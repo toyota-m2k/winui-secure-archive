@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="SecureArchive.Views.TitleBar"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:SecureArchive.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+    <UserControl.Resources>
+        <ResourceDictionary Source="./Converters.xaml"/>
+    </UserControl.Resources>
+
+    <StackPanel 
+                Orientation="Horizontal"
+                Height="26"
+                IsHitTestVisible="True"
+                >
+        <Button Command="{x:Bind ViewModel.GoBackCommand}" Visibility="{x:Bind ViewModel.CanGoBack.Value, Converter={StaticResource BoolVisibilityConverter}, Mode=OneWay}">
+            <Viewbox>
+                <PathIcon Data="M20,11V13H8L13.5,18.5L12.08,19.92L4.16,12L12.08,4.08L13.5,5.5L8,11H20Z" />
+            </Viewbox>
+        </Button>
+        <Viewbox Width="16" Height="16" VerticalAlignment="Center" Margin="4,0,0,0">
+            <PathIcon Data="M12,12H19C18.47,16.11 15.72,19.78 12,20.92V12H5V6.3L12,3.19M12,1L3,5V11C3,16.55 6.84,21.73 12,23C17.16,21.73 21,16.55 21,11V5L12,1Z" 
+                          Foreground="Purple"/>
+        </Viewbox>
+        <TextBlock x:Name="_appTitleText" VerticalAlignment="Center" Margin="10,0,0,0" Text="{x:Bind ViewModel.WindowTitle.Value}"/>
+    </StackPanel>
+</UserControl>

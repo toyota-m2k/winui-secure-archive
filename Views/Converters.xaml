@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:common="using:SecureArchive.Utils"
+    >
+    <common:BoolVisibilityConverter x:Key="BoolVisibilityConverter"/>
+    <common:NegBoolVisibilityConverter x:Key="NegBoolVisibilityConverter"/>
+    <common:NegBoolConverter x:Key="NegBoolConverter"/>
+    <common:EnumBooleanConverter x:Key="EnumBooleanConverter"/>
+    <common:NegEnumBooleanConverter x:Key="NegEnumBooleanConverter"/>
+    <common:EnumVisibilityConverter x:Key="EnumVisibilityConverter"/>
+    <common:NegEnumVisibilityConverter x:Key="NegEnumVisibilityConverter"/>
+    <common:DateStringConverter x:Key="DateStringConverter"/>
+    <common:DecimalStringConverter x:Key="DecimalStringConverter"/>
+    <common:EmptyStringToVisibilityConverter x:Key="EmptyStringToVisibilityConverter"/>
+
+</ResourceDictionary>

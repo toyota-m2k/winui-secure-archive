@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "SecureArchive (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "SecureArchive (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}

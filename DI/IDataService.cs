@@ -1,0 +1,29 @@
+﻿using Microsoft.EntityFrameworkCore;
+using SecureArchive.Models.DB.Accessor;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
+namespace SecureArchive.DI;
+
+public interface ITables {
+    IEntryList Entries { get; }
+    IOwnerInfoList OwnerList { get; }
+    IKVList KVs { get; }
+}
+
+public interface IMutableTables {
+    IMutableEntryList Entries { get; }
+    IMutableOwnerInfoList OwnerList { get; }
+    IMutableKVList KVs { get; }
+}
+
+public interface IDataService : ITables {
+    bool Transaction(Func<IMutableTables, bool> fn);
+    bool EditEntry(Func<IMutableEntryList, bool> fn);
+    bool EditKVs(Func<IMutableKVList, bool> fn);
+    bool EditOwnerList(Func<IMutableOwnerInfoList, bool> fn);
+    void Update();
+}
