@@ -1,3 +1,4 @@
+using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using SecureArchive.Views.ViewModels;
@@ -14,6 +15,27 @@ public sealed partial class SettingsPage : Page {
     public SettingsPage() {
         ViewModel = App.GetService<SettingsPageViewModel>();
         this.InitializeComponent();
+        ViewModel.PanelStatus.Subscribe(async (status) => {
+            UIElement? control = null;
+            switch (status) {
+                case SettingsPageViewModel.Status.Initializing:
+                    return;
+                case SettingsPageViewModel.Status.NeedToSetPassword:
+                    control = EditPasswordSet;
+                    break;
+                case SettingsPageViewModel.Status.NeedToCheckPassword:
+                    control = EditPasswordCheck;
+                    break;
+                case SettingsPageViewModel.Status.NeedToSetDataFolder:
+                    control = ButtonSelectFolder;
+                    break;
+                case SettingsPageViewModel.Status.Ready:
+                    control = ButtonDone;
+                    break;
+            }
+            await Task.Delay(1000);
+            control?.Focus(FocusState.Programmatic);
+        });
     }
 
     private void HandleEnterKey(object sender, KeyRoutedEventArgs e) {

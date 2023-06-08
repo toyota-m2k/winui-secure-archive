@@ -16,6 +16,7 @@ namespace SecureArchive.Views.ViewModels {
         public MenuPageViewModel(IPageService pageSercice) {
             _pageService = pageSercice;
             SettingsCommand.Subscribe(pageSercice.ShowSettingsPage);
+            ListCommand.Subscribe(pageSercice.ShowListPage);
         }
     }
 }
