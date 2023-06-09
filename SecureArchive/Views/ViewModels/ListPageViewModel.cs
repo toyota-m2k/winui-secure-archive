@@ -65,26 +65,11 @@ namespace SecureArchive.Views.ViewModels {
             //_statusNotificationService.ShowMessage("ほげほげ", 3000);
         }
 
-        public void FixedTermMessage(string message, long timeMs) {
-
-        }
-
-        public async Task<bool> ExportFileTo(FileEntry entry, string targetFolderPath, bool allowOverwite) {
-            string outFile = Path.Combine(targetFolderPath, entry.Name);
-            if(Path.Exists(outFile) && !allowOverwite) {
-                var r = await MessageBoxBuilder.Create(App.MainWindow)
-                    .SetMessage("The file exists. Overwrite it?")
-                    .AddButton("OK", id: true)
-                    .AddButton("Cancel", id: false)
-                    .ShowAsync();
-                if((bool?)r !=true) { return false; }
-            }
+        public async Task<bool> ExportFileTo(FileEntry entry, string outFile, ProgressProc progress) {
             try {
                 using (var inStream = File.OpenRead(entry.Path))
                 using (var outStream = File.OpenWrite(outFile)) {
-                    await _cryptoService.DecryptStreamAsync(inStream, outStream, (current, total) => {
-                        _logger.LogDebug("Decrypting {0} ... {1}/{2}", entry.Name, current, total);
-                    });
+                    await _cryptoService.DecryptStreamAsync(inStream, outStream, progress);
                 }
                 return true;
             } catch (Exception ex) {
@@ -93,15 +78,38 @@ namespace SecureArchive.Views.ViewModels {
             }
         }
 
-        public async Task ExportFiles(IEnumerable<FileEntry> list) {
+        public async Task ExportFiles(List<FileEntry> list) {
             var folder = await FolderPickerBuilder.Create(App.MainWindow)
                 .SetIdentifier("SA.ExportData")
                 .SetViewMode(Windows.Storage.Pickers.PickerViewMode.List)
                 .PickAsync();
             if (folder == null) return;
-            foreach (var entry in list) {
-                await ExportFileTo(entry, folder.Path, false);
-            }
+            _taskQueueService.PushTask(async (mainThread) => {
+                await _statusNotificationService.WithProgress("Exporting...", async (updateMessage, progress) => {
+                    int success = 0;
+                    int error = 0;
+                    foreach (var entry in list) {
+                        string outFile = Path.Combine(folder.Path, entry.Name);
+                        if (Path.Exists(outFile)) {
+                            var r = await mainThread.Run(async () => {
+                                return await MessageBoxBuilder.Create(App.MainWindow)
+                                    .SetMessage("The file exists. Overwrite it?")
+                                    .AddButton("OK", id: true)
+                                    .AddButton("Cancel", id: false)
+                                    .ShowAsync();
+                            });
+                            if ((bool?)r != true) continue;
+                        }
+                        updateMessage($"Exporting {entry.Name}");
+                        if(await ExportFileTo(entry, outFile, progress)) {
+                            success++;
+                        } else {
+                            error++;
+                        }
+                    }
+                    updateMessage($"Exported: {success}/{success+error} file(s).");
+                });
+            });
         }
 
         private async void AddLocalFile() {
