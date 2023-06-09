@@ -10,6 +10,6 @@ internal interface ICryptographyService {
     bool IsReady { get; }
     Task SetPasswordAsync(string password);
     Task ChangePasswordAsync(string password);
-    Task EncryptStreamAsync(Stream inputStream, Stream outputStream, Action<long, long>? progress);
-    Task DecryptStreamAsync(Stream inputStream, Stream outputStream, Action<long, long>? progress);
+    Task EncryptStreamAsync(Stream inputStream, Stream outputStream, ProgressProc? progress);
+    Task DecryptStreamAsync(Stream inputStream, Stream outputStream, ProgressProc? progress);
 }

@@ -20,6 +20,13 @@ internal static class HashHelper
             .Append(password)
             .Build();
     }
+    public static IHashResult MD5(string password, string seed) {
+        return HashBuilder
+            .MD5
+            .Append(seed)
+            .Append(password)
+            .Build();
+    }
 
     public static IBuffer AsBuffer(this string src) {
         return Encoding.UTF8.GetBytes(src).AsBuffer();

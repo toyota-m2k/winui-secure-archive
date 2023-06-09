@@ -68,4 +68,12 @@ internal static class FileUtils {
     public static async Task<bool> IsEmpty(this StorageFolder folder) {
         return (await folder.GetItemsAsync()).Count == 0;
     }
+
+    internal static void SafeDelete(string outFilePath) {
+        try {
+            File.Delete(outFilePath);
+        } catch {
+            // nothing to do
+        }
+    }
 }

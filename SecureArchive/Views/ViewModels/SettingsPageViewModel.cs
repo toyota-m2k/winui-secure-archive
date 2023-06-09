@@ -2,7 +2,6 @@
 using SecureArchive.DI;
 using SecureArchive.Utils;
 using System.Reactive.Linq;
-using Windows.UI.Popups;
 
 namespace SecureArchive.Views.ViewModels {
     internal class SettingsPageViewModel {

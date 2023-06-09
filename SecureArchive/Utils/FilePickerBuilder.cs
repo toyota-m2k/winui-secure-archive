@@ -65,7 +65,7 @@ public class FileOpenPickerBuilder {
         WinRT.Interop.InitializeWithWindow.Initialize(_picker, hWnd);
 
         // Set options for your folder picker
-        _picker.SuggestedStartLocation = PickerLocationId.Unspecified;
+        // _picker.SuggestedStartLocation = PickerLocationId.Unspecified;
         //_picker.FileTypeFilter.Add("*");
     }
     public static FileOpenPickerBuilder Create(Window parentWindow) => new FileOpenPickerBuilder(parentWindow);
@@ -126,7 +126,7 @@ public class FileSavePickerBuilder {
         WinRT.Interop.InitializeWithWindow.Initialize(_picker, hWnd);
 
         // Set options for your folder picker
-        _picker.SuggestedStartLocation = PickerLocationId.Unspecified;
+        //_picker.SuggestedStartLocation = PickerLocationId.Unspecified;
         //_picker.FileTypeFilter.Add("*");
     }
     public static FileSavePickerBuilder Create(Window parentWindow) => new FileSavePickerBuilder(parentWindow);

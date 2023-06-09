@@ -14,15 +14,15 @@ public class DataService : IDataService, IMutableTables {
     ILogger _logger;
     DBConnector _connector;
 
-    EntryList _entries { get; }
+    FileEntryList _entries { get; }
     OwnerInfoList _ownerList { get; }
     public KVList _kvs { get; }
 
-    public IEntryList Entries => _entries;
+    public IFileEntryList Entries => _entries;
     public IOwnerInfoList OwnerList => _ownerList;
     public IKVList KVs => _kvs;
 
-    IMutableEntryList IMutableTables.Entries => _entries;
+    IMutableFileEntryList IMutableTables.Entries => _entries;
     IMutableOwnerInfoList IMutableTables.OwnerList => _ownerList;
     IMutableKVList IMutableTables.KVs => _kvs;
 
@@ -34,14 +34,14 @@ public class DataService : IDataService, IMutableTables {
         _logger.LogDebug(appConfigService.DBPath);
 
         _connector = new DBConnector(appConfigService.DBPath);
-        _entries = new EntryList(_connector.Entries);
+        _entries = new FileEntryList(_connector.Entries);
         _ownerList = new OwnerInfoList(_connector.OwnerInfos);
         _kvs = new KVList(_connector.KVs);
     }
 
     private IMutableTables mutableTables => this;
 
-    public bool EditEntry(Func<IMutableEntryList, bool> fn) {
+    public bool EditEntry(Func<IMutableFileEntryList, bool> fn) {
         bool result = false;
         try {
             result = fn(mutableTables.Entries);

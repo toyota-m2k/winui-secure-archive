@@ -9,20 +9,20 @@ using System.Threading.Tasks;
 namespace SecureArchive.DI;
 
 public interface ITables {
-    IEntryList Entries { get; }
+    IFileEntryList Entries { get; }
     IOwnerInfoList OwnerList { get; }
     IKVList KVs { get; }
 }
 
 public interface IMutableTables {
-    IMutableEntryList Entries { get; }
+    IMutableFileEntryList Entries { get; }
     IMutableOwnerInfoList OwnerList { get; }
     IMutableKVList KVs { get; }
 }
 
 public interface IDataService : ITables {
     bool Transaction(Func<IMutableTables, bool> fn);
-    bool EditEntry(Func<IMutableEntryList, bool> fn);
+    bool EditEntry(Func<IMutableFileEntryList, bool> fn);
     bool EditKVs(Func<IMutableKVList, bool> fn);
     bool EditOwnerList(Func<IMutableOwnerInfoList, bool> fn);
     void Update();

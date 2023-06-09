@@ -34,7 +34,7 @@ namespace SecureArchive.Utils {
             return this;
         }
         public MessageBoxBuilder AddButton(string text, object id) {
-            _dialog.Commands.Add(new UICommand(text));
+            _dialog.Commands.Add(new UICommand(text) { Id = id });
             return this;
         }
 
