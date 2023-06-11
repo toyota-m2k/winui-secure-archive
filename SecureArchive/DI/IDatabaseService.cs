@@ -20,10 +20,11 @@ public interface IMutableTables {
     IMutableKVList KVs { get; }
 }
 
-public interface IDataService : ITables {
+public interface IDatabaseService : ITables {
     bool Transaction(Func<IMutableTables, bool> fn);
     bool EditEntry(Func<IMutableFileEntryList, bool> fn);
     bool EditKVs(Func<IMutableKVList, bool> fn);
     bool EditOwnerList(Func<IMutableOwnerInfoList, bool> fn);
     void Update();
+
 }

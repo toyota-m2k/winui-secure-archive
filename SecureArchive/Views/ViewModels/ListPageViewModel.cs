@@ -18,7 +18,7 @@ namespace SecureArchive.Views.ViewModels {
         private IPageService _pageService;
         private ICryptographyService _cryptoService;
         private IFileStoreService _fileStoreService;
-        private IDataService _dataService;
+        private IDatabaseService _dataService;
         private ITaskQueueService _taskQueueService;
         private IStatusNotificationService _statusNotificationService;
         private ILogger _logger;
@@ -37,7 +37,7 @@ namespace SecureArchive.Views.ViewModels {
             IPageService pageService, 
             ICryptographyService cryptographyService, 
             IFileStoreService fileStoreService, 
-            IDataService dataService,
+            IDatabaseService dataService,
             ITaskQueueService taskQueueService,
             IStatusNotificationService statusNotificationService,
             ILoggerFactory loggerFactory) {
