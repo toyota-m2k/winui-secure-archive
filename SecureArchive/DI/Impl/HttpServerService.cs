@@ -1,15 +1,10 @@
 ﻿using Microsoft.Extensions.Logging;
-using Newtonsoft.Json;
 using SecureArchive.Models.DB;
 using SecureArchive.Utils;
 using SecureArchive.Utils.Server.lib;
 using SecureArchive.Utils.Server.lib.model;
 using SecureArchive.Utils.Server.lib.response;
-using System.Diagnostics;
-using System.Reactive.Subjects;
 using System.Text.RegularExpressions;
-using System.Xml.Linq;
-using static SecureArchive.DI.Impl.SecureStorageService;
 using static SecureArchive.Utils.Server.lib.model.HttpContent;
 using HttpContent = SecureArchive.Utils.Server.lib.model.HttpContent;
 
@@ -31,11 +26,26 @@ internal class HttpServerService : IHttpServreService {
         _server = new HttpServer(Routes(), _logger);
     }
 
-    Dictionary<string, UploadHandler> _uploadingTasks = new Dictionary<string, UploadHandler>();
+    private Dictionary<string, UploadHandler> _uploadingTasks = new Dictionary<string, UploadHandler>();
+    private void RegisterUploadTask(UploadHandler handler) {
+        lock(_uploadingTasks) { _uploadingTasks.Add(handler.ID, handler); }
+    }
+    private void UnregisterUploadTask(UploadHandler handler) {
+        lock (_uploadingTasks) { _uploadingTasks.Remove(handler.ID); }
+    }
+    private UploadHandler? LookupUploadTask(string id) {
+        lock(_uploadingTasks) {
+            if(_uploadingTasks.TryGetValue(id, out var handler)) return handler;
+            return null;
+        }
+    }
 
     class UploadHandler : IMultipartContentHander, IDisposable {
         private static AtomicInteger idGenerator = new AtomicInteger();
         private static string newId() => Convert.ToString(idGenerator.IncrementAndGet());
+
+        public long ReceivedLength { get; private set; } = 0;
+        public long ContentLength { get; private set; } = 0;
 
         private ISecureStorageService _secureStorageService;
         public string ID { get; }
@@ -49,6 +59,8 @@ internal class HttpServerService : IHttpServreService {
 
         public Stream CreateFile(HttpContent multipartBody) {
             Dispose();
+            ContentLength = 0;
+            ReceivedLength = 0;
             var entryCreator = _secureStorageService.CreateEntry().Result;
             _entryCreator = entryCreator;
             return entryCreator.OutputStream;
@@ -82,6 +94,11 @@ internal class HttpServerService : IHttpServreService {
                 _entryCreator = null;
             }
         }
+
+        public void Progress(long current, long total) {
+            ReceivedLength = current;
+            ContentLength = total;
+        }
     }
 
     public Regex RegRange = new Regex(@"bytes=(?<start>\d+)(?:-(?<end>\d+))?");
@@ -89,6 +106,7 @@ internal class HttpServerService : IHttpServreService {
     private List<Route> Routes() {
         FileEntry? currentEntry = null;
         SeekableInputStream? seekableInputStream = null;
+        var challenge = Guid.NewGuid().ToString();
         return new List<Route> {
             Route.get(
                 name: "nop",
@@ -105,12 +123,12 @@ internal class HttpServerService : IHttpServreService {
                         return HttpErrorResponse.BadRequest(request);
                     }
                     using(var handler = new UploadHandler(_secureStorageService)) {
-                        _uploadingTasks.Add(handler.ID, handler);
+                        RegisterUploadTask(handler);
                         var response = new TextHttpResponse(request, HttpStatusCode.Accepted, "");
                         response.Headers.Add("Location", $"/uploading/{handler.ID}");
                         response.WriteResponse(request.OutputStream);
                         content.ParseMultipartContent(handler);
-                        _uploadingTasks.Remove(handler.ID);
+                        UnregisterUploadTask(handler);
                     }
                     return NullResponse.Instance;
                     //using(var handler = new UploadHandler(_secureStorageService)) {
@@ -126,17 +144,20 @@ internal class HttpServerService : IHttpServreService {
                     if(id==null) {
                         return HttpErrorResponse.BadRequest(request);
                     }
-                    var handler = _uploadingTasks[id];
+                    var handler = LookupUploadTask(id);
                     if(handler==null) {
                         return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
                     } else {
-                        return new TextHttpResponse(request, HttpStatusCode.Accepted, "Processing.");
+                        var dic = new Dictionary<string, object> {
+                            { "current", $"{handler.ReceivedLength}" },
+                            { "total", $"{handler.ContentLength}" },
+                        };
+                        return TextHttpResponse.FromJson(request, dic, HttpStatusCode.Accepted);
                     }
-                    //return new TextHttpResponse(request, HttpStatusCode.Ok, $"{request.Path.Substring("/uploading/".Length)}");
                 }),
             Route.get(
                 name: "capability",
-                regex:@"/ytplayer/capability",
+                regex:@"/capability",
                 process: (HttpRequest request) => {
                     var cap = new Dictionary<string,object> {
                         {"cmd", "capability"},
@@ -147,12 +168,14 @@ internal class HttpServerService : IHttpServreService {
                         {"mark", false},
                         {"acceptRequest", false},
                         {"hasView", false},
+                        {"authentication", true},
+                        {"challenge",  challenge},
                     };
                     return TextHttpResponse.FromJson(request, cap);
                 }),
             Route.get(
                 name: "list",
-                regex: @"/ytplayer/list(?:\?.*)?",
+                regex: @"/list(?:\?.*)?",
                 process: (HttpRequest request) => {
                     var list = _databaseService.Entries.List()
                     .Where((it) => {
@@ -174,7 +197,7 @@ internal class HttpServerService : IHttpServreService {
                 }),
             Route.get(
                 name: "video",
-                regex: @"/ytplayer/video\?\w+",
+                regex: @"/video\?\w+",
                 process: (HttpRequest request) => {
                     var id = Convert.ToInt64(QueryParser.Parse(request.Url)["id"]);
                     var entry = _databaseService.Entries.List().Where((it) => it.Id == id).SingleOrDefault();
@@ -204,7 +227,7 @@ internal class HttpServerService : IHttpServreService {
                 }),
             Route.get(
                 name: "chapters",
-                regex: @"/ytplayer/chapter\?\w+",
+                regex: @"/chapter\?\w+",
                 process: (request) => {
                     var id = QueryParser.Parse(request.Url)["id"];
                     var dic = new Dictionary<string, object>(){
@@ -213,7 +236,6 @@ internal class HttpServerService : IHttpServreService {
                         { "chapters", new List<object>() }
                     };
                     return TextHttpResponse.FromJson(request, dic);
-
                 }),
         };
     }

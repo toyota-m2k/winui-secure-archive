@@ -39,6 +39,7 @@ public class HttpContent {
         IDictionary<string, string> Parameters { get; }
         Stream CreateFile(HttpContent multipartBody);
         void CloseFile(HttpContent multipartBody, Stream outStream);
+        void Progress(long current, long total);
     }
 
     public void ParseMultipartContent(IMultipartContentHander multipartContentHandler, string[]? expectingBodyTypes = null) {
@@ -61,10 +62,13 @@ public class HttpContent {
             }
         }
 
+        long contentLength = 0;
+        long receivedLength = 0;
         parser.FileHandler += (string name, string fileName, string contentType, string contentDisposition, byte[] buffer, int bytes, int partNumber, IDictionary<string, string> additionalProperties) => {
             if (partNumber == 0) {
                 closeCurrentPart();
-                long contentLength = 0;
+                contentLength = 0;
+                receivedLength = 0;
                 if(additionalProperties.TryGetValue("content-length", out var contentLengthText)) {
                     contentLength = Convert.ToInt64(contentLengthText);
                 }
@@ -72,6 +76,8 @@ public class HttpContent {
                 outStream = multipartContentHandler.CreateFile(partContent);
             }
             outStream?.Write(buffer, 0, bytes);
+            receivedLength += bytes;
+            multipartContentHandler.Progress(receivedLength, contentLength);
         };
 
         parser.Run();
