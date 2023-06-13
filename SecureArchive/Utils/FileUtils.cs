@@ -1,4 +1,5 @@
-﻿using Windows.Storage;
+﻿using System.Text.RegularExpressions;
+using Windows.Storage;
 
 namespace SecureArchive.Utils;
 internal static class FileUtils {
@@ -75,5 +76,27 @@ internal static class FileUtils {
         } catch {
             // nothing to do
         }
+    }
+    internal static string SafeNameOf(string name) {
+        // ファイル名に使えない文字を取得
+        string invalidChars = new string(Path.GetInvalidFileNameChars());
+
+        // ファイル名に使えない文字と、それに対応する全角文字の辞書を作成
+        Dictionary<char, char> replaceChars = new Dictionary<char, char>()
+        {
+            {'\\', '￥'},
+            {'/', '／'},
+            {':', '：'},
+            {'*', '＊'},
+            {'?', '？'},
+            {'"', '”'},
+            {'<', '＜'},
+            {'>', '＞'},
+            {'|', '｜'}
+        };
+
+        // 正規表現で置き換える
+        Regex regex = new Regex($"[{Regex.Escape(invalidChars)}]");
+        return regex.Replace(name, m => replaceChars[m.Value[0]].ToString());
     }
 }

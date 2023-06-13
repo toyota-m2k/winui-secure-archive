@@ -76,7 +76,12 @@ namespace SecureArchive.Utils.Server.lib.response {
 
         public void WriteResponse(Stream output)
         {
-            Prepare();
+            try {
+                Prepare();
+            } catch(HttpException ex) {
+                ex.ErrorResponse.WriteResponse(output);
+                return;
+            }
             WriteHeaders(output);
             WriteText(output, "\r\n");
             WriteBody(output);

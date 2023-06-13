@@ -1,13 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
 using Reactive.Bindings;
 using SecureArchive.Utils;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
-namespace SecureArchive.DI.Impl; 
+namespace SecureArchive.DI.Impl;
 internal class StatusNotificationService : IStatusNotificationService {
     IMainThreadService _mainThreadService;
     ILogger _logger;

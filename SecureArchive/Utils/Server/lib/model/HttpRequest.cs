@@ -17,12 +17,14 @@ public class HttpRequest
     public HttpContent? Content { get; set; } = null;
     public Route? Route { get; set; } = null;
     public string? Path { get; set; } = null;
+    public Stream OutputStream { get; }
 
-    public HttpRequest(string method, string url, Dictionary<string, string>? headers)
+    public HttpRequest(string method, string url, Dictionary<string, string>? headers, Stream outputStream)
     {
         Method = method;
         Url = url;
         Headers = headers ?? new Dictionary<string, string>();
+        OutputStream = outputStream;
     }
 
     //public override string ToString() {

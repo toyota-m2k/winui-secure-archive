@@ -10,7 +10,7 @@ namespace SecureArchive.DI.Impl {
 
 
         public async Task<bool> IsRegistered() {
-            var path = await _userSettingsService.GetAsync<string>(SettingsKey.DataFolder);
+            var path = await _userSettingsService.GetStringAsync(SettingsKey.DataFolder);
             if(string.IsNullOrEmpty(path)) return false;
             return Path.Exists(path);
         }
@@ -41,7 +41,7 @@ namespace SecureArchive.DI.Impl {
         }
 
         public async Task<string?> GetFolder() {
-            var folder = await _userSettingsService.GetAsync<string>(SettingsKey.DataFolder);
+            var folder = await _userSettingsService.GetStringAsync(SettingsKey.DataFolder);
             if (folder == null) return null;
             if (!Path.Exists(folder)) {
                 return null;

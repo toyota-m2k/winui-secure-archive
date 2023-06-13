@@ -61,6 +61,8 @@ namespace SecureArchive {
                     .AddSingleton<ICryptographyService, CryptographyService>()
                     .AddSingleton<IPasswordService, PasswordService>()
                     .AddSingleton<IFileStoreService, FileStoreService>()
+                    .AddSingleton<ISecureStorageService, SecureStorageService>()
+                    .AddSingleton<IHttpServreService,  HttpServerService>()
                     .AddSingleton<IMainThreadService, MainThradService>()
                     .AddTransient<ITaskQueueService, TaskQueueService>()
                     .AddTransient<IStatusNotificationService, StatusNotificationService>()

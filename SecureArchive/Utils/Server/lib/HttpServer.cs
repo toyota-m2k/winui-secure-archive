@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using SecureArchive.Utils.Server.lib.model;
 using System.Net;
 using System.Net.Sockets;
+using System.Reactive.Subjects;
 
 namespace SecureArchive.Utils.Server.lib;
 
@@ -11,8 +12,7 @@ public class HttpServer
 {
     #region Fields
 
-    private int Port;
-    private TcpListener? Listener;
+    private TcpListener Listener = null!;
     private HttpProcessor Processor;
     //private bool IsActive = true;
 
@@ -22,13 +22,15 @@ public class HttpServer
     private bool Alive = true;
     public ILogger Logger;
 
+    private BehaviorSubject<bool> _running = new BehaviorSubject<bool>(false);
+    public IObservable<bool> Running => _running;
+
     //private WeakReference<IReportOutput> mReportOutput;
     //private IReportOutput ReportOutput => mReportOutput?.GetValue();
 
     #region Public Methods
-    public HttpServer(int port, List<Route> routes, ILogger logger)
+    public HttpServer(List<Route> routes, ILogger logger)
     {
-        Port = port;
         Processor = new HttpProcessor(logger); ;
         //mReportOutput = new WeakReference<IReportOutput>(reportOutput);
         Logger = logger;
@@ -55,12 +57,18 @@ public class HttpServer
     //    }
     //}
 
-    public bool Start()
+    public bool Start(int port)
     {
+        if(_running.Value) { 
+            return false; 
+        }
         try
         {
-            Listener = new TcpListener(IPAddress.Any, Port);
+            Alive = true;
+            _running.OnNext(true);
+            Listener = new TcpListener(IPAddress.Any, port);
             Listener.Start();
+            Logger.LogInformation("HTTP Server Running.");
         }
         catch (Exception e)
         {
@@ -88,8 +96,9 @@ public class HttpServer
             }
             lock (this)
             {
-                Listener?.Stop();
-                Listener = null;
+                _running.OnNext(false);
+                Listener.Stop();
+                Logger.LogInformation("HTTP Server Stopped.");
             }
         });
         return true;
@@ -100,8 +109,8 @@ public class HttpServer
         Alive = false;
         lock (this)
         {
-            Listener?.Stop();
-            Listener = null;
+            _running.OnNext(false);
+            Listener.Stop();
         }
     }
     #endregion

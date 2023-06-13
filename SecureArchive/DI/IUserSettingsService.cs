@@ -17,7 +17,9 @@ internal interface IUserSettingsAccessor {
 }
 
 internal interface IUserSettingsService {
-    Task<T?> GetAsync<T>(SettingsKey key);
+    Task<string?> GetStringAsync(SettingsKey key);
+    Task<int> GetIntAsync(SettingsKey key, int defaultValue = 0);
+    Task<long> GetLongAsync(SettingsKey key, long defaultValue = 0);
     Task PutAsync<T>(SettingsKey key, T value);
     Task EditAsync(Func<IUserSettingsAccessor, bool> editor);
 }

@@ -5,5 +5,8 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace SecureArchive.DI; 
-internal interface HttpServreService {
+internal interface IHttpServreService {
+    IObservable<bool> Running { get; }
+    bool Start(int port);
+    void Stop();
 }

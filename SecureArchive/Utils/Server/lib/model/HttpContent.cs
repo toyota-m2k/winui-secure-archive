@@ -35,13 +35,13 @@ public class HttpContent {
         TextContent = null;
     }
 
-    public interface MultipartContentHander {
+    public interface IMultipartContentHander {
         IDictionary<string, string> Parameters { get; }
         Stream CreateFile(HttpContent multipartBody);
         void CloseFile(HttpContent multipartBody, Stream outStream);
     }
 
-    public async Task ParseMultipartContent(MultipartContentHander multipartContentHandler, CancellationToken? cancellationToken = null, string[]? expectingBodyTypes = null) {
+    public void ParseMultipartContent(IMultipartContentHander multipartContentHandler, string[]? expectingBodyTypes = null) {
         if (!HasStream) {
             throw new InvalidOperationException("this is not a streamed content.");
         }
@@ -64,18 +64,17 @@ public class HttpContent {
         parser.FileHandler += (string name, string fileName, string contentType, string contentDisposition, byte[] buffer, int bytes, int partNumber, IDictionary<string, string> additionalProperties) => {
             if (partNumber == 0) {
                 closeCurrentPart();
-                partContent = new HttpContent(contentType, 0) { Name = name, Filename = fileName };
+                long contentLength = 0;
+                if(additionalProperties.TryGetValue("content-length", out var contentLengthText)) {
+                    contentLength = Convert.ToInt64(contentLengthText);
+                }
+                partContent = new HttpContent(contentType, contentLength) { Name = name, Filename = fileName };
                 outStream = multipartContentHandler.CreateFile(partContent);
             }
             outStream?.Write(buffer, 0, bytes);
         };
 
-        if (cancellationToken == null) {
-            await parser.RunAsync();
-        }
-        else {
-            await parser.RunAsync((CancellationToken)cancellationToken!);
-        }
+        parser.Run();
         closeCurrentPart();
     }
 }

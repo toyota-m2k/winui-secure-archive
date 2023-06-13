@@ -10,8 +10,7 @@ using HttpContent = SecureArchive.Utils.Server.lib.model.HttpContent;
 
 namespace SecureArchive.Utils.Server.lib;
 
-public class HttpProcessor
-{
+public class HttpProcessor {
 
     #region Fields
 
@@ -24,22 +23,18 @@ public class HttpProcessor
 
     #region Constructors
 
-    public HttpProcessor(ILogger logger)
-    {
+    public HttpProcessor(ILogger logger) {
         Logger = logger;
     }
 
     #endregion
 
     #region Public Methods
-    public void HandleClient(TcpClient tcpClient)
-    {
-        Task.Run(() =>
-        {
+    public void HandleClient(TcpClient tcpClient) {
+        Task.Run(() => {
             using (Stream inputStream = GetInputStream(tcpClient))
-            using (Stream outputStream = GetOutputStream(tcpClient))
-            {
-                IHttpResponse response = ProcessRequest(inputStream);
+            using (Stream outputStream = GetOutputStream(tcpClient)) {
+                IHttpResponse response = ProcessRequest(inputStream, outputStream);
 
 
                 //// HttpRequest request = GetRequest(inputStream, outputStream);
@@ -58,13 +53,11 @@ public class HttpProcessor
                 //}
 
                 //Console.WriteLine("{0} {1}", response.ToString(), request.Url);
-                try
-                {
+                try {
                     response.WriteResponse(outputStream);
                     outputStream.Flush();
                 }
-                catch (Exception e)
-                {
+                catch (Exception e) {
                     Logger.LogError(e, "WriteResponse");
                 }
             }
@@ -73,8 +66,7 @@ public class HttpProcessor
 
     // this formats the HTTP response...
 
-    public void AddRoute(Route route)
-    {
+    public void AddRoute(Route route) {
         Routes.Add(route);
     }
 
@@ -82,12 +74,10 @@ public class HttpProcessor
 
     #region Private Methods
 
-    private static string Readline(Stream stream)
-    {
+    private static string Readline(Stream stream) {
         int next_char;
         string data = "";
-        while (true)
-        {
+        while (true) {
             next_char = stream.ReadByte();
             if (next_char == '\n') { break; }
             if (next_char == '\r') { continue; }
@@ -97,19 +87,16 @@ public class HttpProcessor
         return data;
     }
 
-    private static void Write(Stream stream, string text)
-    {
+    private static void Write(Stream stream, string text) {
         byte[] bytes = Encoding.UTF8.GetBytes(text);
         stream.Write(bytes, 0, bytes.Length);
     }
 
-    private Stream GetOutputStream(TcpClient tcpClient)
-    {
+    private Stream GetOutputStream(TcpClient tcpClient) {
         return tcpClient.GetStream();
     }
 
-    private Stream GetInputStream(TcpClient tcpClient)
-    {
+    private Stream GetInputStream(TcpClient tcpClient) {
         return tcpClient.GetStream();
     }
 
@@ -149,49 +136,42 @@ public class HttpProcessor
 
     //}
 
-    private string GetValueOrNull(Dictionary<string, string> map, string key, string def = "")
-    {
+    private string GetValueOrNull(Dictionary<string, string> map, string key, string def = "") {
         return map.TryGetValue("content-length", out var value) ? value : def;
     }
 
-    private bool IsTextType(string contentType)
-    {
+    private bool IsTextType(string contentType) {
         var type = contentType.ToLower();
         if (type.StartsWith("text/")) return true;
         if (type.StartsWith("application/json")) return true;
         else return false;
     }
 
-    private IHttpResponse ProcessRequest(Stream inputStream)
-    {
-        try
-        {
-            var request = ParseHeader(inputStream);
-            IHttpResponse? response = null;
-            Route? route = GetRoute(request, out response);
-            if (route == null)
-            {
-                return response ?? HttpErrorResponse.InternalServerError(request);
-            }
+    private IHttpResponse ProcessRequest(Stream inputStream, Stream outputStream) {
+        try {
+            var request = ParseHeader(inputStream, outputStream);
+            Route route = GetRoute(request);
             ParseContent(inputStream, request, route);
             return route.Process(request);
         }
-        catch (Exception ex)
-        {
+        catch (Exception ex) {
             Logger.LogError(ex, "Route.Process");
-            return HttpErrorResponse.InternalServerError(null);
+            if (ex is HttpException httpException) {
+                return httpException.ErrorResponse;
+            }
+            else {
+                return HttpErrorResponse.InternalServerError(null);
+            }
         }
     }
 
 
-    private HttpRequest ParseHeader(Stream inputStream)
-    {
+    private HttpRequest ParseHeader(Stream inputStream, Stream outputStream) {
         //Read Request Line
         string request = Readline(inputStream);
 
         string[] tokens = request.Split(' ');
-        if (tokens.Length != 3)
-        {
+        if (tokens.Length != 3) {
             throw new Exception("invalid http request line");
         }
         string method = tokens[0].ToUpper();
@@ -201,58 +181,46 @@ public class HttpProcessor
         //Read Headers
         Dictionary<string, string> headers = new Dictionary<string, string>();
         string line;
-        while ((line = Readline(inputStream)) != null)
-        {
-            if (line.Equals(""))
-            {
+        while ((line = Readline(inputStream)) != null) {
+            if (line.Equals("")) {
                 break;
             }
 
             int separator = line.IndexOf(':');
-            if (separator == -1)
-            {
+            if (separator == -1) {
                 throw new Exception("invalid http header line: " + line);
             }
             string name = line.Substring(0, separator);
             int pos = separator + 1;
-            while (pos < line.Length && line[pos] == ' ')
-            {
+            while (pos < line.Length && line[pos] == ' ') {
                 pos++;
             }
 
             string value = line.Substring(pos, line.Length - pos);
             headers.Add(name.ToLower(), value);
         }
-        return new HttpRequest(method, url, headers);
+        return new HttpRequest(method, url, headers, outputStream);
     }
 
-    private Route? GetRoute(HttpRequest request, out IHttpResponse? errorResponse)
-    {
+    private Route GetRoute(HttpRequest request) {
         List<Route> routes = Routes.Where(x => Regex.Match(request.Url, x.UrlRegex).Success).ToList();
 
-        errorResponse = null;
-        if (!routes.Any())
-        {
-            errorResponse = HttpErrorResponse.NotFound(request);
-            return null;
+        if (!routes.Any()) {
+            throw HttpErrorResponse.NotFound(request).Exception;
         }
 
         Route? route = routes.FirstOrDefault(x => x.Method == request.Method);
 
-        if (route == null)
-        {
-            errorResponse = HttpErrorResponse.MethodNotAllowed(request);
-            return null;
+        if (route == null) {
+            throw HttpErrorResponse.MethodNotAllowed(request).Exception;
         }
 
         // extract the path if there is one
         var match = Regex.Match(request.Url, route.UrlRegex);
-        if (match.Groups.Count > 1)
-        {
+        if (match.Groups.Count > 1) {
             request.Path = match.Groups[1].Value;
         }
-        else
-        {
+        else {
             request.Path = request.Url;
         }
         return route;

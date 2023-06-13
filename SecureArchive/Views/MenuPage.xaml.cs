@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
+using SecureArchive.DI;
 using SecureArchive.Views.ViewModels;
 using System;
 using System.Collections.Generic;
@@ -21,10 +22,18 @@ namespace SecureArchive.Views;
 /// <summary>
 /// An empty page that can be used on its own or navigated to within a Frame.
 /// </summary>
-public sealed partial class MenuPage : Page {
+public sealed partial class MenuPage : Page, INavigationAware {
     private MenuPageViewModel ViewModel { get; }
     public MenuPage() {
         ViewModel = App.GetService<MenuPageViewModel>();
         this.InitializeComponent();
+    }
+
+    public void OnPageActivated() {
+        ViewModel.StartServer();
+    }
+
+    public void OnPageLeaving() {
+        ViewModel.StopServer();
     }
 }

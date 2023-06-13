@@ -1,6 +1,4 @@
-﻿using Windows.Storage;
-
-namespace SecureArchive.DI;
+﻿namespace SecureArchive.DI;
 internal interface IFileStoreService {
     Task<bool> IsRegistered();
     Task<bool> Register(string newFolder);
