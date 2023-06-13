@@ -1,4 +1,6 @@
-﻿using System.Runtime.CompilerServices;
+﻿using System.CodeDom;
+using System.Diagnostics;
+using System.Runtime.CompilerServices;
 
 namespace SecureArchive.DI.Impl;
 
@@ -14,12 +16,12 @@ internal class UserSettingsService : IUserSettingsService {
 
 
         public string? DataFolder {
-            get => _userSettings.Get<string>(callerName());
+            get => _userSettings.GetString(callerName());
             set => _userSettings.Put(callerName(), value);
         }
         public int PortNo { 
-            get => _userSettings.Get<int>(callerName(), 6000);
-            set => _userSettings.Put(callerName(), value);
+            get => _userSettings.GetInt(callerName(), 6000);
+            set => _userSettings.Put<int>(callerName(), value);
         }
     }
 
@@ -57,21 +59,65 @@ internal class UserSettingsService : IUserSettingsService {
     //       return default(T?);
     //    }
     //}
-    private T? Get<T>(string key, T? defalutValue = default) {
+    //private T? Get<T>(string key, T? defalutValue = default) {
+    //    if (_cache == null) {
+    //        throw new InvalidOperationException("call InitializeAsync() in prior.");
+    //    }
+    //    if (_cache.TryGetValue(key, out var value)) {
+    //        return (T)value;
+    //    }
+    //    else {
+    //        return defalutValue;
+    //    }
+    //}
+
+    //private object? Get(string key) {
+    //    if (_cache == null) {
+    //        throw new InvalidOperationException("call InitializeAsync() in prior.");
+    //    }
+    //    if (_cache.TryGetValue(key, out var value)) {
+    //        return value;
+    //    }
+    //    return null;
+    //}
+
+    private string? GetString(string key, string? defalutValue = default) {
         if (_cache == null) {
             throw new InvalidOperationException("call InitializeAsync() in prior.");
         }
         if (_cache.TryGetValue(key, out var value)) {
-            return (T)value;
+            return Convert.ToString(value);
+        }
+        else {
+            return defalutValue;
+        }
+    }
+    private int GetInt(string key, int defalutValue = 0) {
+        if (_cache == null) {
+            throw new InvalidOperationException("call InitializeAsync() in prior.");
+        }
+        if (_cache.TryGetValue(key, out var value)) {
+            return Convert.ToInt32(value);
+        }
+        else {
+            return defalutValue;
+        }
+    }
+    private long GetLong(string key, long defalutValue = 0) {
+        if (_cache == null) {
+            throw new InvalidOperationException("call InitializeAsync() in prior.");
+        }
+        if (_cache.TryGetValue(key, out var value)) {
+            return Convert.ToInt64(value);
         }
         else {
             return defalutValue;
         }
     }
 
-    private T? Get<T>(SettingsKey key) {
-        return Get<T>(key.ToString());
-    }
+    //private T? Get<T>(SettingsKey key) {
+    //    return Get<T>(key.ToString());
+    //}
 
     private void Put<T>(string key, T? value) {
         if (_cache == null) {
@@ -83,7 +129,22 @@ internal class UserSettingsService : IUserSettingsService {
                 _dirty = true;
             }
         }
-        else if (!value.Equals(Get<T>(key))) {
+        bool needUpdate;
+        switch(value) {
+            case int i:
+                needUpdate = i != GetInt(key);
+                break;
+            case long l:
+                needUpdate = l != GetLong(key);
+                break;
+            case string s:
+                needUpdate = s != GetString(key);
+                break;
+            default:
+                Debug.Assert(false, $"unknown type: {value.GetType()}");
+                return;
+        }
+        if(needUpdate) { 
             _cache[key] = value;
             _dirty = true;
         }
@@ -92,9 +153,17 @@ internal class UserSettingsService : IUserSettingsService {
         Put(key.ToString(), value);
     }
 
-    public async Task<T?> GetAsync<T>(SettingsKey key) {
+    public async Task<string?> GetStringAsync(SettingsKey key) {
         await InitializeAsync();
-        return Get<T>(key);
+        return GetString(key.ToString());
+    }
+    public async Task<int> GetIntAsync(SettingsKey key, int defaultValue=0) {
+        await InitializeAsync();
+        return GetInt(key.ToString(),defaultValue);
+    }
+    public async Task<long> GetLongAsync(SettingsKey key, long defaultValue = 0) {
+        await InitializeAsync();
+        return GetLong(key.ToString(), defaultValue);
     }
 
     public async Task PutAsync<T>(SettingsKey key, T value) {

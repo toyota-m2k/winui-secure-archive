@@ -1,20 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
-using Reactive.Bindings;
 using SecureArchive.Utils.Crypto;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Runtime.InteropServices.WindowsRuntime;
 using System.Security.Cryptography;
-using System.Security.Cryptography.Xml;
-using System.Text;
-using System.Threading.Tasks;
-using Windows.Security.Cryptography;
-using Windows.Security.Cryptography.Core;
-using Windows.Storage.Streams;
 
-namespace SecureArchive.DI.Impl
-{
+namespace SecureArchive.DI.Impl {
     internal class CryptographyService : ICryptographyService {
         const string KEY_CRYPT_KEY = "CryptKey";
         const string CRYPT_SEED = "WTiefd$d$a&W2f39=RE%HGfe:ee7g";
@@ -68,6 +56,40 @@ namespace SecureArchive.DI.Impl
             await _localSettingsService.PutAsync(KEY_CRYPT_KEY, cryptedKey);
         }
 
+        //public bool OpenStreamForEncryption(Stream outputStream, Func<Stream, bool> writer) {
+        //    if (_cryptoKey == null) {
+        //        _logger.LogError("No CryptoKey ... SetPassword in advance.");
+        //        throw new InvalidOperationException("call SetPassword to set old password earlier.");
+        //    }
+        //    var aes = Aes.Create();
+        //    //aes.Key = HashHelper.SHA256(_cryptoKey, CRYPT_SEED).Hash;
+        //    aes.Key = Guid.Parse(_cryptoKey).ToByteArray();     // 128ビット ... AES の最短鍵長 ... これで十分。
+        //    aes.IV = HashHelper.MD5(_cryptoKey, IV_SEED).Hash;  // 16バイト(128ビット）
+        //    using (CryptoStream cryptoStream = new CryptoStream(outputStream, aes.CreateEncryptor(), CryptoStreamMode.Write)) {
+        //        if (!writer(cryptoStream)) {
+        //            return false;
+        //        }
+        //        cryptoStream.FlushFinalBlock();
+        //        cryptoStream.Flush();
+        //        return true;
+        //    }
+        //}
+
+
+
+        public CryptoStream OpenStreamForEncryption(Stream outputStream) { 
+            if (_cryptoKey == null) {
+                _logger.LogError("No CryptoKey ... SetPassword in advance.");
+                throw new InvalidOperationException("call SetPassword to set old password earlier.");
+            }
+            var aes = Aes.Create();
+            //aes.Key = HashHelper.SHA256(_cryptoKey, CRYPT_SEED).Hash;
+            aes.Key = Guid.Parse(_cryptoKey).ToByteArray();     // 128ビット ... AES の最短鍵長 ... これで十分。
+            aes.IV = HashHelper.MD5(_cryptoKey, IV_SEED).Hash;  // 16バイト(128ビット）
+            return new CryptoStream(outputStream, aes.CreateEncryptor(), CryptoStreamMode.Write);
+        }
+
+
         public async Task EncryptStreamAsync(Stream inputStream, Stream outputStream, ProgressProc? progress) {
             if (_cryptoKey == null) {
                 _logger.LogError("No CryptoKey ... SetPassword in advance.");
@@ -95,17 +117,21 @@ namespace SecureArchive.DI.Impl
             });
         }
 
-        public async Task DecryptStreamAsync(Stream inputStream, Stream outputStream, ProgressProc? progress) {
+        public Stream OpenStreamForDecryption(Stream inputStream) {
             if (_cryptoKey == null) {
                 _logger.LogError("No CryptoKey ... SetPassword in advance.");
                 throw new InvalidOperationException("call SetPassword to set old password earlier.");
             }
+            var aes = Aes.Create();
+            //aes.Key = HashHelper.SHA256(_cryptoKey, CRYPT_SEED).Hash;
+            aes.Key = Guid.Parse(_cryptoKey).ToByteArray();     // 128ビット ... AES の最短鍵長 ... これで十分。
+            aes.IV = HashHelper.MD5(_cryptoKey, IV_SEED).Hash;  // 16バイト(128ビット）
+            return new CryptoStream(inputStream, aes.CreateDecryptor(), CryptoStreamMode.Read);
+        }
+
+        public async Task DecryptStreamAsync(Stream inputStream, Stream outputStream, ProgressProc? progress) {
             await Task.Run(() => {
-                var aes = Aes.Create();
-                //aes.Key = HashHelper.SHA256(_cryptoKey, CRYPT_SEED).Hash;
-                aes.Key = Guid.Parse(_cryptoKey).ToByteArray();     // 128ビット ... AES の最短鍵長 ... これで十分。
-                aes.IV = HashHelper.MD5(_cryptoKey, IV_SEED).Hash;  // 16バイト(128ビット）
-                using (CryptoStream cryptoStream = new CryptoStream(inputStream, aes.CreateDecryptor(), CryptoStreamMode.Read)) {
+                using (var cryptoStream = OpenStreamForDecryption(inputStream)) { 
                     var buffer = new byte[4096];
                     int len;
                     long total = inputStream.Length;

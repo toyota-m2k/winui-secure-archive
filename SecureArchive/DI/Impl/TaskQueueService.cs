@@ -1,13 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using SecureArchive.Utils;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms.VisualStyles;
 
-namespace SecureArchive.DI.Impl; 
+namespace SecureArchive.DI.Impl;
 internal class TaskQueueService : ITaskQueueService {
     IMainThreadService _mainThreadService;
     ILogger _logger;

@@ -1,22 +1,16 @@
 ﻿using Microsoft.Extensions.Logging;
-using SecureArchive.DI;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SecureArchive.DI.Impl;
-public class DataService : IDataService, IMutableTables {
+public class DatabaseService : IDatabaseService, IMutableTables {
     IAppConfigService _appConfigService;
     ILogger _logger;
     DBConnector _connector;
 
     FileEntryList _entries { get; }
     OwnerInfoList _ownerList { get; }
-    public KVList _kvs { get; }
+    KVList _kvs { get; }
 
     public IFileEntryList Entries => _entries;
     public IOwnerInfoList OwnerList => _ownerList;
@@ -26,7 +20,7 @@ public class DataService : IDataService, IMutableTables {
     IMutableOwnerInfoList IMutableTables.OwnerList => _ownerList;
     IMutableKVList IMutableTables.KVs => _kvs;
 
-    public DataService(IAppConfigService appConfigService, ILoggerFactory loggerFactory)
+    public DatabaseService(IAppConfigService appConfigService, ILoggerFactory loggerFactory)
     {
         _appConfigService = appConfigService;
         _logger = loggerFactory.CreateLogger("DataService");

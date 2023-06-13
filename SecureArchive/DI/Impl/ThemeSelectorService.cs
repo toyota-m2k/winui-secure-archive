@@ -1,7 +1,5 @@
 ﻿using Microsoft.UI.Xaml;
 using SecureArchive.Utils;
-using System;
-using System.Threading.Tasks;
 
 namespace SecureArchive.DI.Impl;
 

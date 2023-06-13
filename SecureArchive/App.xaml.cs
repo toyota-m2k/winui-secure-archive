@@ -57,10 +57,12 @@ namespace SecureArchive {
                     .AddSingleton<ILocalSettingsService, LocalSettingsService>()
                     .AddSingleton<IUserSettingsService, UserSettingsService>()
                     .AddSingleton<IPageService, PageService>()
-                    .AddSingleton<IDataService, DataService>()
+                    .AddSingleton<IDatabaseService, DatabaseService>()
                     .AddSingleton<ICryptographyService, CryptographyService>()
                     .AddSingleton<IPasswordService, PasswordService>()
                     .AddSingleton<IFileStoreService, FileStoreService>()
+                    .AddSingleton<ISecureStorageService, SecureStorageService>()
+                    .AddSingleton<IHttpServreService,  HttpServerService>()
                     .AddSingleton<IMainThreadService, MainThradService>()
                     .AddTransient<ITaskQueueService, TaskQueueService>()
                     .AddTransient<IStatusNotificationService, StatusNotificationService>()
@@ -93,7 +95,7 @@ namespace SecureArchive {
             MainWindow.Activate();
             TitleBarHelper.ApplySystemThemeToCaptionButtons();
 
-            var ds = GetService<IDataService>();
+            var ds = GetService<IDatabaseService>();
             ds.EditKVs((kvs) => {
                 kvs.SetString("hoge", "fuga");
                 return true;

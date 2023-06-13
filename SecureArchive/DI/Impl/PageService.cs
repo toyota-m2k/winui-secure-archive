@@ -10,6 +10,7 @@ internal class PageService : IPageService {
     Frame _rootFrame = null!;
     IFileStoreService _fileStoreService;
     private ReactivePropertySlim<Type?> _currentPageType = new(null);
+    private Page? _currentPage = null;
 
     public ReadOnlyReactivePropertySlim<bool> CanGoBack { get; }
 
@@ -30,6 +31,12 @@ internal class PageService : IPageService {
         if(sender is Frame frame) {
             // BackStackは自力で管理する。
             frame.BackStack.Clear();
+            if(e.Content is Page page) {
+                _currentPage = page;
+                if (page is INavigationAware after) {
+                    after.OnPageActivated();
+                }
+            }
         }
     }
 
@@ -42,6 +49,9 @@ internal class PageService : IPageService {
     private void NavigateTo(Type pageType) {
         if (_currentPageType.Value != pageType) {
             _currentPageType.Value = pageType;
+            if(_currentPage is INavigationAware before) {
+                before.OnPageLeaving();
+            }
             _rootFrame.Navigate(pageType);
         }
 

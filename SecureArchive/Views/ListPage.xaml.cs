@@ -29,7 +29,7 @@ namespace SecureArchive.Views {
             this.InitializeComponent();
 
             ViewModel.ExportCommand.Subscribe(() => {
-                _ = ViewModel.ExportFiles(FileListView.SelectedItems.Select((it)=>(FileEntry)it));
+                _ = ViewModel.ExportFiles(FileListView.SelectedItems.Select((it)=>(FileEntry)it).ToList());
             });
         }
     }
