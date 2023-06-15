@@ -1,10 +1,14 @@
 ﻿using Microsoft.Extensions.Logging;
+using SecureArchive.Utils;
 using SecureArchive.Utils.Crypto;
+using System.Runtime.InteropServices.WindowsRuntime;
+using System.Security.Cryptography;
+using Windows.Security.Cryptography;
 
 namespace SecureArchive.DI.Impl {
     internal class PasswordService: IPasswordService {
         const string KEY_PASSWORD = "Password";
-        const string PWD_SEED = "gewq#idsE%Dfa&ewqjo8S(33s2f66$";
+        const string PWD_SEED = "y6c46S/PBqd1zGFwghK2AFqvSDbdjl+YL/DKXgn/pkECj0x2fic5hxntizw5";
         PasswordStatus _passwordStatus = PasswordStatus.NotChecked;
         ILocalSettingsService _localSettingsService;
         ICryptographyService _cryptographyService;
@@ -22,11 +26,18 @@ namespace SecureArchive.DI.Impl {
 
         private async Task Initialize() {
             if(!_isInitialized) {
+                _isInitialized = true;
                 _hashedPassword = await _localSettingsService.GetAsync<string>(KEY_PASSWORD);
                 if(string.IsNullOrEmpty(_hashedPassword)) { 
                     _passwordStatus = PasswordStatus.NotSet;
                 }
-                _logger.LogDebug($"Initialized: state={_passwordStatus}");
+                //for (var i = 0; i < 10; i++) {
+                //    var rand = RandomNumberGenerator.GetBytes(45);
+                //    var sr = CryptographicBuffer.EncodeToBase64String(rand.AsBuffer());
+                //    _logger.Debug(sr);
+                //}
+
+                _logger.Debug($"Initialized: state={_passwordStatus}");
             }
         }
 
@@ -34,11 +45,11 @@ namespace SecureArchive.DI.Impl {
         public async Task<bool> SetPasswordAsync(string newPassword) {
             await Initialize();
             if(string.IsNullOrEmpty(newPassword)) {
-                _logger.LogError($"password must not be empty.");
+                _logger.Error($"password must not be empty.");
                 return false;
             }
             if(_passwordStatus == PasswordStatus.NotChecked) {
-                _logger.LogError($"check password on ahead.");
+                _logger.Error($"check password on ahead.");
                 return false;
             }
             try {
@@ -48,10 +59,11 @@ namespace SecureArchive.DI.Impl {
                     await _cryptographyService.ChangePasswordAsync(newPassword);
                 }
             } catch (Exception ex) {
-                _logger.LogError(ex, "change password error in CryptograpyService.");
+                _logger.Error(ex, "change password error in CryptograpyService.");
                 return false;
             }
-            await _localSettingsService.PutAsync(KEY_PASSWORD, HashHelper.SHA256(newPassword, PWD_SEED).AsHexString);
+            _hashedPassword = HashHelper.SHA256(newPassword, PWD_SEED).AsHexString;
+            await _localSettingsService.PutAsync(KEY_PASSWORD, _hashedPassword);
             _passwordStatus = PasswordStatus.Checked;
             return true;
         }
@@ -59,20 +71,20 @@ namespace SecureArchive.DI.Impl {
         public async Task<bool> CheckPasswordAsync(string password) {
             await Initialize();
             if(string.IsNullOrEmpty(_hashedPassword)) {
-                _logger.LogError("given password is empty.");
+                _logger.Error("given password is empty.");
                 return false;
             }
             if(_hashedPassword != HashHelper.SHA256(password, PWD_SEED).AsHexString) {
-                _logger.LogError("given password is not match.");
+                _logger.Error("given password is not match.");
                 return false;
             }
             try {
                 await _cryptographyService.SetPasswordAsync(password);
-                _logger.LogDebug("password checked.");
+                _logger.Debug("password checked.");
                 _passwordStatus = PasswordStatus.Checked;
                 return true;
             } catch (Exception ex) {
-                _logger.LogError(ex, "cannot set password to crypt service.");
+                _logger.Error(ex, "cannot set password to crypt service.");
                 return false;
             }
         }
@@ -81,5 +93,16 @@ namespace SecureArchive.DI.Impl {
             await Initialize();
             return _passwordStatus;
         }
+
+        public async Task<bool> CheckRemoteKey(string challenge, string? remoteKey) {
+            await Initialize();
+            if (string.IsNullOrEmpty(_hashedPassword)) {
+                _logger.Error("no password has been set yet.");
+                throw new InvalidOperationException("no password has been set yet.");
+            }
+            if (remoteKey == null) return false;
+            return HashHelper.SHA256(challenge, _hashedPassword).AsBase64String == remoteKey;
+        }
+
     }
 }

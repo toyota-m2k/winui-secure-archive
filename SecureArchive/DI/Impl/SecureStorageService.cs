@@ -55,7 +55,7 @@ internal class SecureStorageService : ISecureStorageService {
             return entry;
         }
         catch (Exception ex) {
-            _logger.LogError(ex, "Encryption Error.");
+            _logger.Error(ex, "Encryption Error.");
             if (File.Exists(cryptedFilePath)) {
                 FileUtils.SafeDelete(cryptedFilePath);
             }

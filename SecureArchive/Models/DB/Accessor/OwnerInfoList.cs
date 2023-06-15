@@ -7,8 +7,10 @@ using System.Threading.Tasks;
 
 namespace SecureArchive.Models.DB.Accessor;
 public interface IOwnerInfoList {
-    IEnumerable<OwnerInfo> List();
-    IEnumerable<OwnerInfo> List(Func<OwnerInfo, bool> predicate);
+    IList<OwnerInfo> List();
+    IList<OwnerInfo> List(Func<OwnerInfo, bool> predicate);
+    IList<T> List<T>(Func<OwnerInfo, bool> predicate, Func<OwnerInfo, T> select);
+    IList<T> List<T>(Func<OwnerInfo, T?> predicate) where T : class;
 
     OwnerInfo? Get(string ownerId);
 }
@@ -19,10 +21,13 @@ public interface IMutableOwnerInfoList: IOwnerInfoList {
 }
 
 public class OwnerInfoList : IMutableOwnerInfoList {
+    private DBConnector _connector;
     private DbSet<OwnerInfo> _owners;
-    public OwnerInfoList(DbSet<OwnerInfo> owners) {
-        _owners = owners;
+    public OwnerInfoList(DBConnector connector) {
+        _connector = connector;
+        _owners = connector.OwnerInfos;
     }
+
     public OwnerInfo Add(string ownerId, string name, string type, int flag, string? option = null) {
         var owner = new OwnerInfo() {
             OwnerId = ownerId,
@@ -31,16 +36,32 @@ public class OwnerInfoList : IMutableOwnerInfoList {
             Flags = flag,
             Option = option
         };
-        _owners.Add(owner);
+        lock (_connector) {
+            _owners.Add(owner);
+        }
         return owner;
     }
 
-    public IEnumerable<OwnerInfo> List() {
-        return _owners;
+    public IList<OwnerInfo> List() {
+        lock (_connector) {
+            return _owners.ToList();
+        }
     }
 
-    public IEnumerable<OwnerInfo> List(Func<OwnerInfo, bool> predicate) {
-        return _owners.Where(predicate);
+    public IList <OwnerInfo> List(Func<OwnerInfo, bool> predicate) {
+        lock (_connector) {
+            return _owners.Where(predicate).ToList();
+        }
+    }
+    public IList<T> List<T>(Func<OwnerInfo, bool> predicate, Func<OwnerInfo, T> select) {
+        lock (_connector) {
+            return _owners.Where(predicate).Select(select).ToList();
+        }
+    }
+    public IList<T> List<T>(Func<OwnerInfo, T?> predicate) where T : class {
+        lock (_connector) {
+            return _owners.Select(predicate).Where(it => it is not null).Select(it => it!).ToList();
+        }
     }
 
     public OwnerInfo? Get(string ownerId) {

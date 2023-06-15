@@ -37,6 +37,15 @@ class HttpErrorResponse : TextHttpResponse
                     "Not Found.");
     }
 
+    public static HttpErrorResponse Unauthorized(HttpRequest req) {
+        //string content = File.ReadAllText("Resources/Pages/404.html");
+
+        return new HttpErrorResponse(req,
+                    HttpStatusCode.Unauthorized,
+                    "Unauthorized.");
+    }
+
+
     public static HttpErrorResponse MethodNotAllowed(HttpRequest req)
     {
         return new HttpErrorResponse(req,

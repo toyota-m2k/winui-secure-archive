@@ -9,20 +9,38 @@ public class StreamingHttpResponse : AbstractHttpResponse {
     private long TotalLength = -1;
     private byte[]? Buffer = null;
     private int PartialLength = 0;
+    private UtLog Logger = new UtLog(typeof(StreamingHttpResponse));
 
     public StreamingHttpResponse(HttpRequest req, string contentType, Stream inStream, long start, long end)
         : base(req, HttpStatusCode.Ok) {
         InputStream = inStream;
         TotalLength = inStream.Length;
+        ContentType = contentType;
         Start = start;
         End = end;
         if (TotalLength > 0) {
-            ContentType = contentType;
+            ContentLength = TotalLength;
+        } else {
+            //ContentLength = 100000;
         }
     }
 
-    const int AUTO_BUFFER_SIZE = 32 * 1024;
+    const int AUTO_BUFFER_SIZE = 1 * 1024 * 1024;
     
+
+    int ReadStream(Stream inStream, byte[] buffer, out bool eos) {
+        eos = false;
+        var remain = buffer.Length;
+        while(remain> 0) {
+            int read = inStream.Read(buffer, buffer.Length-remain, remain);
+            if(read==0) {
+                eos = true;
+                break;
+            }
+            remain -= read;
+        }
+        return buffer.Length - remain;
+    }
 
     protected override void Prepare() {
         if (Start == 0 && End == 0) {
@@ -30,6 +48,7 @@ public class StreamingHttpResponse : AbstractHttpResponse {
             Headers["Accept-Ranges"] = "bytes";
         }
         else {
+            Logger.Debug($"Requested Range: {Start} - {End}");
             StatusCode = HttpStatusCode.PartialContent;
             if (TotalLength>0) {
                 Buffer = null;
@@ -40,14 +59,18 @@ public class StreamingHttpResponse : AbstractHttpResponse {
                 Headers["Content-Range"] = $"bytes {Start}-{End}/{TotalLength}";
                 Headers["Accept-Ranges"] = "bytes";
             } else {
-                Buffer = new byte[AUTO_BUFFER_SIZE];
-                InputStream.Seek(Start, SeekOrigin.Begin);
-                PartialLength = InputStream.Read(Buffer, 0, Buffer.Length);
-                if(End==0) {
-                    End = Start + PartialLength - 1;
+                int buffSize = AUTO_BUFFER_SIZE;
+                if (End > 0) {
+                    buffSize = (int)Math.Min((long)AUTO_BUFFER_SIZE, End - Start);
                 }
+                Buffer = new byte[buffSize];
+                InputStream.Seek(Start, SeekOrigin.Begin);
+                PartialLength = ReadStream(InputStream, Buffer, out var eos);
+                End = Start + PartialLength - 1;
                 ContentLength = PartialLength;
-                Headers["Content-Range"] = $"bytes {Start}-{End}/*";
+                var total = eos ? $"{End+1}" :"*";
+                Logger.Debug($"Actual Range: {Start} - {End} ({ContentLength})");
+                Headers["Content-Range"] = $"bytes {Start}-{End}/{total}";
                 Headers["Accept-Ranges"] = "bytes";
             }
         }
@@ -55,7 +78,13 @@ public class StreamingHttpResponse : AbstractHttpResponse {
 
     protected override void WriteBody(Stream output) {
         if (Start == 0 && End == 0) {
-            InputStream.CopyTo(output);
+            output.Flush();
+            try {
+                InputStream.CopyTo(output, 2048);
+            } catch (Exception e) {
+                Logger.Error(e);
+                throw;
+            }
         }
         else {
             if(Buffer==null) {

@@ -18,45 +18,58 @@ public interface IMutableKVList : IKVList {
 }
 
 public class KVList: IMutableKVList {
+    private DBConnector _connector;
     private DbSet<KV> _kvs;
-    public KVList(DbSet<KV> kvs) {
-        _kvs = kvs;
+    public KVList(DBConnector connector) {
+        _connector = connector;
+        _kvs = connector.KVs;
     }
 
     public void Delete(string key) {
-        _kvs.RemoveRange(_kvs.Where(it => it.Key == key));
+        lock (_connector) {
+            _kvs.RemoveRange(_kvs.Where(it => it.Key == key));
+        }
     }
 
     public int GetInt(string key, int def=0) {
-        return _kvs.FirstOrDefault(it => it.Key == key)?.iValue ?? 0;
+        lock (_connector) {
+            return _kvs.FirstOrDefault(it => it.Key == key)?.iValue ?? 0;
+        }
     }
 
     public string? GetString(string key) {
-        return _kvs.FirstOrDefault(it => it.Key == key)?.sValue;
+        lock (_connector) {
+            return _kvs.FirstOrDefault(it => it.Key == key)?.sValue;
+        }
     }
 
     public void SetInt(string key, int value) {
-        var e = _kvs.FirstOrDefault(it => it.Key == key);
-        if (e != null) {
-            e.iValue = value;
-        } else {
-            _kvs.Add(new KV() { 
-                Key = key,
-                iValue = value
-            });
+        lock (_connector) {
+            var e = _kvs.FirstOrDefault(it => it.Key == key);
+            if (e != null) {
+                e.iValue = value;
+            }
+            else {
+                _kvs.Add(new KV() {
+                    Key = key,
+                    iValue = value
+                });
+            }
         }
     }
 
     public void SetString(string key, string value) {
-        var e = _kvs.FirstOrDefault(it => it.Key == key);
-        if (e != null) {
-            e.sValue = value;
-        }
-        else {
-            _kvs.Add(new KV() {
-                Key = key,
-                sValue = value
-            });
+        lock (_connector) {
+            var e = _kvs.FirstOrDefault(it => it.Key == key);
+            if (e != null) {
+                e.sValue = value;
+            }
+            else {
+                _kvs.Add(new KV() {
+                    Key = key,
+                    sValue = value
+                });
+            }
         }
     }
 }

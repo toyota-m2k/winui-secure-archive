@@ -1,4 +1,6 @@
-﻿using System.Diagnostics;
+﻿using Microsoft.Extensions.Logging;
+using System.CodeDom;
+using System.Diagnostics;
 
 namespace SecureArchive.Utils;
 
@@ -8,29 +10,39 @@ public class SeekableInputStream : Stream
     private Stream _internalStream;
     public delegate Stream ReopenStreamProc(Stream currentStream);
     private ReopenStreamProc? _reopenStream;
+    private UtLog _logger = new (typeof(SeekableInputStream));
 
     public SeekableInputStream(Stream inStream, ReopenStreamProc? reopenStream)
     {
         Debug.Assert(inStream.CanRead);
         _internalStream = inStream;
         _reopenStream = reopenStream;
+        Length = getLength();
     }
 
 
-    public override long Length
-    {
-        get
-        {
-            try
-            {
-                return _internalStream.Length;
-            }
-            catch (Exception e)
-            {
-                return -1;
-            }
+    public override long Length { get; }
+    private long getLength() {
+        try {
+            return _internalStream.Length;
+        }
+        catch (Exception e) {
+            return -1;
         }
     }
+    //{
+    //    get
+    //    {
+    //        try
+    //        {
+    //            return _internalStream.Length;
+    //        }
+    //        catch (Exception e)
+    //        {
+    //            return -1;
+    //        }
+    //    }
+    //}
 
     private long _position = 0L;
     public override long Position
@@ -52,11 +64,17 @@ public class SeekableInputStream : Stream
 
     public override int Read(byte[] buffer, int offset, int count)
     {
-        return _internalStream.Read(buffer, offset, count);
+        var len = _internalStream.Read(buffer, offset, count);
+        _position += len;
+        return len;
+        //var len = _internalStream.Read(buffer, offset, count);
+        //_logger.Debug($"buffer size = {count} / read = {len}");
+        //return len;
     }
 
     public override long Seek(long offset, SeekOrigin origin)
     {
+        _logger.Debug($"Seek: currentPosition={_position} / requested={offset}");
         if (_internalStream.CanSeek)
         {
             return _internalStream.Seek(offset, origin);
@@ -90,7 +108,9 @@ public class SeekableInputStream : Stream
             _internalStream = _reopenStream(_internalStream);
             _position = 0;
         }
-        Skip(seekTo - _position);
+        var delta = seekTo - _position;
+        Skip(delta);
+        _position = seekTo;
         return seekTo;
     }
 

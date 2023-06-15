@@ -5,6 +5,7 @@ using System.Text.RegularExpressions;
 namespace SecureArchive.Utils.Server.lib.response {
     public interface IHttpResponse
     {
+        HttpRequest? Request { get; }
         void WriteResponse(Stream outputStream);
     }
 
@@ -13,13 +14,15 @@ namespace SecureArchive.Utils.Server.lib.response {
         private static Regex refererForCors = new Regex(@"(?<target>http://(?:localhost|127.0.0.1)(?::\d+)?)/");
         public HttpStatusCode StatusCode { get; set; }
         //public string ReasonPhrase { get; set; }
+        public HttpRequest? Request { get; }
 
 
         protected AbstractHttpResponse(HttpRequest? req, HttpStatusCode statusCode)
         {
+            Request = req;
             StatusCode = statusCode;
             // ローカルホストからの要求に対してはCross-Origin Resource Shareingを許可する
-            if (req != null && req.Headers.TryGetValue("Referer", out var referer))
+            if (req != null && req.Headers.TryGetValue("referer", out var referer))
             {
                 var m = refererForCors.Match(referer);
                 if (m.Success)

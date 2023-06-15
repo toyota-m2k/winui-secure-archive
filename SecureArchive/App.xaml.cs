@@ -40,7 +40,7 @@ namespace SecureArchive {
         public static Frame RootFrame => MainWindow.RootFrame;
 
         public static UIElement? AppTitleBar => MainWindow.AppTitleBar;
-        public ILogger logger { get; }
+        public ILogger Logger { get; }
 
         /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
@@ -78,12 +78,13 @@ namespace SecureArchive {
                 })
                 .Build();
 
-            logger = GetService<ILoggerFactory>().CreateLogger("App");
+            Logger = GetService<ILoggerFactory>().CreateLogger("");
+            UtLog.SetGlobalLogger(Logger);
             UnhandledException += OnUnhandledException;
         }
 
         private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e) {
-            logger.LogError(e.Exception, "Unhandled Exception");
+            Logger.Error(e.Exception, "Unhandled Exception");
         }
 
         /// <summary>

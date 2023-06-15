@@ -1,6 +1,7 @@
 ﻿using HttpMultipartParser;
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -56,9 +57,10 @@ public class HttpContent {
         HttpContent partContent = null!;
         void closeCurrentPart() {
             if (outStream != null) {
-                outStream.Flush();
+                Debug.WriteLine($"{DateTime.Now.ToLocalTime()} closeCurrentPart");
                 multipartContentHandler.CloseFile(partContent, outStream);
                 outStream = null;
+                Debug.WriteLine($"{DateTime.Now.ToLocalTime()} closeCurrentPart: Done");
             }
         }
 
@@ -78,6 +80,8 @@ public class HttpContent {
             outStream?.Write(buffer, 0, bytes);
             receivedLength += bytes;
             multipartContentHandler.Progress(receivedLength, contentLength);
+            var percent = contentLength > 0 ? receivedLength * 100 / contentLength : -1;
+            Debug.WriteLine($"{DateTime.Now.ToLocalTime()}: {receivedLength}/{contentLength} ({percent} %)");
         };
 
         parser.Run();

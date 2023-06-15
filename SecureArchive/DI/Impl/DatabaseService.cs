@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
+using SecureArchive.Utils;
 
 namespace SecureArchive.DI.Impl;
 public class DatabaseService : IDatabaseService, IMutableTables {
@@ -8,9 +9,9 @@ public class DatabaseService : IDatabaseService, IMutableTables {
     ILogger _logger;
     DBConnector _connector;
 
-    FileEntryList _entries { get; }
-    OwnerInfoList _ownerList { get; }
-    KVList _kvs { get; }
+    private FileEntryList _entries { get; }
+    private OwnerInfoList _ownerList { get; }
+    private KVList _kvs { get; }
 
     public IFileEntryList Entries => _entries;
     public IOwnerInfoList OwnerList => _ownerList;
@@ -25,12 +26,12 @@ public class DatabaseService : IDatabaseService, IMutableTables {
         _appConfigService = appConfigService;
         _logger = loggerFactory.CreateLogger("DataService");
 
-        _logger.LogDebug(appConfigService.DBPath);
+        _logger.Debug(appConfigService.DBPath);
 
         _connector = new DBConnector(appConfigService.DBPath);
-        _entries = new FileEntryList(_connector.Entries);
-        _ownerList = new OwnerInfoList(_connector.OwnerInfos);
-        _kvs = new KVList(_connector.KVs);
+        _entries = new FileEntryList(_connector);
+        _ownerList = new OwnerInfoList(_connector);
+        _kvs = new KVList(_connector);
     }
 
     private IMutableTables mutableTables => this;

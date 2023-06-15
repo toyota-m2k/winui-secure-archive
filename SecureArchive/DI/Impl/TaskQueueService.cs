@@ -51,7 +51,7 @@ internal class TaskQueueService : ITaskQueueService {
     private void Push(Func<Task> internalAction) {
         int id = _taskIdGenerator.IncrementAndGet();
         lock (this) {
-            _logger.LogDebug("Task ({0}): Enqueued.", id);
+            _logger.Debug($"Task ({id}): Enqueued.");
             _taskQueue.Enqueue(new QueueingTask(id, internalAction));
         }
         Execute();
@@ -78,10 +78,10 @@ internal class TaskQueueService : ITaskQueueService {
                 }
                 try {
                     await task.Execute();
-                    _logger.LogDebug("Task ({0}): Completed.", task.Id);
+                    _logger.Debug($"Task ({task.Id}): Completed.");
                 }
                 catch (Exception ex) {
-                    _logger.LogError(ex, "Task ({0}): Error.", task.Id);
+                    _logger.Error(ex, $"Task ({task.Id}): Error.");
                 }
             }
         });

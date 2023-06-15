@@ -8,12 +8,18 @@ using System.Threading.Tasks;
 
 namespace SecureArchive.Utils.Server.lib.response {
     public class NullResponse : IHttpResponse {
-        public NullResponse() {
+        public HttpRequest? Request { get; }
+
+        public NullResponse(HttpRequest? request) {
+            Request = request;
         }
 
         public void WriteResponse(Stream output) {
             
         }
-        public static NullResponse Instance { get { return new NullResponse(); } }
+        public static NullResponse Get(HttpRequest req) { 
+            return new NullResponse(req); 
+        }
+
     }
 }

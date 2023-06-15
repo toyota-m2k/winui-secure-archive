@@ -31,7 +31,7 @@ public class HttpServer
     #region Public Methods
     public HttpServer(List<Route> routes, ILogger logger)
     {
-        Processor = new HttpProcessor(logger); ;
+        Processor = new HttpProcessor(); ;
         //mReportOutput = new WeakReference<IReportOutput>(reportOutput);
         Logger = logger;
 
@@ -68,11 +68,11 @@ public class HttpServer
             _running.OnNext(true);
             Listener = new TcpListener(IPAddress.Any, port);
             Listener.Start();
-            Logger.LogInformation("HTTP Server Running.");
+            Logger.Info($"HTTP Server Running... Port={port}");
         }
         catch (Exception e)
         {
-            Logger.LogError(e, "Start");
+            Logger.Error(e, "cannot start server.");
             Stop();
             return false;
         }
@@ -84,13 +84,14 @@ public class HttpServer
                 {
                     TcpClient s = await Listener.AcceptTcpClientAsync();
                     Processor.HandleClient(s);
+                    Logger.Debug("Processer Completed.");
                 }
                 catch (Exception e)
                 {
                     if (Alive)
                     {
                         //ReportOutput?.ErrorOutput(e.ToString());
-                        Logger.LogError(e, "Listen");
+                        Logger.Error(e, "cannot listen.");
                     }
                 }
             }
@@ -98,7 +99,7 @@ public class HttpServer
             {
                 _running.OnNext(false);
                 Listener.Stop();
-                Logger.LogInformation("HTTP Server Stopped.");
+                Logger.Info("HTTP Server Stopped.");
             }
         });
         return true;

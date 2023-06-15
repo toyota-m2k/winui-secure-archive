@@ -1,10 +1,14 @@
 ﻿using Microsoft.Extensions.Logging;
 using SecureArchive.Models.DB;
 using SecureArchive.Utils;
+using SecureArchive.Utils.Crypto;
 using SecureArchive.Utils.Server.lib;
 using SecureArchive.Utils.Server.lib.model;
 using SecureArchive.Utils.Server.lib.response;
+using System.Runtime.InteropServices.WindowsRuntime;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using Windows.Security.Cryptography;
 using static SecureArchive.Utils.Server.lib.model.HttpContent;
 using HttpContent = SecureArchive.Utils.Server.lib.model.HttpContent;
 
@@ -15,16 +19,20 @@ internal class HttpServerService : IHttpServreService {
     private HttpServer _server;
     private ISecureStorageService _secureStorageService;
     private IDatabaseService _databaseService;
+    private IPasswordService _passwordService;
 
     //private IUserSettingsService _userSettingsService;
-    public HttpServerService(ILoggerFactory factory, ISecureStorageService secureStorageService, IDatabaseService databaseService) {
+    public HttpServerService(ILoggerFactory factory, ISecureStorageService secureStorageService, IDatabaseService databaseService, IPasswordService passwordService) {
         _logger = factory.CreateLogger<HttpServerService>();
         _secureStorageService = secureStorageService;
         _databaseService = databaseService;
+        _passwordService = passwordService;
 
         //_userSettingsService = userSettingsService;
         _server = new HttpServer(Routes(), _logger);
     }
+
+    #region Uploading
 
     private Dictionary<string, UploadHandler> _uploadingTasks = new Dictionary<string, UploadHandler>();
     private void RegisterUploadTask(UploadHandler handler) {
@@ -56,6 +64,7 @@ internal class HttpServerService : IHttpServreService {
         public IDictionary<string, string> Parameters { get; } = new Dictionary<string, string>();
 
         private IEntryCreator? _entryCreator = null;
+        public bool HasError { get; set; }
 
         public Stream CreateFile(HttpContent multipartBody) {
             Dispose();
@@ -101,12 +110,76 @@ internal class HttpServerService : IHttpServreService {
         }
     }
 
+    #endregion
+    #region Authentication
+
+    class OneTimePasscode {
+        IPasswordService _passwordService;
+        readonly TimeSpan ValidTerm = new TimeSpan(0, 30, 0);    // 30分
+        string _challenge = null!; // = Guid.NewGuid().ToString();
+        string _authToken = null!; // = CryptographicBuffer.EncodeToHexString(RandomNumberGenerator.GetBytes(8).AsBuffer());
+        DateTime _tick = DateTime.MinValue;
+
+        public OneTimePasscode(IPasswordService passwordService) {
+            _passwordService = passwordService;
+            Reset();
+        }
+
+        private void Validate() {
+            if(DateTime.Now - _tick > ValidTerm) {
+                Reset();
+            }
+        }
+
+        public string Challenge {
+            get {
+                Validate();
+                return _challenge;
+            }
+        }
+
+        void Reset() {
+            _challenge = Guid.NewGuid().ToString();
+            _authToken = CryptographicBuffer.EncodeToHexString(RandomNumberGenerator.GetBytes(8).AsBuffer());
+            _tick = DateTime.Now;
+        }
+
+        public async Task<IHttpResponse> Authenticate(HttpRequest request, string? authPhrase) {
+            Validate();
+            if(!await _passwordService.CheckRemoteKey(_challenge, authPhrase)) {
+                return UnauthorizedResponse(request);
+            } else {
+                var dic = new Dictionary<string, object> {
+                    { "cmd", "auth" },
+                    { "token", _authToken },
+                    { "term", (_tick + ValidTerm).Ticks }
+                };
+                return TextHttpResponse.FromJson(request, dic);
+            }
+        }
+
+        public bool CheckAuthToken(string? token) {
+            Validate();
+            if (token == null) return false;
+            return token == _authToken;
+        }
+
+        public IHttpResponse UnauthorizedResponse(HttpRequest request) {
+            Validate();
+            var dic = new Dictionary<string, object> { { "challenge", _challenge } };
+            return TextHttpResponse.FromJson(request, dic, HttpStatusCode.Unauthorized);
+        }
+    }
+    #endregion
+    #region Router
+
     public Regex RegRange = new Regex(@"bytes=(?<start>\d+)(?:-(?<end>\d+))?");
 
     private List<Route> Routes() {
         FileEntry? currentEntry = null;
         SeekableInputStream? seekableInputStream = null;
-        var challenge = Guid.NewGuid().ToString();
+        var oneTimePasscode = new OneTimePasscode(_passwordService);
+
         return new List<Route> {
             Route.get(
                 name: "nop",
@@ -124,17 +197,27 @@ internal class HttpServerService : IHttpServreService {
                     }
                     using(var handler = new UploadHandler(_secureStorageService)) {
                         RegisterUploadTask(handler);
+                        // Uploadされたファイルの登録に時間がかかるので、一旦、202応答を返しておく。
+                        // 登録処理の経過が知りたければ、GET /uploading/<taskId> で取得する。
                         var response = new TextHttpResponse(request, HttpStatusCode.Accepted, "");
                         response.Headers.Add("Location", $"/uploading/{handler.ID}");
                         response.WriteResponse(request.OutputStream);
-                        content.ParseMultipartContent(handler);
-                        UnregisterUploadTask(handler);
+                        _logger.Debug("Accept file : 202 Response.");
+
+                        // そのあとで登録処理を実行
+                        try {
+                            _logger.Debug("Parsing Multipart");
+                            content.ParseMultipartContent(handler);
+                            UnregisterUploadTask(handler);
+                            _logger.Debug("Parsing Multipart ... Completed");
+                        } catch (Exception ex) {
+                            _logger.Error(ex, "Parsing multipart body error.");
+                            handler.HasError = true;
+                        }
+                        // 処理完了
                     }
-                    return NullResponse.Instance;
-                    //using(var handler = new UploadHandler(_secureStorageService)) {
-                    //    content.ParseMultipartContent(handler);
-                    //}
-                    //return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
+                    // すでに応答を返しているので、ここは制御を戻すだけ。
+                    return NullResponse.Get(request);
                 }),
             Route.get(
                 name: "upload task",
@@ -163,29 +246,53 @@ internal class HttpServerService : IHttpServreService {
                         {"cmd", "capability"},
                         {"serverName", "SecureArchive"},
                         {"version", 1},
+                        {"root", "/" },
                         {"category", false},
                         {"rating", false},
                         {"mark", false},
+                        {"chapter", false },
+                        {"sync", false },
                         {"acceptRequest", false},
                         {"hasView", false},
                         {"authentication", true},
-                        {"challenge",  challenge},
+                        {"challenge",  oneTimePasscode.Challenge },
                     };
                     return TextHttpResponse.FromJson(request, cap);
+                }),
+            Route.put(
+                name: "authentication",
+                regex: "/auth",
+                process: (HttpRequest request) => {
+                    var passPhrease = request.Content?.TextContent?.Trim();
+                    return oneTimePasscode.Authenticate(request, passPhrease).Result;
+                }),
+            Route.get(
+                name: "auth & nop",
+                regex: @"/auth/.*",
+                process: (HttpRequest request) => {
+                    if(!oneTimePasscode.CheckAuthToken(request.Url.Substring(6))) {
+                        return oneTimePasscode.UnauthorizedResponse(request);
+                    }
+                    return new TextHttpResponse(request, HttpStatusCode.Ok, "Ok");
                 }),
             Route.get(
                 name: "list",
                 regex: @"/list(?:\?.*)?",
                 process: (HttpRequest request) => {
-                    var list = _databaseService.Entries.List()
-                    .Where((it) => {
-                        return it.Type == ".mp4";
-                    }).Select((entry) => {
-                        return new Dictionary<string, object>() {
-                            { "id", entry.Id },
-                            { "name", entry.Name },
-                            { "type", entry.Type.Substring(1) },
-                            { "size", entry.Size },
+                    var p = QueryParser.Parse(request.Url);
+                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+                        return oneTimePasscode.UnauthorizedResponse(request);
+                    }
+                    var list = _databaseService.Entries.List(
+                        predicate: (it) => {
+                            return it.Type == ".mp4";
+                        }, 
+                        select: (entry) => {
+                            return new Dictionary<string, object>() {
+                                { "id", entry.Id },
+                                { "name", entry.Name },
+                                { "type", entry.Type.Substring(1) },
+                                { "size", entry.Size },
                         };
                     });
                     var dic = new Dictionary<string,object> {
@@ -199,20 +306,25 @@ internal class HttpServerService : IHttpServreService {
                 name: "video",
                 regex: @"/video\?\w+",
                 process: (HttpRequest request) => {
-                    var id = Convert.ToInt64(QueryParser.Parse(request.Url)["id"]);
-                    var entry = _databaseService.Entries.List().Where((it) => it.Id == id).SingleOrDefault();
+                    var p = QueryParser.Parse(request.Url);
+                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+                        return oneTimePasscode.UnauthorizedResponse(request);
+                    }
+                    var id = Convert.ToInt64(p.GetValue("id", "0"));
+                    var entry = _databaseService.Entries.GetById(id);
                     if(entry==null) {
                         return HttpErrorResponse.NotFound(request);
                     }
 
                     if(currentEntry?.Id != entry.Id) {
+                        currentEntry = entry;
                         seekableInputStream?.Dispose();
                         seekableInputStream = new SeekableInputStream(_secureStorageService.OpenEntry(entry), (oldStream) => {
                             oldStream.Dispose();
                             return _secureStorageService.OpenEntry(entry);
                         });
                     }
-                    if(!request.Headers.TryGetValue("Range", out var range)) {
+                    if(!request.Headers.TryGetValue("range", out var range)) {
                         //Source?.StandardOutput($"BooServer: cmd=video({id})");
                         return new StreamingHttpResponse(request, "video/mp4", seekableInputStream!, 0, 0);
                     }
@@ -240,6 +352,9 @@ internal class HttpServerService : IHttpServreService {
         };
     }
 
+    #endregion
+    #region Server
+
     public IObservable<bool> Running => _server.Running;
     
     public bool Start(int port) {
@@ -250,4 +365,5 @@ internal class HttpServerService : IHttpServreService {
     public void Stop() {
         _server.Stop();
     }
+    #endregion
 }

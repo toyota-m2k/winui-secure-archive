@@ -15,5 +15,6 @@ namespace SecureArchive.DI {
         Task<PasswordStatus> GetPasswordStatusAsync();
         Task<bool> CheckPasswordAsync(string password);
         Task<bool> SetPasswordAsync(string newPassword);
+        Task<bool> CheckRemoteKey(string challenge, string? remoteKey);
     }
 }

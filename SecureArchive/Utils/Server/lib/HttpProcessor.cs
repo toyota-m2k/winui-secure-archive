@@ -17,14 +17,13 @@ public class HttpProcessor {
     //private static int MAX_POST_SIZE = 10 * 1024 * 1024; // 10MB
 
     private List<Route> Routes = new List<Route>();
-    private ILogger Logger;
+    private UtLog Logger = new UtLog(typeof(HttpProcessor));
 
     #endregion
 
     #region Constructors
 
-    public HttpProcessor(ILogger logger) {
-        Logger = logger;
+    public HttpProcessor() {
     }
 
     #endregion
@@ -32,8 +31,11 @@ public class HttpProcessor {
     #region Public Methods
     public void HandleClient(TcpClient tcpClient) {
         Task.Run(() => {
+            using (tcpClient)
             using (Stream inputStream = GetInputStream(tcpClient))
             using (Stream outputStream = GetOutputStream(tcpClient)) {
+                Logger.Debug("Started.");
+    
                 IHttpResponse response = ProcessRequest(inputStream, outputStream);
 
 
@@ -54,13 +56,16 @@ public class HttpProcessor {
 
                 //Console.WriteLine("{0} {1}", response.ToString(), request.Url);
                 try {
+                    Logger.Info($"Sending: {response.Request?.Url ?? "?"}");
                     response.WriteResponse(outputStream);
                     outputStream.Flush();
+                    Logger.Info($"Complete: {response.Request?.Url ?? "?"}");
                 }
                 catch (Exception e) {
-                    Logger.LogError(e, "WriteResponse");
+                    Logger.Error(e, $"WriteResponse {response.Request?.Url ?? "?"}");
                 }
             }
+            Logger.Debug("Finished.");
         });
     }
 
@@ -137,7 +142,7 @@ public class HttpProcessor {
     //}
 
     private string GetValueOrNull(Dictionary<string, string> map, string key, string def = "") {
-        return map.TryGetValue("content-length", out var value) ? value : def;
+        return map.TryGetValue(key, out var value) ? value : def;
     }
 
     private bool IsTextType(string contentType) {
@@ -155,7 +160,7 @@ public class HttpProcessor {
             return route.Process(request);
         }
         catch (Exception ex) {
-            Logger.LogError(ex, "Route.Process");
+            Logger.Error(ex, "Route.Process");
             if (ex is HttpException httpException) {
                 return httpException.ErrorResponse;
             }

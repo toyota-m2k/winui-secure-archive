@@ -73,7 +73,7 @@ namespace SecureArchive.Views.ViewModels {
                 await _secureStorageService.Export(entry, outFile, progress);
                 return true;
             } catch (Exception ex) {
-                _logger.LogError(ex, "Decryption Error.");
+                _logger.Error(ex, "Decryption Error.");
                 return false;
             }
         }
@@ -145,7 +145,7 @@ namespace SecureArchive.Views.ViewModels {
                             }
                             catch (Exception ex) {
                                 error++;
-                                _logger.LogError(ex, "Encryption Error.");
+                                _logger.Error(ex, "Encryption Error.");
                             }
                         }
                         updateMessage($"Imported {success}/{success+error} file(s)");
@@ -153,7 +153,7 @@ namespace SecureArchive.Views.ViewModels {
                 });
 
             } catch(Exception e) {
-                _logger.LogError(e, "AddLocalFile Error");
+                _logger.LogError(e, "LocalFile Error");
             }
         }
     }
