@@ -25,7 +25,7 @@ public class StreamingHttpResponse : AbstractHttpResponse {
         }
     }
 
-    const int AUTO_BUFFER_SIZE = 1 * 1024 * 1024;
+    const int AUTO_BUFFER_SIZE = 4 * 1024 * 1024;       // 32KB 程度だとストリーミングに失敗した。ある程度の大きさが必要みたい。
     
 
     int ReadStream(Stream inStream, byte[] buffer, out bool eos) {
