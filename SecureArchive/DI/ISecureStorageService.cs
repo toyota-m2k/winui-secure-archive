@@ -8,13 +8,14 @@ using System.Threading.Tasks;
 namespace SecureArchive.DI;
 public interface IEntryCreator : IDisposable {
     Stream OutputStream { get; }
-    FileEntry Complete(string ownerId, string name, long size, string type, long originalDate, string? originalId, string? metaInfo);
+    FileEntry Complete(string name, long size, string type, long originalDate, string? metaInfo);
 }
 
 internal interface ISecureStorageService {
+    bool IsRegistered(string ownerId, string originalId);
     Task<FileEntry?> RegisterFile(string filePath, string ownerId, string? name, long originalDate, string? originalId, string? metaInfo, ProgressProc? progress);
     Task<FileEntry?> Register(Stream inStream, string ownerId, string name, long size, string type, long originalDate, string? originalId, string? metaInfo, ProgressProc? progress);
-    Task<IEntryCreator> CreateEntry();
+    Task<IEntryCreator?> CreateEntry(string ownerId, string originalId, bool overwrite=false);
 
     Stream OpenEntry(FileEntry entry);
     Task Export(FileEntry entry, string outPath);

@@ -30,13 +30,15 @@ public static class LogUtils {
 }
 
 public class UtLog {
+    static private ILogger _globalLogger = null!;
     public static void SetGlobalLogger(ILogger logger) {
-        _logger = logger;
+        _globalLogger = logger;
     }
-    static ILogger _logger = null!;
+    ILogger _logger;
     string _prefix;
-    public UtLog(string prefix) {
+    public UtLog(string prefix, ILogger? logger=null) {
         _prefix = prefix;
+        _logger = logger ?? _globalLogger;
     }
     public UtLog(Type clazz) {
         _prefix = clazz.Name;

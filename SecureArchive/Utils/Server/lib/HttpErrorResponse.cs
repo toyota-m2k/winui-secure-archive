@@ -53,6 +53,12 @@ class HttpErrorResponse : TextHttpResponse
                     "Method Not Allowed");
     }
 
+    public static HttpErrorResponse Conflict(HttpRequest req) {
+        return new HttpErrorResponse(req,
+                    HttpStatusCode.Conflict,
+                    "Conflict");
+    }
+
     public static HttpErrorResponse ServiceUnavailable(HttpRequest req)
     {
         return new HttpErrorResponse(req,

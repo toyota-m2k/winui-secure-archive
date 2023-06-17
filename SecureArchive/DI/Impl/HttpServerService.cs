@@ -1,13 +1,20 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
+using Microsoft.Extensions.Logging;
+using Newtonsoft.Json;
 using SecureArchive.Models.DB;
 using SecureArchive.Utils;
 using SecureArchive.Utils.Crypto;
 using SecureArchive.Utils.Server.lib;
 using SecureArchive.Utils.Server.lib.model;
 using SecureArchive.Utils.Server.lib.response;
+using System.Data.Common;
+using System.Data.SqlTypes;
+using System.Diagnostics;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
+using System.Windows.Controls;
+using System.Windows.Navigation;
 using Windows.Security.Cryptography;
 using static SecureArchive.Utils.Server.lib.model.HttpContent;
 using HttpContent = SecureArchive.Utils.Server.lib.model.HttpContent;
@@ -20,15 +27,21 @@ internal class HttpServerService : IHttpServreService {
     private ISecureStorageService _secureStorageService;
     private IDatabaseService _databaseService;
     private IPasswordService _passwordService;
+    private IBackupService _backupService;
 
     //private IUserSettingsService _userSettingsService;
-    public HttpServerService(ILoggerFactory factory, ISecureStorageService secureStorageService, IDatabaseService databaseService, IPasswordService passwordService) {
+    public HttpServerService(
+        ILoggerFactory factory, 
+        ISecureStorageService secureStorageService,
+        IDatabaseService databaseService,
+        IPasswordService passwordService,
+        IBackupService backupService) {
         _logger = factory.CreateLogger<HttpServerService>();
         _secureStorageService = secureStorageService;
         _databaseService = databaseService;
         _passwordService = passwordService;
+        _backupService = backupService;
 
-        //_userSettingsService = userSettingsService;
         _server = new HttpServer(Routes(), _logger);
     }
 
@@ -70,7 +83,17 @@ internal class HttpServerService : IHttpServreService {
             Dispose();
             ContentLength = 0;
             ReceivedLength = 0;
-            var entryCreator = _secureStorageService.CreateEntry().Result;
+
+            if (!Parameters.TryGetValue("OwnerId", out var ownerId)) {
+                ownerId = "*";
+            }
+            if (!Parameters.TryGetValue("OriginalId", out var originalId)) {
+                originalId = "";
+            }
+            var entryCreator = _secureStorageService.CreateEntry(ownerId, originalId, true).Result;
+            if(entryCreator==null) {
+                throw new InvalidOperationException("cannot create entry.");
+            }
             _entryCreator = entryCreator;
             return entryCreator.OutputStream;
         }
@@ -80,20 +103,14 @@ internal class HttpServerService : IHttpServreService {
                 return;
             }
             var name = string.IsNullOrEmpty(multipartBody.Filename) ? multipartBody.Name : multipartBody.Filename;
-            if (!Parameters.TryGetValue("OwnerId", out var ownerId)) {
-                ownerId = "*";
-            }
             long originalDate = 0;
             if (!Parameters.TryGetValue("FileDate", out var fileDateText)) {
                 originalDate = Convert.ToInt64(fileDateText);
             }
-            if (!Parameters.TryGetValue("OriginalId", out var originalId)) {
-                originalId = "";
-            }
             if (!Parameters.TryGetValue("MetaInfo", out var metaInfo)) {
                 metaInfo = null;
             }
-            _entryCreator?.Complete(ownerId, name, multipartBody.ContentLength, Path.GetExtension(name), originalDate, originalId, metaInfo);
+            _entryCreator?.Complete(name, multipartBody.ContentLength, Path.GetExtension(name), originalDate, metaInfo);
             Dispose();
         }
 
@@ -253,6 +270,7 @@ internal class HttpServerService : IHttpServreService {
                         {"chapter", false },
                         {"sync", false },
                         {"acceptRequest", false},
+                        {"backup", true},
                         {"hasView", false},
                         {"authentication", true},
                         {"challenge",  oneTimePasscode.Challenge },
@@ -349,7 +367,71 @@ internal class HttpServerService : IHttpServreService {
                     };
                     return TextHttpResponse.FromJson(request, dic);
                 }),
+            Route.put(
+                name:"register owner",
+                regex: @"/owner",
+                process: (request) => {
+                    var content = request.Content?.TextContent;
+                    if (content== null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    if(!RegisterOwner(JsonConvert.DeserializeObject<Dictionary<string, string>>(content))) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "owner" }, {"status", "registered"} });
+                }),
+            Route.put(
+                name: "backup",
+                regex: @"/backup",
+                process: (request) => {
+                    var content = request.Content?.TextContent;
+                    if (content== null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(content);
+                    if (dic == null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var token = dic.GetValue("token");
+                    var client = dic.GetValue("url");
+                    var ownerId = dic.GetValue("id");
+                    if(token.IsEmpty() ||client.IsEmpty() ||ownerId.IsEmpty()) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    RegisterOwner(dic);
+                    if(_backupService.startBackup(ownerId!, token!, client!)) {
+                        return HttpErrorResponse.Conflict(request);
+                    }
+                    return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "backup" }, {"status", "accepted"} });
+                }),
+                
+            
         };
+    }
+
+    private bool RegisterOwner(IDictionary<string,string>? dic) {
+        if (dic == null) return false;
+        var ownerId = dic.GetValue("id");
+        var ownerName = dic.GetValue("name");
+        var ownerType = dic.GetValue("type") ?? "*";
+        var flag = Convert.ToInt32(dic.GetValue("type") ?? "0");
+        var option = dic.GetValue("option");
+        if (ownerId.IsEmpty()|| ownerName.IsEmpty()) {
+            return false;
+        }
+        _databaseService.EditOwnerList(list => {
+            var reg = list.Get(ownerId);
+            if (reg != null) {
+                reg.Option = option;
+                reg.Name = ownerName;
+                reg.Type = ownerType;
+                reg.Flags = flag;
+            } else { 
+                list.Add(ownerId, ownerName, ownerType, flag, option);
+            }
+            return true;
+        });
+        return true;
     }
 
     #endregion

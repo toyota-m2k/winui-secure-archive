@@ -25,8 +25,12 @@ public class StreamingHttpResponse : AbstractHttpResponse {
         }
     }
 
-    const int AUTO_BUFFER_SIZE = 4 * 1024 * 1024;       // 32KB 程度だとストリーミングに失敗した。ある程度の大きさが必要みたい。
-    
+    // ファイル長が不明の場合、クライアントからはバッファサイズが要求されない（End=0）。
+    // その場合は、サーバー側の都合でバッファサイズを決めるのだが、
+    // 32KB 程度だとストリーミングに失敗し、1MBならOKだった。ある程度の大きさが必要らしい。
+    // 実際に（ファイル長がわかっている場合に） Android ExoPlayer から要求されるバッファサイズが4MBだったので、
+    // デフォルトのバッファサイズは 4MBとしておく。
+    const int AUTO_BUFFER_SIZE = 4 * 1024 * 1024;    
 
     int ReadStream(Stream inStream, byte[] buffer, out bool eos) {
         eos = false;
