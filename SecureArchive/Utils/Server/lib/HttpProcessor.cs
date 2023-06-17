@@ -211,12 +211,14 @@ public class HttpProcessor {
         List<Route> routes = Routes.Where(x => Regex.Match(request.Url, x.UrlRegex).Success).ToList();
 
         if (!routes.Any()) {
+            Logger.Error($"Not Found: {request.Method} {request.Url}");
             throw HttpErrorResponse.NotFound(request).Exception;
         }
 
         Route? route = routes.FirstOrDefault(x => x.Method == request.Method);
 
         if (route == null) {
+            Logger.Error($"Not Found: {request.Method} {request.Url}");
             throw HttpErrorResponse.MethodNotAllowed(request).Exception;
         }
 

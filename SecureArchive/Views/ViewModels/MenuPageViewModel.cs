@@ -21,7 +21,7 @@ namespace SecureArchive.Views.ViewModels {
         }
 
         public async void StartServer() {
-            _httpServreService.Start(await _userSettingsService.GetIntAsync(SettingsKey.PortNo));
+            _httpServreService.Start((await _userSettingsService.GetAsync()).PortNo);
         }
         public void StopServer() {
             _httpServreService.Stop();

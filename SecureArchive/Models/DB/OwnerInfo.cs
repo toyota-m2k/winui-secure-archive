@@ -11,7 +11,7 @@ namespace SecureArchive.Models.DB;
 [Table("t_owner_info")]
 public class OwnerInfo {
     public static string[] DDL = {
-        @"CREATE TABLE IF NOT EXISTS t_kv(
+        @"CREATE TABLE IF NOT EXISTS t_owner_info(
             OwnerId TEXT NOT NULL PRIMARY KEY,
             Name TEXT NOT NULL,
             Type TEXT NOT NULL,

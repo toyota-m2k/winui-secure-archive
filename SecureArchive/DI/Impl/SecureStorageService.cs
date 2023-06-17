@@ -31,6 +31,10 @@ internal class SecureStorageService : ISecureStorageService {
 
     #region Write
 
+    public bool IsRegistered(string ownerId, string originalId) {
+        return null != _databaseService.Entries.GetByOriginalId(ownerId, originalId);
+    }
+
     public async Task<FileEntry?> RegisterFile(string filePath, string ownerId, string? name, long originalDate, string? originalId, string? metaInfo, ProgressProc? progress) {
         var type = Path.GetExtension(filePath) ?? "*";
         var info = new FileInfo(filePath);
@@ -94,7 +98,15 @@ internal class SecureStorageService : ISecureStorageService {
         private string _cryptedFilePath;
         private bool _completed = false;
 
-        public EntryCreator(string cryptedFilePath, ICryptographyService cryptService, IDatabaseService databaseService) {
+        private string _ownerId;
+        private string _originalId;
+        private long _existingId;
+
+        public EntryCreator(string ownerId, string originalId, FileEntry? entry, string cryptedFilePath, ICryptographyService cryptService, IDatabaseService databaseService) {
+            _ownerId = ownerId;
+            _originalId = originalId;
+            _existingId = entry?.Id ?? -1;
+
             _cryptedFilePath = cryptedFilePath;
             _databaseService = databaseService;
             _innerStream = File.OpenWrite(cryptedFilePath);
@@ -105,7 +117,7 @@ internal class SecureStorageService : ISecureStorageService {
             
         }
 
-        public FileEntry Complete(string ownerId, string name, long size, string type, long originalDate, string? originalId, string? metaInfo) {
+        public FileEntry Complete(string name, long size, string type, long originalDate, string? metaInfo) {
             _completed = true;
             _cryptoStream.FlushFinalBlock();
             _cryptoStream.Flush();
@@ -114,8 +126,23 @@ internal class SecureStorageService : ISecureStorageService {
 
             FileEntry entry = null!;
             _databaseService.EditEntry((entryList) => {
-                entry = entryList.Add(ownerId, name, size, type, _cryptedFilePath, originalDate, originalId, metaInfo);
-                return true;
+                if (_existingId >= 0) {
+                    // Overwrite
+                    entry = entryList.GetById(_existingId)!;
+                    FileUtils.SafeDelete(entry.Path);
+                    entry.Path = _cryptedFilePath;
+                    entry.Name = name;
+                    entry.Size = size;
+                    entry.Type = type;
+                    entry.OriginalDate = originalDate;
+                    entry.MetaInfo = metaInfo;
+                    return true;
+                }
+                else {
+                    // New entry.
+                    entry = entryList.Add(_ownerId, name, size, type, _cryptedFilePath, originalDate, _originalId, metaInfo);
+                    return true;
+                }
             });
             return entry;
         }
@@ -129,10 +156,14 @@ internal class SecureStorageService : ISecureStorageService {
         }
     }
 
-    public async Task<IEntryCreator> CreateEntry() {
+    public async Task<IEntryCreator?> CreateEntry(string ownerId, string originalId, bool overwrite) {
+        var entry = _databaseService.Entries.GetByOriginalId(ownerId, originalId);
+        if (entry!=null && !overwrite) {
+            return null;
+        }
         var outFolder = await _fileStoreService.GetFolder();
         var cryptedFilePath = Path.Combine(outFolder!, Guid.NewGuid().ToString());
-        return new EntryCreator(cryptedFilePath, _cryptoService, _databaseService);
+        return new EntryCreator(ownerId, originalId, entry, cryptedFilePath, _cryptoService, _databaseService);
     }
 
     #endregion

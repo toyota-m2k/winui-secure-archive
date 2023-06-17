@@ -178,4 +178,9 @@ internal class UserSettingsService : IUserSettingsService {
             await CommitAsync();
         }
     }
+
+    public async Task<IReadonlyUserSettingsAccessor> GetAsync() {
+        await InitializeAsync();
+        return new SettingsEditor(this);
+    }
 }
