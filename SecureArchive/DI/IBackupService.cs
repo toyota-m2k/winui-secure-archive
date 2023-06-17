@@ -9,5 +9,6 @@ namespace SecureArchive.DI;
 internal interface IBackupService {
     bool IsBusy { get; }
     IObservable<bool> Executing { get; }
-    bool startBackup(string ownerId, string token, string url);
+    bool Backup(string ownerId, string token, string url);
+    void Cancel();
 }

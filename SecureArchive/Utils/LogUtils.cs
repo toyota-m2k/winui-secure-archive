@@ -40,8 +40,9 @@ public class UtLog {
         _prefix = prefix;
         _logger = logger ?? _globalLogger;
     }
-    public UtLog(Type clazz) {
+    public UtLog(Type clazz, ILogger? logger=null) {
         _prefix = clazz.Name;
+        _logger = logger ?? _globalLogger;
     }
     string composeMessage(string msg, string memberName, int sourceLineNumber) {
         //var time = $"{DateTime.Now.ToLocalTime()}";

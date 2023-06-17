@@ -381,8 +381,8 @@ internal class HttpServerService : IHttpServreService {
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "owner" }, {"status", "registered"} });
                 }),
             Route.put(
-                name: "backup",
-                regex: @"/backup",
+                name: "backup start",
+                regex: @"/backup/request",
                 process: (request) => {
                     var content = request.Content?.TextContent;
                     if (content== null) {
@@ -393,13 +393,13 @@ internal class HttpServerService : IHttpServreService {
                         return HttpErrorResponse.BadRequest(request);
                     }
                     var token = dic.GetValue("token");
-                    var client = dic.GetValue("url");
+                    var address = dic.GetValue("address");
                     var ownerId = dic.GetValue("id");
-                    if(token.IsEmpty() ||client.IsEmpty() ||ownerId.IsEmpty()) {
+                    if(token.IsEmpty() ||address.IsEmpty() ||ownerId.IsEmpty()) {
                         return HttpErrorResponse.BadRequest(request);
                     }
                     RegisterOwner(dic);
-                    if(_backupService.startBackup(ownerId!, token!, client!)) {
+                    if(!_backupService.Backup(ownerId!, token!, address!)) {
                         return HttpErrorResponse.Conflict(request);
                     }
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "backup" }, {"status", "accepted"} });
@@ -414,20 +414,20 @@ internal class HttpServerService : IHttpServreService {
         var ownerId = dic.GetValue("id");
         var ownerName = dic.GetValue("name");
         var ownerType = dic.GetValue("type") ?? "*";
-        var flag = Convert.ToInt32(dic.GetValue("type") ?? "0");
+        var flag = Convert.ToInt32(dic.GetValue("flag") ?? "0");
         var option = dic.GetValue("option");
         if (ownerId.IsEmpty()|| ownerName.IsEmpty()) {
             return false;
         }
         _databaseService.EditOwnerList(list => {
-            var reg = list.Get(ownerId);
+            var reg = list.Get(ownerId!);
             if (reg != null) {
                 reg.Option = option;
-                reg.Name = ownerName;
+                reg.Name = ownerName!;
                 reg.Type = ownerType;
                 reg.Flags = flag;
             } else { 
-                list.Add(ownerId, ownerName, ownerType, flag, option);
+                list.Add(ownerId!, ownerName!, ownerType, flag, option);
             }
             return true;
         });

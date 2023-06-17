@@ -26,7 +26,7 @@ public class SeekableInputStream : Stream
         try {
             return _internalStream.Length;
         }
-        catch (Exception e) {
+        catch (Exception) {
             return -1;
         }
     }
