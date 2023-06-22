@@ -91,7 +91,11 @@ public class FileEntryList : IMutableFileEntryList {
         }
     }
 
-    public FileEntry Add(string ownerId, string name, long size, string type, string path, long originalDate, string? originalId=null, string? metaInfo = null) {
+    public FileEntry Add(string ownerId, string name, long size, string type_, string path, long originalDate, string? originalId=null, string? metaInfo = null) {
+        var type = type_;
+        if(type_.StartsWith(".")) {
+            type = type_.Substring(1);
+        }
         FileEntry entry;
         lock (_connector) {
             entry = new FileEntry { OwnerId = ownerId, OriginalId = originalId, Name = name, Size = size, Type = type, Path = path, MetaInfo = metaInfo, OriginalDate = originalDate, RegisteredDate = DateTime.UtcNow.Ticks };

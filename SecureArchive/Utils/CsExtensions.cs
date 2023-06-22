@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
@@ -40,10 +41,10 @@ public static class CsExtensions {
         return args;
     }
 
-    public static bool IsEmpty(this string? s) {
+    public static bool IsEmpty([NotNullWhen(false)] this string? s) {
         return string.IsNullOrEmpty(s);
     }
-    public static bool IsNotEmpty(this string? s) {
+    public static bool IsNotEmpty([NotNullWhen(true)] this string? s) {
         return !string.IsNullOrEmpty(s);
     }
 

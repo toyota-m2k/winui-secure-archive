@@ -117,13 +117,17 @@ internal class SecureStorageService : ISecureStorageService {
             
         }
 
-        public FileEntry Complete(string name, long size, string type, long originalDate, string? metaInfo) {
+        public FileEntry Complete(string name, long size, string type_, long originalDate, string? metaInfo) {
             _completed = true;
             _cryptoStream.FlushFinalBlock();
             _cryptoStream.Flush();
             _cryptoStream.Dispose();
             _innerStream.Dispose();
 
+            var type = type_;
+            if(type_.StartsWith(".")) {
+                type = type_.Substring(1);
+            }
             FileEntry entry = null!;
             _databaseService.EditEntry((entryList) => {
                 if (_existingId >= 0) {

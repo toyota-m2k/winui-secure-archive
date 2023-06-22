@@ -191,6 +191,7 @@ internal class HttpServerService : IHttpServreService {
     #region Router
 
     public Regex RegRange = new Regex(@"bytes=(?<start>\d+)(?:-(?<end>\d+))?");
+    public Regex RegUploading = new Regex(@"/uploading/(?<hid>[^?/]+)(?:[?].*)*");
 
     private List<Route> Routes() {
         FileEntry? currentEntry = null;
@@ -212,6 +213,7 @@ internal class HttpServerService : IHttpServreService {
                     if(content==null) {
                         return HttpErrorResponse.BadRequest(request);
                     }
+                    var p = QueryParser.Parse(request.Url);
                     using(var handler = new UploadHandler(_secureStorageService)) {
                         RegisterUploadTask(handler);
                         // Uploadされたファイルの登録に時間がかかるので、一旦、202応答を返しておく。
@@ -240,13 +242,25 @@ internal class HttpServerService : IHttpServreService {
                 name: "upload task",
                 regex: @"/uploading/\w+",
                 process: (HttpRequest request) => {
-                    var id = request.Path?.Substring("/uploading/".Length);
-                    if(id==null) {
+                    var m = RegUploading.Match(request.Url);
+                    if(!m.Success) {
                         return HttpErrorResponse.BadRequest(request);
                     }
-                    var handler = LookupUploadTask(id);
+                    var handlerId = m.Groups["hid"].Value;
+                    if(handlerId.IsEmpty()) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+
+                    var handler = LookupUploadTask(handlerId);
                     if(handler==null) {
-                        return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
+                        var p = QueryParser.Parse(request.Url);
+                        var oid = p.GetValue("o");
+                        var cid = p.GetValue("c");
+                        if(oid.IsNotEmpty() && cid.IsNotEmpty() && _secureStorageService.IsRegistered(oid,cid)) {
+                            return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
+                        } else {
+                            return HttpErrorResponse.NotFound(request);
+                        }
                     } else {
                         var dic = new Dictionary<string, object> {
                             { "current", $"{handler.ReceivedLength}" },
@@ -303,7 +317,7 @@ internal class HttpServerService : IHttpServreService {
                     }
                     var list = _databaseService.Entries.List(
                         predicate: (it) => {
-                            return it.Type == ".mp4";
+                            return it.Type == "mp4";
                         }, 
                         select: (entry) => {
                             return new Dictionary<string, object>() {
