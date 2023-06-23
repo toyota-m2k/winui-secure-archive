@@ -1,5 +1,4 @@
-﻿using System.CodeDom;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.Runtime.CompilerServices;
 
 namespace SecureArchive.DI.Impl;
@@ -21,7 +20,11 @@ internal class UserSettingsService : IUserSettingsService {
         }
         public int PortNo { 
             get => _userSettings.GetInt(callerName(), 6001);
-            set => _userSettings.Put<int>(callerName(), value);
+            set => _userSettings.Put(callerName(), value);
+        }
+        public bool ServerAutoStart {
+            get => _userSettings.GetBool(callerName(), false);
+            set => _userSettings.Put(callerName(), value);
         }
     }
 
@@ -115,6 +118,18 @@ internal class UserSettingsService : IUserSettingsService {
         }
     }
 
+    private bool GetBool(string key, bool defalutValue = false) {
+        if (_cache == null) {
+            throw new InvalidOperationException("call InitializeAsync() in prior.");
+        }
+        if (_cache.TryGetValue(key, out var value)) {
+            return Convert.ToBoolean(value);
+        }
+        else {
+            return defalutValue;
+        }
+    }
+
     //private T? Get<T>(SettingsKey key) {
     //    return Get<T>(key.ToString());
     //}
@@ -140,6 +155,9 @@ internal class UserSettingsService : IUserSettingsService {
             case string s:
                 needUpdate = s != GetString(key);
                 break;
+            case bool b:
+                needUpdate = b != GetBool(key);
+                break;
             default:
                 Debug.Assert(false, $"unknown type: {value.GetType()}");
                 return;
@@ -164,6 +182,10 @@ internal class UserSettingsService : IUserSettingsService {
     public async Task<long> GetLongAsync(SettingsKey key, long defaultValue = 0) {
         await InitializeAsync();
         return GetLong(key.ToString(), defaultValue);
+    }
+    public async Task<bool> GetBoolAsync(SettingsKey key, bool defaultValue = false) {
+        await InitializeAsync();
+        return GetBool(key.ToString(), defaultValue);
     }
 
     public async Task PutAsync<T>(SettingsKey key, T value) {

@@ -88,6 +88,7 @@ namespace SecureArchive.Utils.Server.lib.response {
             WriteHeaders(output);
             WriteText(output, "\r\n");
             WriteBody(output);
+            output.Flush();
         }
 
         protected static void WriteText(Stream output, string text)

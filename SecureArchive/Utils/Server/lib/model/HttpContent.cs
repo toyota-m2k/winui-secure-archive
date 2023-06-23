@@ -1,4 +1,5 @@
 ﻿using HttpMultipartParser;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -20,6 +21,8 @@ public class HttpContent {
 
     public bool HasText => !string.IsNullOrEmpty(TextContent);
     public bool HasStream => InputStream != null;
+
+    private UtLog Logger = new UtLog(typeof(HttpContent));
 
     private HttpContent(string contentType, long contentLength) {
         ContentType = contentType;
@@ -43,11 +46,28 @@ public class HttpContent {
         void Progress(long current, long total);
     }
 
+    //public void receiveToStream() {
+    //    FileUtils.SafeDelete("c:\\temp\\x.dat");
+    //    using (var fileStream = File.OpenWrite("c:\\temp\\x.dat")) {
+    //        byte[] buff = new byte[1024 * 128];
+    //        int len;
+    //        Logger.Debug($"Content-Length: {ContentLength}");
+    //        while ((len = InputStream!.Read(buff, 0, buff.Length)) > 0) {
+    //            fileStream.Write(buff, 0, len);
+    //            Logger.Debug($"len={len}/total={fileStream.Length}");
+    //        }
+    //        Logger.Debug($"len={len}/total={fileStream.Length}");
+    //        fileStream.Flush();
+    //        fileStream.Position = 0;
+    //    }
+    //}
+
     public void ParseMultipartContent(IMultipartContentHander multipartContentHandler, string[]? expectingBodyTypes = null) {
         if (!HasStream) {
             throw new InvalidOperationException("this is not a streamed content.");
         }
-        var parser = new StreamingMultipartFormDataParser(InputStream, Encoding.UTF8, binaryMimeTypes: expectingBodyTypes, ignoreInvalidParts: true);
+
+        var parser = new StreamingMultipartFormDataParser(HttpInputStream.Create(InputStream!, ContentLength), Encoding.UTF8, binaryMimeTypes: expectingBodyTypes, ignoreInvalidParts: true);
 
         parser.ParameterHandler += (ParameterPart p) => {
             multipartContentHandler.Parameters.Add(p.Name, p.Data ?? "");

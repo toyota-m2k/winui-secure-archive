@@ -213,7 +213,7 @@ internal class HttpServerService : IHttpServreService {
                     if(content==null) {
                         return HttpErrorResponse.BadRequest(request);
                     }
-                    var p = QueryParser.Parse(request.Url);
+                    //var p = QueryParser.Parse(request.Url);
                     using(var handler = new UploadHandler(_secureStorageService)) {
                         RegisterUploadTask(handler);
                         // Uploadされたファイルの登録に時間がかかるので、一旦、202応答を返しておく。
@@ -343,7 +343,15 @@ internal class HttpServerService : IHttpServreService {
                         return oneTimePasscode.UnauthorizedResponse(request);
                     }
                     var id = Convert.ToInt64(p.GetValue("id", "0"));
-                    var entry = _databaseService.Entries.GetById(id);
+                    var oid = p.GetValue("o");
+                    var cid = p.GetValue("c");
+
+                    FileEntry? entry = null;
+                    if(oid.IsNotEmpty() && cid.IsNotEmpty()) {
+                        entry = _databaseService.Entries.GetByOriginalId(oid, cid);
+                    } else {
+                        entry = _databaseService.Entries.GetById(id);
+                    }
                     if(entry==null) {
                         return HttpErrorResponse.NotFound(request);
                     }
@@ -368,6 +376,38 @@ internal class HttpServerService : IHttpServreService {
                     var end = me.Success ? Convert.ToInt64(me.Value) : 0;
 
                     return new StreamingHttpResponse(request, "video/mp4", seekableInputStream!, start, end);
+                }),
+            Route.get(
+                name: "image",
+                regex: @"/photo\?\w+",
+                process: (HttpRequest request) => {
+                    var p = QueryParser.Parse(request.Url);
+                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+                        return oneTimePasscode.UnauthorizedResponse(request);
+                    }
+                    var id = Convert.ToInt64(p.GetValue("id", "0"));
+                    var oid = p.GetValue("o");
+                    var cid = p.GetValue("c");
+
+                    FileEntry? entry = null;
+                    if(oid.IsNotEmpty() && cid.IsNotEmpty()) {
+                        entry = _databaseService.Entries.GetByOriginalId(oid, cid);
+                    } else {
+                        entry = _databaseService.Entries.GetById(id);
+                    }
+                    if(entry==null) {
+                        return HttpErrorResponse.NotFound(request);
+                    }
+
+                    if(currentEntry?.Id != entry.Id) {
+                        currentEntry = entry;
+                        seekableInputStream?.Dispose();
+                        seekableInputStream = new SeekableInputStream(_secureStorageService.OpenEntry(entry), (oldStream) => {
+                            oldStream.Dispose();
+                            return _secureStorageService.OpenEntry(entry);
+                        });
+                    }
+                    return new StreamingHttpResponse(request, "image/jpeg", seekableInputStream!, 0, 0);
                 }),
             Route.get(
                 name: "chapters",

@@ -11,6 +11,7 @@ public class StreamingHttpResponse : AbstractHttpResponse {
     private int PartialLength = 0;
     private UtLog Logger = new UtLog(typeof(StreamingHttpResponse));
 
+    private bool SupportRange { get; } = true;
     public StreamingHttpResponse(HttpRequest req, string contentType, Stream inStream, long start, long end)
         : base(req, HttpStatusCode.Ok) {
         InputStream = inStream;
@@ -21,6 +22,21 @@ public class StreamingHttpResponse : AbstractHttpResponse {
         if (TotalLength > 0) {
             ContentLength = TotalLength;
         } else {
+            //ContentLength = 100000;
+        }
+    }
+    public StreamingHttpResponse(HttpRequest req, string contentType, Stream inStream)
+        : base(req, HttpStatusCode.Ok) {
+        InputStream = inStream;
+        TotalLength = inStream.Length;
+        ContentType = contentType;
+        Start = 0;
+        End = 0;
+        SupportRange = false;
+        if (TotalLength > 0) {
+            ContentLength = TotalLength;
+        }
+        else {
             //ContentLength = 100000;
         }
     }
@@ -49,7 +65,9 @@ public class StreamingHttpResponse : AbstractHttpResponse {
     protected override void Prepare() {
         if (Start == 0 && End == 0) {
             StatusCode = HttpStatusCode.Ok;
-            Headers["Accept-Ranges"] = "bytes";
+            if (SupportRange) {
+                Headers["Accept-Ranges"] = "bytes";
+            }
         }
         else {
             Logger.Debug($"Requested Range: {Start} - {End}");

@@ -56,7 +56,7 @@ public class HttpProcessor {
 
                 //Console.WriteLine("{0} {1}", response.ToString(), request.Url);
                 try {
-                    Logger.Info($"Sending: {response.Request?.Url ?? "?"}");
+                    Logger.Info($"Responding: {response.Request?.Url ?? "?"}");
                     response.WriteResponse(outputStream);
                     outputStream.Flush();
                     Logger.Info($"Complete: {response.Request?.Url ?? "?"}");

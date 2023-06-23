@@ -16,25 +16,25 @@ namespace SecureArchive.DI.Impl;
 
 internal class RemoteItem {
     [JsonProperty("id")]
-    public string Id { get; set; }
+    public string Id { get; set; } = "";
     [JsonProperty("name")]
-    public string Name { get; set; }
+    public string Name { get; set; } = "";
     [JsonProperty("size")]
     public long Size { get; set; }
     [JsonProperty("date")]
     public long Date { get; set; }
     [JsonProperty("type")]
-    public string Type { get; set; }
+    public string Type { get; set; } = "";
     [JsonProperty("duration")]
     public long Duration { get; set; }
 }
 internal class RemoteItemResponse {
     [JsonProperty("cmd")]
-    public string Cmd { get; set; }
+    public string Cmd { get; set; } = "";
     [JsonProperty("date")]
     public long Date { get; set; }
     [JsonProperty("list")]
-    public List<RemoteItem> List { get; set; }
+    public List<RemoteItem> List { get; set; } = new();
 }
 
 internal class BackupService : IBackupService {
