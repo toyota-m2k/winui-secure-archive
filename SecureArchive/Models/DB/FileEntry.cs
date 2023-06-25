@@ -9,8 +9,7 @@ using System.Threading.Tasks;
 namespace SecureArchive.Models.DB;
 
 [Table("t_entry")]
-public class FileEntry
-{
+public class FileEntry {
     public static string[] DDL = {
         @"CREATE TABLE IF NOT EXISTS t_entry (
             Id INTEGER NOT NULL PRIMARY KEY,
@@ -22,7 +21,8 @@ public class FileEntry
             Path TEXT NOT NULL,
             RegisteredDate INTEGER DEFAULT 0,
             OriginalDate INTEGER DEFAULT 0,
-            MetaInfo TEXT
+            MetaInfo TEXT,
+            FOREIGN KEY(OwnerId) REFERENCES t_owner_info(OwnerId)
         )",
     };
 
@@ -42,4 +42,7 @@ public class FileEntry
 
     public long RegisteredDate { get; set; }
     public long OriginalDate { get; set; }
+
+    [ForeignKey("OwnerId")]
+    public OwnerInfo OwnerInfo { get; set; } = new OwnerInfo();
 }

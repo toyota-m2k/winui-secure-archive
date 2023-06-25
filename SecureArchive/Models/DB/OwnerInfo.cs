@@ -10,6 +10,7 @@ namespace SecureArchive.Models.DB;
 
 [Table("t_owner_info")]
 public class OwnerInfo {
+    public static string LOCAL_ID = "LOCAL";
     public static string[] DDL = {
         @"CREATE TABLE IF NOT EXISTS t_owner_info(
             OwnerId TEXT NOT NULL PRIMARY KEY,
@@ -32,4 +33,16 @@ public class OwnerInfo {
     public string? Option { get; set; }
 
     public int Flags { get; set; }
+
+    public override bool Equals(object? obj) {
+        if (base.Equals(obj)) return true;
+        if(obj==null) return false;
+        var oi = obj as OwnerInfo;
+        if(oi==null) return false;
+        return oi.OwnerId == OwnerId && oi.Name == Name && oi.Type == Type && oi.Option == Option && oi.Flags == Flags;
+    }
+
+    public override int GetHashCode() {
+        return base.GetHashCode();
+    }
 }

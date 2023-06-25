@@ -474,15 +474,7 @@ internal class HttpServerService : IHttpServreService {
             return false;
         }
         _databaseService.EditOwnerList(list => {
-            var reg = list.Get(ownerId!);
-            if (reg != null) {
-                reg.Option = option;
-                reg.Name = ownerName!;
-                reg.Type = ownerType;
-                reg.Flags = flag;
-            } else { 
-                list.Add(ownerId!, ownerName!, ownerType, flag, option);
-            }
+            list.AddOrUpdate(ownerId, ownerName, ownerType, flag, option);
             return true;
         });
         return true;

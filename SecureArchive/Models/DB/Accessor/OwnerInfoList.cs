@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace SecureArchive.Models.DB.Accessor;
 public interface IOwnerInfoList {
@@ -15,7 +16,8 @@ public interface IOwnerInfoList {
     OwnerInfo? Get(string ownerId);
 }
 public interface IMutableOwnerInfoList: IOwnerInfoList {
-    OwnerInfo Add(string ownerId, string name, string type, int flag, string? option=null);
+    bool Add(string ownerId, string name, string type, int flag, string? option=null);
+    bool AddOrUpdate(string ownerId, string name, string type, int flag, string? option = null);
     void Remove(OwnerInfo entry);
     void Remove(Func<OwnerInfo, bool> predicate);
 }
@@ -26,9 +28,29 @@ public class OwnerInfoList : IMutableOwnerInfoList {
     public OwnerInfoList(DBConnector connector) {
         _connector = connector;
         _owners = connector.OwnerInfos;
+        Add(OwnerInfo.LOCAL_ID, "Local", "PC", 0, null);
     }
 
-    public OwnerInfo Add(string ownerId, string name, string type, int flag, string? option = null) {
+    public bool Add(string ownerId, string name, string type, int flag, string? option = null) {
+        lock (_connector) {
+            var org = Get(ownerId);
+            if (org == null) {
+                var owner = new OwnerInfo() {
+                    OwnerId = ownerId,
+                    Name = name,
+                    Type = type,
+                    Flags = flag,
+                    Option = option
+                };
+                _owners.Add(owner);
+                return true;
+            }
+        }
+        return false;
+
+    }
+
+    public bool AddOrUpdate(string ownerId, string name, string type, int flag, string? option = null) {
         var owner = new OwnerInfo() {
             OwnerId = ownerId,
             Name = name,
@@ -37,9 +59,17 @@ public class OwnerInfoList : IMutableOwnerInfoList {
             Option = option
         };
         lock (_connector) {
-            _owners.Add(owner);
+            var org = Get(ownerId);
+            if (org == null) {
+                _owners.Add(owner);
+                return true;
+            } else if(owner!=org) {
+                _owners.Update(owner);
+                return true;
+            } else {
+                return false;
+            }
         }
-        return owner;
     }
 
     public IList<OwnerInfo> List() {
