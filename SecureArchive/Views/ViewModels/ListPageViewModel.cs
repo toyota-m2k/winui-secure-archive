@@ -23,6 +23,7 @@ namespace SecureArchive.Views.ViewModels {
         private IDatabaseService _dataBaseService;
         private ITaskQueueService _taskQueueService;
         private IStatusNotificationService _statusNotificationService;
+        private IMainThreadService _mainThreadService;
         private ILogger _logger;
 
         public ReactiveCommandSlim AddCommand { get; } = new ReactiveCommandSlim();
@@ -43,6 +44,7 @@ namespace SecureArchive.Views.ViewModels {
             IDatabaseService dataBaseService,
             ITaskQueueService taskQueueService,
             IStatusNotificationService statusNotificationService,
+            IMainThreadService mainThreadService,
             ILoggerFactory loggerFactory) {
             _pageService = pageService;
             //_cryptoService = cryptographyService;
@@ -51,6 +53,7 @@ namespace SecureArchive.Views.ViewModels {
             _dataBaseService = dataBaseService;
             _taskQueueService = taskQueueService;
             _statusNotificationService = statusNotificationService;
+            _mainThreadService = mainThreadService;
             _logger = loggerFactory.CreateLogger("ListPage");
             
             GoBackCommand.Subscribe(_pageService.ShowMenuPage);
@@ -69,20 +72,22 @@ namespace SecureArchive.Views.ViewModels {
             //_statusNotificationService.ShowMessage("ほげほげ", 3000);
 
             _dataBaseService.Entries.Changes.Subscribe(change => {
-                switch(change.Type) {
-                    case DataChangeInfo.Change.Add:
-                        AddItems(change.Items);
-                        break;
-                    case DataChangeInfo.Change.Remove:
-                        RemoveItems(change.Items);
-                        break;
-                    case DataChangeInfo.Change.Update:
-                        UpdateItems(change.Items);
-                        break;
-                    case DataChangeInfo.Change.ResetAll:
-                        FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(true));
-                        break;
-                }
+                _mainThreadService.Run(() => {
+                    switch (change.Type) {
+                        case DataChangeInfo.Change.Add:
+                            AddItem(change.Item);
+                            break;
+                        case DataChangeInfo.Change.Remove:
+                            RemoveItem(change.Item);
+                            break;
+                        case DataChangeInfo.Change.Update:
+                            UpdateItem(change.Item);
+                            break;
+                        case DataChangeInfo.Change.ResetAll:
+                            FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(true));
+                            break;
+                    }
+                });
             });
         }
 
@@ -140,11 +145,11 @@ namespace SecureArchive.Views.ViewModels {
             }
         }
 
-        private void AddItems(FileEntry[] entries) {
-            foreach (var entry in entries) {
-                  AddItem(entry);
-            }
-        }
+        //private void AddItems(FileEntry[] entries) {
+        //    foreach (var entry in entries) {
+        //          AddItem(entry);
+        //    }
+        //}
         private void RemoveItem(FileEntry entry) {
             var list = FileList.Value;
             var item = list.FirstOrDefault((it) => it.Id == entry.Id);
@@ -152,11 +157,11 @@ namespace SecureArchive.Views.ViewModels {
                 list.Remove(item);
             }
         }
-        private void RemoveItems(FileEntry[] entries) {
-            foreach (var entry in entries) {
-                RemoveItem(entry);
-            }
-        }
+        //private void RemoveItems(FileEntry[] entries) {
+        //    foreach (var entry in entries) {
+        //        RemoveItem(entry);
+        //    }
+        //}
         private void UpdateItem(FileEntry entry) { 
             var list = FileList.Value;
             var item = list.FirstOrDefault((it) => it.Id == entry.Id);
@@ -167,11 +172,11 @@ namespace SecureArchive.Views.ViewModels {
                 }
             }
         }
-        private void UpdateItems(FileEntry[] entries) {
-            foreach (var entry in entries) {
-                UpdateItem(entry);
-            }
-        }
+        //private void UpdateItems(FileEntry[] entries) {
+        //    foreach (var entry in entries) {
+        //        UpdateItem(entry);
+        //    }
+        //}
 
 
         private async void AddLocalFile() {
@@ -195,7 +200,7 @@ namespace SecureArchive.Views.ViewModels {
                             //var outFilePath = Path.Combine(outFolder!, item.Name);
                             var ext = Path.GetExtension(item.Name) ?? "*";
                             try {
-                                var newEntry = await _secureStorageService.RegisterFile(item.Path, "@Local", item.Name, fileInfo.LastWriteTime.Ticks, null, null, progress);
+                                var newEntry = await _secureStorageService.RegisterFile(item.Path, OwnerInfo.LOCAL_ID, item.Name, fileInfo.LastWriteTime.Ticks, null, null, progress);
                                 if (newEntry != null) {
                                     mainThread.Run(() => {
                                         FileList.Value.Add(newEntry);

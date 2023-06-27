@@ -27,7 +27,7 @@ public interface IMutableFileEntryList : IFileEntryList {
     FileEntry Update(string ownerId, string name, long size, string type_, string path, long originalDate, string? originalId = null, string? metaInfo = null);
     FileEntry AddOrUpdate(string ownerId, string name, long size, string type_, string path, long originalDate, string? originalId = null, string? metaInfo = null); 
     void Remove(FileEntry entry);
-    void Remove(Func<FileEntry, bool> predicate);
+    //void Remove(Func<FileEntry, bool> predicate);
 }
 
 public class DataChangeInfo {
@@ -38,23 +38,23 @@ public class DataChangeInfo {
         ResetAll,
     }
     public Change Type { get; }
-    public FileEntry[] Items { get; private set; }
-    DataChangeInfo(Change type, FileEntry[] items) {
+    public FileEntry Item { get; private set; } = null;
+    DataChangeInfo(Change type, FileEntry item) {
         Type = type;
-        Items = items;
+        Item = item;
     }
 
-    public static DataChangeInfo Add(params FileEntry[] entry) {
+    public static DataChangeInfo Add(FileEntry entry) {
         return new DataChangeInfo(Change.Add, entry);
     }
-    public static DataChangeInfo Remove(params FileEntry[] entry) {
+    public static DataChangeInfo Remove(FileEntry entry) {
         return new DataChangeInfo(Change.Remove, entry);
     }
-    public static DataChangeInfo Update(params FileEntry[] entry) {
+    public static DataChangeInfo Update(FileEntry entry) {
         return new DataChangeInfo(Change.Update, entry);
     }
     public static DataChangeInfo ResetAll() {
-        return new DataChangeInfo(Change.ResetAll, Array.Empty<FileEntry>());
+        return new DataChangeInfo(Change.ResetAll, new FileEntry());
     }
 }
 
@@ -108,6 +108,15 @@ public class FileEntryList : IMutableFileEntryList {
         }
     }
 
+    private FileEntry ResolveOwnerInfo(FileEntry entry) {
+        if (entry.OwnerInfo == null) {
+            lock (_connector) {
+                entry.OwnerInfo = _connector.OwnerInfos.FirstOrDefault(it => it.OwnerId == entry.OwnerId) ?? OwnerInfo.Empty;
+            }
+        }
+        return entry;
+    }
+
     public IList<T> List<T>(Func<FileEntry, bool> predicate, Func<FileEntry, T> select) {
         lock (_connector) {
             return rawList.Where(predicate).Select(select).ToList();
@@ -140,7 +149,7 @@ public class FileEntryList : IMutableFileEntryList {
             entry = new FileEntry { OwnerId = ownerId, OriginalId = originalId, Name = name, Size = size, Type = type, Path = path, MetaInfo = metaInfo, OriginalDate = originalDate, RegisteredDate = DateTime.UtcNow.Ticks };
             _entries.Add(entry);
         }
-        _changes.OnNext(DataChangeInfo.Add(entry));
+        _changes.OnNext(DataChangeInfo.Add(ResolveOwnerInfo(entry)));
         return entry;
     }
 
@@ -165,7 +174,7 @@ public class FileEntryList : IMutableFileEntryList {
             entry.MetaInfo = metaInfo;
             _entries.Update(entry);
         }
-        _changes.OnNext(DataChangeInfo.Update(entry));
+        _changes.OnNext(DataChangeInfo.Update(ResolveOwnerInfo(entry)));
         return entry;
 
     }
@@ -177,14 +186,14 @@ public class FileEntryList : IMutableFileEntryList {
         _changes.OnNext(DataChangeInfo.Remove(entry));
     }
 
-    public void Remove(Func<FileEntry, bool> predicate) {
-        FileEntry[] del;
-        lock (_connector) {
-            del = _entries.Where(predicate).ToArray();
-            _entries.RemoveRange(del);
-        }
-        _changes.OnNext(DataChangeInfo.Remove(del));
-    }
+    //public void Remove(Func<FileEntry, bool> predicate) {
+    //    FileEntry[] del;
+    //    lock (_connector) {
+    //        del = _entries.Where(predicate).ToArray();
+    //        _entries.RemoveRange(del);
+    //    }
+    //    _changes.OnNext(DataChangeInfo.Remove(del));
+    //}
 
     public FileEntry? GetById(long id) {
         lock (_connector) {

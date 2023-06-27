@@ -21,9 +21,9 @@ public class FileEntry {
             Path TEXT NOT NULL,
             RegisteredDate INTEGER DEFAULT 0,
             OriginalDate INTEGER DEFAULT 0,
-            MetaInfo TEXT,
-            FOREIGN KEY(OwnerId) REFERENCES t_owner_info(OwnerId)
+            MetaInfo TEXT
         )",
+        // FOREIGN KEY(OwnerId) REFERENCES t_owner_info(OwnerId)
     };
 
     [Key, Required]

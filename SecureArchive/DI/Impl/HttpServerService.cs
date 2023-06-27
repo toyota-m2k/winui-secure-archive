@@ -47,19 +47,19 @@ internal class HttpServerService : IHttpServreService {
 
     #region Uploading
 
-    private Dictionary<string, UploadHandler> _uploadingTasks = new Dictionary<string, UploadHandler>();
-    private void RegisterUploadTask(UploadHandler handler) {
-        lock(_uploadingTasks) { _uploadingTasks.Add(handler.ID, handler); }
-    }
-    private void UnregisterUploadTask(UploadHandler handler) {
-        lock (_uploadingTasks) { _uploadingTasks.Remove(handler.ID); }
-    }
-    private UploadHandler? LookupUploadTask(string id) {
-        lock(_uploadingTasks) {
-            if(_uploadingTasks.TryGetValue(id, out var handler)) return handler;
-            return null;
-        }
-    }
+    //private Dictionary<string, UploadHandler> _uploadingTasks = new Dictionary<string, UploadHandler>();
+    //private void RegisterUploadTask(UploadHandler handler) {
+    //    lock(_uploadingTasks) { _uploadingTasks.Add(handler.ID, handler); }
+    //}
+    //private void UnregisterUploadTask(UploadHandler handler) {
+    //    lock (_uploadingTasks) { _uploadingTasks.Remove(handler.ID); }
+    //}
+    //private UploadHandler? LookupUploadTask(string id) {
+    //    lock(_uploadingTasks) {
+    //        if(_uploadingTasks.TryGetValue(id, out var handler)) return handler;
+    //        return null;
+    //    }
+    //}
 
     class UploadHandler : IMultipartContentHander, IDisposable {
         private static AtomicInteger idGenerator = new AtomicInteger();
@@ -215,60 +215,62 @@ internal class HttpServerService : IHttpServreService {
                     }
                     //var p = QueryParser.Parse(request.Url);
                     using(var handler = new UploadHandler(_secureStorageService)) {
-                        RegisterUploadTask(handler);
-                        // Uploadされたファイルの登録に時間がかかるので、一旦、202応答を返しておく。
-                        // 登録処理の経過が知りたければ、GET /uploading/<taskId> で取得する。
-                        var response = new TextHttpResponse(request, HttpStatusCode.Accepted, "");
-                        response.Headers.Add("Location", $"/uploading/{handler.ID}");
-                        response.WriteResponse(request.OutputStream);
-                        _logger.Debug("Accept file : 202 Response.");
+                        //RegisterUploadTask(handler);
+                        //// Uploadされたファイルの登録に時間がかかるので、一旦、202応答を返しておく。
+                        //// 登録処理の経過が知りたければ、GET /uploading/<taskId> で取得する。
+                        //var response = new TextHttpResponse(request, HttpStatusCode.Accepted, "");
+                        //response.Headers.Add("Location", $"/uploading/{handler.ID}");
+                        //response.WriteResponse(request.OutputStream);
+                        //_logger.Debug("Accept file : 202 Response.");
 
-                        // そのあとで登録処理を実行
+                        //// そのあとで登録処理を実行
                         try {
                             _logger.Debug("Parsing Multipart");
                             content.ParseMultipartContent(handler);
-                            UnregisterUploadTask(handler);
+                            //UnregisterUploadTask(handler);
                             _logger.Debug("Parsing Multipart ... Completed");
+                            return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
                         } catch (Exception ex) {
                             _logger.Error(ex, "Parsing multipart body error.");
                             handler.HasError = true;
+                            return HttpErrorResponse.InternalServerError(request);
                         }
                         // 処理完了
                     }
-                    // すでに応答を返しているので、ここは制御を戻すだけ。
-                    return NullResponse.Get(request);
+                    //// すでに応答を返しているので、ここは制御を戻すだけ。
+                    //return NullResponse.Get(request);
                 }),
-            Route.get(
-                name: "upload task",
-                regex: @"/uploading/\w+",
-                process: (HttpRequest request) => {
-                    var m = RegUploading.Match(request.Url);
-                    if(!m.Success) {
-                        return HttpErrorResponse.BadRequest(request);
-                    }
-                    var handlerId = m.Groups["hid"].Value;
-                    if(handlerId.IsEmpty()) {
-                        return HttpErrorResponse.BadRequest(request);
-                    }
+            //Route.get(
+            //    name: "upload task",
+            //    regex: @"/uploading/\w+",
+            //    process: (HttpRequest request) => {
+            //        var m = RegUploading.Match(request.Url);
+            //        if(!m.Success) {
+            //            return HttpErrorResponse.BadRequest(request);
+            //        }
+            //        var handlerId = m.Groups["hid"].Value;
+            //        if(handlerId.IsEmpty()) {
+            //            return HttpErrorResponse.BadRequest(request);
+            //        }
 
-                    var handler = LookupUploadTask(handlerId);
-                    if(handler==null) {
-                        var p = QueryParser.Parse(request.Url);
-                        var oid = p.GetValue("o");
-                        var cid = p.GetValue("c");
-                        if(oid.IsNotEmpty() && cid.IsNotEmpty() && _secureStorageService.IsRegistered(oid,cid)) {
-                            return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
-                        } else {
-                            return HttpErrorResponse.NotFound(request);
-                        }
-                    } else {
-                        var dic = new Dictionary<string, object> {
-                            { "current", $"{handler.ReceivedLength}" },
-                            { "total", $"{handler.ContentLength}" },
-                        };
-                        return TextHttpResponse.FromJson(request, dic, HttpStatusCode.Accepted);
-                    }
-                }),
+            //        var handler = LookupUploadTask(handlerId);
+            //        if(handler==null) {
+            //            var p = QueryParser.Parse(request.Url);
+            //            var oid = p.GetValue("o");
+            //            var cid = p.GetValue("c");
+            //            if(oid.IsNotEmpty() && cid.IsNotEmpty() && _secureStorageService.IsRegistered(oid,cid)) {
+            //                return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
+            //            } else {
+            //                return HttpErrorResponse.NotFound(request);
+            //            }
+            //        } else {
+            //            var dic = new Dictionary<string, object> {
+            //                { "current", $"{handler.ReceivedLength}" },
+            //                { "total", $"{handler.ContentLength}" },
+            //            };
+            //            return TextHttpResponse.FromJson(request, dic, HttpStatusCode.Accepted);
+            //        }
+            //    }),
             Route.get(
                 name: "capability",
                 regex:@"/capability",
