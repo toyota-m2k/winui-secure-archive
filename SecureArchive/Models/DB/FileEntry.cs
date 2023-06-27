@@ -43,6 +43,8 @@ public class FileEntry {
     public long RegisteredDate { get; set; }
     public long OriginalDate { get; set; }
 
-    [ForeignKey("OwnerId")]
-    public OwnerInfo OwnerInfo { get; set; } = new OwnerInfo();
+    //[ForeignKey("OwnerId")]
+    //public OwnerInfo OwnerInfo { get; set; } = new OwnerInfo();
+    [NotMapped]
+    public OwnerInfo? OwnerInfo { get; set; } = null;
 }

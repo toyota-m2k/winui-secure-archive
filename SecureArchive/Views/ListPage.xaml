@@ -17,9 +17,10 @@
     <Grid x:DefaultBindMode="OneWay">
         <Grid.Resources>
             <DataTemplate x:Key="FileEntryListItem" x:DataType="data:FileEntry">
-                <Grid>
+                <StackPanel Orientation="Vertical">
                     <TextBlock Text="{x:Bind Name}"/>
-                </Grid>
+                    <TextBlock Text="{x:Bind OwnerInfo.Name}"/>
+                </StackPanel>
             </DataTemplate>
         </Grid.Resources>
         <SplitView IsPaneOpen="True" PaneBackground="{ThemeResource SystemBaseMediumLowColor}" 

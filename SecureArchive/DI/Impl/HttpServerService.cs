@@ -407,6 +407,7 @@ internal class HttpServerService : IHttpServreService {
                             return _secureStorageService.OpenEntry(entry);
                         });
                     }
+                    seekableInputStream!.Position = 0;
                     return new StreamingHttpResponse(request, "image/jpeg", seekableInputStream!, 0, 0);
                 }),
             Route.get(

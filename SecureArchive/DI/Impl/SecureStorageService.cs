@@ -162,8 +162,7 @@ internal class SecureStorageService : ISecureStorageService {
 
     public async Task<IEntryCreator?> CreateEntry(string ownerId, string originalId, bool overwrite) {
         _databaseService.EditOwnerList(list => {
-            var add = list.Add(ownerId, "remote", "unknown", 0);
-            return add != null;
+            return list.Add(ownerId, "remote", "unknown", 0);
         });
         var entry = _databaseService.Entries.GetByOriginalId(ownerId, originalId);
         if (entry!=null && !overwrite) {

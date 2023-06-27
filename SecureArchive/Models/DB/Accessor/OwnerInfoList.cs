@@ -29,6 +29,8 @@ public class OwnerInfoList : IMutableOwnerInfoList {
         _connector = connector;
         _owners = connector.OwnerInfos;
         Add(OwnerInfo.LOCAL_ID, "Local", "PC", 0, null);
+        _connector.SaveChanges();
+        
     }
 
     public bool Add(string ownerId, string name, string type, int flag, string? option = null) {

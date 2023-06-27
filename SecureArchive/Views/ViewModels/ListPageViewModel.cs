@@ -3,6 +3,7 @@ using Reactive.Bindings;
 using SecureArchive.DI;
 using SecureArchive.DI.Impl;
 using SecureArchive.Models.DB;
+using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using System;
 using System.Collections.Generic;
@@ -19,7 +20,7 @@ namespace SecureArchive.Views.ViewModels {
         //private ICryptographyService _cryptoService;
         //private IFileStoreService _fileStoreService;
         private ISecureStorageService _secureStorageService;
-        private IDatabaseService _dataService;
+        private IDatabaseService _dataBaseService;
         private ITaskQueueService _taskQueueService;
         private IStatusNotificationService _statusNotificationService;
         private ILogger _logger;
@@ -39,7 +40,7 @@ namespace SecureArchive.Views.ViewModels {
             //ICryptographyService cryptographyService, 
             //IFileStoreService fileStoreService, 
             ISecureStorageService secureStorageService,
-            IDatabaseService dataService,
+            IDatabaseService dataBaseService,
             ITaskQueueService taskQueueService,
             IStatusNotificationService statusNotificationService,
             ILoggerFactory loggerFactory) {
@@ -47,7 +48,7 @@ namespace SecureArchive.Views.ViewModels {
             //_cryptoService = cryptographyService;
             //_fileStoreService = fileStoreService;
             _secureStorageService = secureStorageService;
-            _dataService = dataService;
+            _dataBaseService = dataBaseService;
             _taskQueueService = taskQueueService;
             _statusNotificationService = statusNotificationService;
             _logger = loggerFactory.CreateLogger("ListPage");
@@ -55,7 +56,7 @@ namespace SecureArchive.Views.ViewModels {
             GoBackCommand.Subscribe(_pageService.ShowMenuPage);
             AddCommand.Subscribe(AddLocalFile);
 
-            FileList.Value = new ObservableCollection<FileEntry>(_dataService.Entries.List());
+            FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(true));
             Message = _statusNotificationService.Message;
             ProgressMode = _statusNotificationService.ProgressMode;
             ProgressInPercent = _statusNotificationService.ProgressInPercent;
@@ -66,6 +67,23 @@ namespace SecureArchive.Views.ViewModels {
             //});
 
             //_statusNotificationService.ShowMessage("ほげほげ", 3000);
+
+            _dataBaseService.Entries.Changes.Subscribe(change => {
+                switch(change.Type) {
+                    case DataChangeInfo.Change.Add:
+                        AddItems(change.Items);
+                        break;
+                    case DataChangeInfo.Change.Remove:
+                        RemoveItems(change.Items);
+                        break;
+                    case DataChangeInfo.Change.Update:
+                        UpdateItems(change.Items);
+                        break;
+                    case DataChangeInfo.Change.ResetAll:
+                        FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(true));
+                        break;
+                }
+            });
         }
 
         public async Task<bool> ExportFileTo(FileEntry entry, string outFile, ProgressProc progress) {
@@ -111,6 +129,50 @@ namespace SecureArchive.Views.ViewModels {
                 });
             });
         }
+
+        private void AddItem(FileEntry entry) {
+            var list = FileList.Value;
+            var next = list.FirstOrDefault((it) => it.OriginalDate > entry.OriginalDate);
+            if(next==null) {
+                list.Add(entry);
+            } else {
+                list.Insert(list.IndexOf(next), entry);
+            }
+        }
+
+        private void AddItems(FileEntry[] entries) {
+            foreach (var entry in entries) {
+                  AddItem(entry);
+            }
+        }
+        private void RemoveItem(FileEntry entry) {
+            var list = FileList.Value;
+            var item = list.FirstOrDefault((it) => it.Id == entry.Id);
+            if (item != null) {
+                list.Remove(item);
+            }
+        }
+        private void RemoveItems(FileEntry[] entries) {
+            foreach (var entry in entries) {
+                RemoveItem(entry);
+            }
+        }
+        private void UpdateItem(FileEntry entry) { 
+            var list = FileList.Value;
+            var item = list.FirstOrDefault((it) => it.Id == entry.Id);
+            if (item != null) {
+                var index = list.IndexOf(item);
+                if (index >= 0) {
+                    list[index] = entry;
+                }
+            }
+        }
+        private void UpdateItems(FileEntry[] entries) {
+            foreach (var entry in entries) {
+                UpdateItem(entry);
+            }
+        }
+
 
         private async void AddLocalFile() {
             try {

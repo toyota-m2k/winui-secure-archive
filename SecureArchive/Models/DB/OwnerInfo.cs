@@ -1,10 +1,5 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
+﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SecureArchive.Models.DB;
 
@@ -45,4 +40,13 @@ public class OwnerInfo {
     public override int GetHashCode() {
         return base.GetHashCode();
     }
+
+    public static OwnerInfo Empty =>
+        new OwnerInfo() { 
+            OwnerId = string.Empty, 
+            Name = string.Empty, 
+            Type = string.Empty, 
+            Option = string.Empty, 
+            Flags = 0 
+        };
 }
