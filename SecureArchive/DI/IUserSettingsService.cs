@@ -9,15 +9,18 @@ namespace SecureArchive.DI;
 internal enum SettingsKey {
     DataFolder,
     PortNo,
+    ServerAutoStart,
 }
 
 internal interface IReadonlyUserSettingsAccessor {
     string? DataFolder { get; }
     int PortNo { get; }
+    bool ServerAutoStart { get; }
 }
 internal interface IUserSettingsAccessor : IReadonlyUserSettingsAccessor {
     new string? DataFolder { get; set; }
     new int PortNo { get; set; }
+    new bool ServerAutoStart { get; set; }
 }
 
 internal interface IUserSettingsService {

@@ -21,6 +21,8 @@ internal class PageService : IPageService {
         CanGoBack = _currentPageType.Select((it) => { return it != null && it != typeof(MenuPage); }).ToReadOnlyReactivePropertySlim<bool>();
     }
 
+    public Page? CurrentPage => _currentPage;
+
     public void Startup(Frame rootFrame) {
         _rootFrame = rootFrame;
         rootFrame.Navigated += OnNavigated;

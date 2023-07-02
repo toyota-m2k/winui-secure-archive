@@ -180,6 +180,33 @@ public class DecimalStringConverter : IValueConverter {
     }
 }
 
+public class SizeStringConverter : IValueConverter {
+    public static string formatSizeString(long size) {
+        double kb = (double)size / 1000;
+        if (kb < 1000) {
+            return String.Format(" {0} KB", kb.ToString("n3"));
+        }
+
+        double mb = kb / 1000;
+        if (mb < 1000) {
+            return String.Format(" {0} MB", mb.ToString("n3"));
+        }
+
+        double gb = mb / 1000;
+        return String.Format(" {0} GB", gb.ToString("n3"));
+    }
+
+    public object Convert(object value, Type targetType, object parameter, string language) {
+        if (value is long size) {
+            return formatSizeString(size);
+        }
+        return "";
+    }
+    public object ConvertBack(object value, Type targetType, object parameter, string language) {
+        throw new NotSupportedException();
+    }
+}
+
 public class EmptyStringToVisibilityConverter : IValueConverter {
     public object Convert(object value, Type targetType, object parameter, string language) {
         if (string.IsNullOrEmpty(value as string)) {

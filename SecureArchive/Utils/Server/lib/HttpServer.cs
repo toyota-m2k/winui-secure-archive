@@ -98,7 +98,7 @@ public class HttpServer
             lock (this)
             {
                 _running.OnNext(false);
-                Listener.Stop();
+                Listener?.Stop();
                 Logger.Info("HTTP Server Stopped.");
             }
         });
@@ -107,11 +107,14 @@ public class HttpServer
 
     public void Stop()
     {
-        Alive = false;
         lock (this)
         {
+            if(!Alive) {
+                return;
+            }
+            Alive = false;
             _running.OnNext(false);
-            Listener.Stop();
+            Listener?.Stop();
         }
     }
     #endregion

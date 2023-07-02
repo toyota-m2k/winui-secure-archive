@@ -3,6 +3,7 @@ using Reactive.Bindings;
 using SecureArchive.DI;
 using SecureArchive.DI.Impl;
 using SecureArchive.Models.DB;
+using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using System;
 using System.Collections.Generic;
@@ -19,9 +20,10 @@ namespace SecureArchive.Views.ViewModels {
         //private ICryptographyService _cryptoService;
         //private IFileStoreService _fileStoreService;
         private ISecureStorageService _secureStorageService;
-        private IDatabaseService _dataService;
+        private IDatabaseService _dataBaseService;
         private ITaskQueueService _taskQueueService;
         private IStatusNotificationService _statusNotificationService;
+        private IMainThreadService _mainThreadService;
         private ILogger _logger;
 
         public ReactiveCommandSlim AddCommand { get; } = new ReactiveCommandSlim();
@@ -39,23 +41,25 @@ namespace SecureArchive.Views.ViewModels {
             //ICryptographyService cryptographyService, 
             //IFileStoreService fileStoreService, 
             ISecureStorageService secureStorageService,
-            IDatabaseService dataService,
+            IDatabaseService dataBaseService,
             ITaskQueueService taskQueueService,
             IStatusNotificationService statusNotificationService,
+            IMainThreadService mainThreadService,
             ILoggerFactory loggerFactory) {
             _pageService = pageService;
             //_cryptoService = cryptographyService;
             //_fileStoreService = fileStoreService;
             _secureStorageService = secureStorageService;
-            _dataService = dataService;
+            _dataBaseService = dataBaseService;
             _taskQueueService = taskQueueService;
             _statusNotificationService = statusNotificationService;
+            _mainThreadService = mainThreadService;
             _logger = loggerFactory.CreateLogger("ListPage");
             
             GoBackCommand.Subscribe(_pageService.ShowMenuPage);
             AddCommand.Subscribe(AddLocalFile);
 
-            FileList.Value = new ObservableCollection<FileEntry>(_dataService.Entries.List());
+            FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(true));
             Message = _statusNotificationService.Message;
             ProgressMode = _statusNotificationService.ProgressMode;
             ProgressInPercent = _statusNotificationService.ProgressInPercent;
@@ -66,6 +70,25 @@ namespace SecureArchive.Views.ViewModels {
             //});
 
             //_statusNotificationService.ShowMessage("ほげほげ", 3000);
+
+            _dataBaseService.Entries.Changes.Subscribe(change => {
+                _mainThreadService.Run(() => {
+                    switch (change.Type) {
+                        case DataChangeInfo.Change.Add:
+                            AddItem(change.Item);
+                            break;
+                        case DataChangeInfo.Change.Remove:
+                            RemoveItem(change.Item);
+                            break;
+                        case DataChangeInfo.Change.Update:
+                            UpdateItem(change.Item);
+                            break;
+                        case DataChangeInfo.Change.ResetAll:
+                            FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(true));
+                            break;
+                    }
+                });
+            });
         }
 
         public async Task<bool> ExportFileTo(FileEntry entry, string outFile, ProgressProc progress) {
@@ -112,6 +135,50 @@ namespace SecureArchive.Views.ViewModels {
             });
         }
 
+        private void AddItem(FileEntry entry) {
+            var list = FileList.Value;
+            var next = list.FirstOrDefault((it) => it.OriginalDate > entry.OriginalDate);
+            if(next==null) {
+                list.Add(entry);
+            } else {
+                list.Insert(list.IndexOf(next), entry);
+            }
+        }
+
+        //private void AddItems(FileEntry[] entries) {
+        //    foreach (var entry in entries) {
+        //          AddItem(entry);
+        //    }
+        //}
+        private void RemoveItem(FileEntry entry) {
+            var list = FileList.Value;
+            var item = list.FirstOrDefault((it) => it.Id == entry.Id);
+            if (item != null) {
+                list.Remove(item);
+            }
+        }
+        //private void RemoveItems(FileEntry[] entries) {
+        //    foreach (var entry in entries) {
+        //        RemoveItem(entry);
+        //    }
+        //}
+        private void UpdateItem(FileEntry entry) { 
+            var list = FileList.Value;
+            var item = list.FirstOrDefault((it) => it.Id == entry.Id);
+            if (item != null) {
+                var index = list.IndexOf(item);
+                if (index >= 0) {
+                    list[index] = entry;
+                }
+            }
+        }
+        //private void UpdateItems(FileEntry[] entries) {
+        //    foreach (var entry in entries) {
+        //        UpdateItem(entry);
+        //    }
+        //}
+
+
         private async void AddLocalFile() {
             try {
                 var list = await FileOpenPickerBuilder.Create(App.MainWindow)
@@ -133,7 +200,7 @@ namespace SecureArchive.Views.ViewModels {
                             //var outFilePath = Path.Combine(outFolder!, item.Name);
                             var ext = Path.GetExtension(item.Name) ?? "*";
                             try {
-                                var newEntry = await _secureStorageService.RegisterFile(item.Path, "@Local", item.Name, fileInfo.LastWriteTime.Ticks, null, null, progress);
+                                var newEntry = await _secureStorageService.RegisterFile(item.Path, OwnerInfo.LOCAL_ID, item.Name, fileInfo.LastWriteTime.Ticks, null, null, progress);
                                 if (newEntry != null) {
                                     mainThread.Run(() => {
                                         FileList.Value.Add(newEntry);

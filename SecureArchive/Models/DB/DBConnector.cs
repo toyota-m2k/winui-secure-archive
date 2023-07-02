@@ -56,6 +56,7 @@ public class DBConnector : DbContext
         base.OnConfiguring(optionsBuilder);
         //optionsBuilder.UseSqlite($"Data Source={_dbPath}");
         optionsBuilder.UseSqlite(mConnection);
+        optionsBuilder.LogTo(msg => System.Diagnostics.Debug.WriteLine(msg));
     }
 
     //protected override void OnModelCreating(ModelBuilder modelBuilder) {

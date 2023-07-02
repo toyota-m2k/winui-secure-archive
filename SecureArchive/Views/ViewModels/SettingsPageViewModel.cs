@@ -1,5 +1,6 @@
 ﻿using Reactive.Bindings;
 using SecureArchive.DI;
+using SecureArchive.DI.Impl;
 using SecureArchive.Utils;
 using System.Reactive.Linq;
 
@@ -9,10 +10,12 @@ namespace SecureArchive.Views.ViewModels {
         private IPasswordService _passwordService;
         private IFileStoreService _fileStoreSercice;
         private IPageService _pageService;
+        private IHttpServreService _httpServreService;
 
         //public ReactivePropertySlim<bool> DataFolderRegistered = new(false);
         public ReactivePropertySlim<string> DataFolder { get; } = new ("");
         public ReactivePropertySlim<int> PortNo { get; } = new(0);
+        public ReactivePropertySlim<bool> ServerAutoStart { get; } = new(false);
         //private ReactivePropertySlim<PasswordStatus?> CurrentPasswordStatus { get; } = new(null);
 
         //public ReadOnlyReactivePropertySlim<bool> Initialized { get; }
@@ -85,12 +88,15 @@ namespace SecureArchive.Views.ViewModels {
             IUserSettingsService userSettingsService, 
             IPasswordService passwordService,
             IFileStoreService fileStoreSercice,
-            IPageService pageService
+            IPageService pageService,
+            IHttpServreService httpServreService
             ) {
             _userSettingsService = userSettingsService;
             _passwordService = passwordService;
             _fileStoreSercice = fileStoreSercice;
             _pageService = pageService;
+            _httpServreService = httpServreService;
+
             //Initialized = CurrentPasswordStatus.Select((it) => it != null).ToReadOnlyReactivePropertySlim<bool>();
             //NeedToSetPassword = CurrentPasswordStatus.Select((it)=> it==PasswordStatus.NotSet).ToReadOnlyReactivePropertySlim<bool>();
             //NeedToCheckPassword = CurrentPasswordStatus.Select((it)=> it==PasswordStatus.NotChecked).ToReadOnlyReactivePropertySlim<bool>();
@@ -130,12 +136,16 @@ namespace SecureArchive.Views.ViewModels {
 
         private async void Done() {
             await _userSettingsService.EditAsync((editor) => {
-                if(editor.PortNo != PortNo.Value) {
+                var changed = false;
+                if (editor.PortNo != PortNo.Value) {
                     editor.PortNo = PortNo.Value;
-                    return true;
-                } else {
-                    return false;
+                    changed = true;
                 }
+                if(editor.ServerAutoStart != ServerAutoStart.Value) { 
+                    editor.ServerAutoStart = ServerAutoStart.Value;
+                    changed = true;
+                }
+                return changed;
             });
             _pageService.ShowMenuPage();
         }
@@ -190,9 +200,11 @@ namespace SecureArchive.Views.ViewModels {
         }
 
         private async void Initialize() {
+            _httpServreService.Stop();
             await _userSettingsService.EditAsync((editor) => {
                 //DataFolder.Value = editor.DataFolder ?? "";
                 PortNo.Value = editor.PortNo;
+                ServerAutoStart.Value = editor.ServerAutoStart;
                 return false;
             });
             DataFolder.Value = (await _fileStoreSercice.GetFolder()) ?? "";

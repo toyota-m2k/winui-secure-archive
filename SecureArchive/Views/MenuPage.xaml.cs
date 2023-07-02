@@ -30,10 +30,10 @@ public sealed partial class MenuPage : Page, INavigationAware {
     }
 
     public void OnPageActivated() {
-        ViewModel.StartServer();
+        //ViewModel.StartServer();
     }
 
     public void OnPageLeaving() {
-        ViewModel.StopServer();
+        //ViewModel.StopServer();
     }
 }

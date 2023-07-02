@@ -47,19 +47,19 @@ internal class HttpServerService : IHttpServreService {
 
     #region Uploading
 
-    private Dictionary<string, UploadHandler> _uploadingTasks = new Dictionary<string, UploadHandler>();
-    private void RegisterUploadTask(UploadHandler handler) {
-        lock(_uploadingTasks) { _uploadingTasks.Add(handler.ID, handler); }
-    }
-    private void UnregisterUploadTask(UploadHandler handler) {
-        lock (_uploadingTasks) { _uploadingTasks.Remove(handler.ID); }
-    }
-    private UploadHandler? LookupUploadTask(string id) {
-        lock(_uploadingTasks) {
-            if(_uploadingTasks.TryGetValue(id, out var handler)) return handler;
-            return null;
-        }
-    }
+    //private Dictionary<string, UploadHandler> _uploadingTasks = new Dictionary<string, UploadHandler>();
+    //private void RegisterUploadTask(UploadHandler handler) {
+    //    lock(_uploadingTasks) { _uploadingTasks.Add(handler.ID, handler); }
+    //}
+    //private void UnregisterUploadTask(UploadHandler handler) {
+    //    lock (_uploadingTasks) { _uploadingTasks.Remove(handler.ID); }
+    //}
+    //private UploadHandler? LookupUploadTask(string id) {
+    //    lock(_uploadingTasks) {
+    //        if(_uploadingTasks.TryGetValue(id, out var handler)) return handler;
+    //        return null;
+    //    }
+    //}
 
     class UploadHandler : IMultipartContentHander, IDisposable {
         private static AtomicInteger idGenerator = new AtomicInteger();
@@ -191,6 +191,7 @@ internal class HttpServerService : IHttpServreService {
     #region Router
 
     public Regex RegRange = new Regex(@"bytes=(?<start>\d+)(?:-(?<end>\d+))?");
+    public Regex RegUploading = new Regex(@"/uploading/(?<hid>[^?/]+)(?:[?].*)*");
 
     private List<Route> Routes() {
         FileEntry? currentEntry = null;
@@ -212,49 +213,64 @@ internal class HttpServerService : IHttpServreService {
                     if(content==null) {
                         return HttpErrorResponse.BadRequest(request);
                     }
+                    //var p = QueryParser.Parse(request.Url);
                     using(var handler = new UploadHandler(_secureStorageService)) {
-                        RegisterUploadTask(handler);
-                        // Uploadされたファイルの登録に時間がかかるので、一旦、202応答を返しておく。
-                        // 登録処理の経過が知りたければ、GET /uploading/<taskId> で取得する。
-                        var response = new TextHttpResponse(request, HttpStatusCode.Accepted, "");
-                        response.Headers.Add("Location", $"/uploading/{handler.ID}");
-                        response.WriteResponse(request.OutputStream);
-                        _logger.Debug("Accept file : 202 Response.");
+                        //RegisterUploadTask(handler);
+                        //// Uploadされたファイルの登録に時間がかかるので、一旦、202応答を返しておく。
+                        //// 登録処理の経過が知りたければ、GET /uploading/<taskId> で取得する。
+                        //var response = new TextHttpResponse(request, HttpStatusCode.Accepted, "");
+                        //response.Headers.Add("Location", $"/uploading/{handler.ID}");
+                        //response.WriteResponse(request.OutputStream);
+                        //_logger.Debug("Accept file : 202 Response.");
 
-                        // そのあとで登録処理を実行
+                        //// そのあとで登録処理を実行
                         try {
                             _logger.Debug("Parsing Multipart");
                             content.ParseMultipartContent(handler);
-                            UnregisterUploadTask(handler);
+                            //UnregisterUploadTask(handler);
                             _logger.Debug("Parsing Multipart ... Completed");
+                            return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
                         } catch (Exception ex) {
                             _logger.Error(ex, "Parsing multipart body error.");
                             handler.HasError = true;
+                            return HttpErrorResponse.InternalServerError(request);
                         }
                         // 処理完了
                     }
-                    // すでに応答を返しているので、ここは制御を戻すだけ。
-                    return NullResponse.Get(request);
+                    //// すでに応答を返しているので、ここは制御を戻すだけ。
+                    //return NullResponse.Get(request);
                 }),
-            Route.get(
-                name: "upload task",
-                regex: @"/uploading/\w+",
-                process: (HttpRequest request) => {
-                    var id = request.Path?.Substring("/uploading/".Length);
-                    if(id==null) {
-                        return HttpErrorResponse.BadRequest(request);
-                    }
-                    var handler = LookupUploadTask(id);
-                    if(handler==null) {
-                        return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
-                    } else {
-                        var dic = new Dictionary<string, object> {
-                            { "current", $"{handler.ReceivedLength}" },
-                            { "total", $"{handler.ContentLength}" },
-                        };
-                        return TextHttpResponse.FromJson(request, dic, HttpStatusCode.Accepted);
-                    }
-                }),
+            //Route.get(
+            //    name: "upload task",
+            //    regex: @"/uploading/\w+",
+            //    process: (HttpRequest request) => {
+            //        var m = RegUploading.Match(request.Url);
+            //        if(!m.Success) {
+            //            return HttpErrorResponse.BadRequest(request);
+            //        }
+            //        var handlerId = m.Groups["hid"].Value;
+            //        if(handlerId.IsEmpty()) {
+            //            return HttpErrorResponse.BadRequest(request);
+            //        }
+
+            //        var handler = LookupUploadTask(handlerId);
+            //        if(handler==null) {
+            //            var p = QueryParser.Parse(request.Url);
+            //            var oid = p.GetValue("o");
+            //            var cid = p.GetValue("c");
+            //            if(oid.IsNotEmpty() && cid.IsNotEmpty() && _secureStorageService.IsRegistered(oid,cid)) {
+            //                return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
+            //            } else {
+            //                return HttpErrorResponse.NotFound(request);
+            //            }
+            //        } else {
+            //            var dic = new Dictionary<string, object> {
+            //                { "current", $"{handler.ReceivedLength}" },
+            //                { "total", $"{handler.ContentLength}" },
+            //            };
+            //            return TextHttpResponse.FromJson(request, dic, HttpStatusCode.Accepted);
+            //        }
+            //    }),
             Route.get(
                 name: "capability",
                 regex:@"/capability",
@@ -303,7 +319,7 @@ internal class HttpServerService : IHttpServreService {
                     }
                     var list = _databaseService.Entries.List(
                         predicate: (it) => {
-                            return it.Type == ".mp4";
+                            return it.Type == "mp4";
                         }, 
                         select: (entry) => {
                             return new Dictionary<string, object>() {
@@ -329,7 +345,15 @@ internal class HttpServerService : IHttpServreService {
                         return oneTimePasscode.UnauthorizedResponse(request);
                     }
                     var id = Convert.ToInt64(p.GetValue("id", "0"));
-                    var entry = _databaseService.Entries.GetById(id);
+                    var oid = p.GetValue("o");
+                    var cid = p.GetValue("c");
+
+                    FileEntry? entry = null;
+                    if(oid.IsNotEmpty() && cid.IsNotEmpty()) {
+                        entry = _databaseService.Entries.GetByOriginalId(oid, cid);
+                    } else {
+                        entry = _databaseService.Entries.GetById(id);
+                    }
                     if(entry==null) {
                         return HttpErrorResponse.NotFound(request);
                     }
@@ -354,6 +378,39 @@ internal class HttpServerService : IHttpServreService {
                     var end = me.Success ? Convert.ToInt64(me.Value) : 0;
 
                     return new StreamingHttpResponse(request, "video/mp4", seekableInputStream!, start, end);
+                }),
+            Route.get(
+                name: "image",
+                regex: @"/photo\?\w+",
+                process: (HttpRequest request) => {
+                    var p = QueryParser.Parse(request.Url);
+                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+                        return oneTimePasscode.UnauthorizedResponse(request);
+                    }
+                    var id = Convert.ToInt64(p.GetValue("id", "0"));
+                    var oid = p.GetValue("o");
+                    var cid = p.GetValue("c");
+
+                    FileEntry? entry = null;
+                    if(oid.IsNotEmpty() && cid.IsNotEmpty()) {
+                        entry = _databaseService.Entries.GetByOriginalId(oid, cid);
+                    } else {
+                        entry = _databaseService.Entries.GetById(id);
+                    }
+                    if(entry==null) {
+                        return HttpErrorResponse.NotFound(request);
+                    }
+
+                    if(currentEntry?.Id != entry.Id) {
+                        currentEntry = entry;
+                        seekableInputStream?.Dispose();
+                        seekableInputStream = new SeekableInputStream(_secureStorageService.OpenEntry(entry), (oldStream) => {
+                            oldStream.Dispose();
+                            return _secureStorageService.OpenEntry(entry);
+                        });
+                    }
+                    seekableInputStream!.Position = 0;
+                    return new StreamingHttpResponse(request, "image/jpeg", seekableInputStream!, 0, 0);
                 }),
             Route.get(
                 name: "chapters",
@@ -399,7 +456,7 @@ internal class HttpServerService : IHttpServreService {
                         return HttpErrorResponse.BadRequest(request);
                     }
                     RegisterOwner(dic);
-                    if(!_backupService.Backup(ownerId!, token!, address!)) {
+                    if(!_backupService.Request(ownerId!, token!, address!)) {
                         return HttpErrorResponse.Conflict(request);
                     }
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "backup" }, {"status", "accepted"} });
@@ -420,15 +477,7 @@ internal class HttpServerService : IHttpServreService {
             return false;
         }
         _databaseService.EditOwnerList(list => {
-            var reg = list.Get(ownerId!);
-            if (reg != null) {
-                reg.Option = option;
-                reg.Name = ownerName!;
-                reg.Type = ownerType;
-                reg.Flags = flag;
-            } else { 
-                list.Add(ownerId!, ownerName!, ownerType, flag, option);
-            }
+            list.AddOrUpdate(ownerId, ownerName, ownerType, flag, option);
             return true;
         });
         return true;

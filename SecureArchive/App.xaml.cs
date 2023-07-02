@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using SecureArchive.DI;
@@ -75,6 +76,7 @@ namespace SecureArchive {
                     .AddTransient<MenuPageViewModel>()
                     .AddTransient<SettingsPageViewModel>()
                     .AddTransient<ListPageViewModel>()
+                    .AddTransient<BackupDialogViewModel>()
                     ;
                 })
                 .Build();
@@ -97,11 +99,36 @@ namespace SecureArchive {
             MainWindow.Activate();
             TitleBarHelper.ApplySystemThemeToCaptionButtons();
 
-            var ds = GetService<IDatabaseService>();
-            ds.EditKVs((kvs) => {
-                kvs.SetString("hoge", "fuga");
-                return true;
-            });
+            //var ds = GetService<IDatabaseService>();
+            //ds.EditKVs((kvs) => {
+            //    kvs.SetString("hoge", "fuga");
+            //    return true;
+            //});
+            MainWindow.AppWindow.Closing += AppWindow_Closing;
+        }
+
+        /**
+         * アプリ終了前に確認ダイアログを表示する
+         */
+        private bool closeConfirmed = false;
+        private async void ConfirmClose() {
+            var r = await MessageBoxBuilder.Create(MainWindow)
+                .SetMessage("Are you sure you want to exit?")
+                .AddButton("Yes", id: true)
+                .AddButton("No", id: false)
+                .ShowAsync() as bool?;
+            if(r==true) {
+                closeConfirmed = true;
+                MainWindow.Close();
+            }
+        }
+
+        private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args) {
+            if (!closeConfirmed) {
+                args.Cancel = true;
+                ConfirmClose();
+            }
+            GetService<IHttpServreService>().Stop();
         }
     }
 }

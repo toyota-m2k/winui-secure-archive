@@ -19,4 +19,5 @@ internal interface IPageService {
     void ShowSettingsPage();
     void ShowListPage();
     void GoBack();
+    Page? CurrentPage { get; }
 }
