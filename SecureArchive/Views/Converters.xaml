@@ -12,7 +12,9 @@
     <common:EnumVisibilityConverter x:Key="EnumVisibilityConverter"/>
     <common:NegEnumVisibilityConverter x:Key="NegEnumVisibilityConverter"/>
     <common:DateStringConverter x:Key="DateStringConverter"/>
+    <common:SizeStringConverter x:Key="SizeStringConverter"/>
     <common:DecimalStringConverter x:Key="DecimalStringConverter"/>
     <common:EmptyStringToVisibilityConverter x:Key="EmptyStringToVisibilityConverter"/>
 
+    
 </ResourceDictionary>

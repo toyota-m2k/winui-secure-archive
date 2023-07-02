@@ -1,16 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
-using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Drawing;
-using System.Linq;
 using System.Reactive.Subjects;
-using System.Security.Policy;
-using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Documents;
 
-namespace SecureArchive.Models.DB.Accessor; 
+namespace SecureArchive.Models.DB.Accessor;
 
 public interface IFileEntryList {
     IObservable<DataChangeInfo> Changes { get; }
@@ -38,7 +29,7 @@ public class DataChangeInfo {
         ResetAll,
     }
     public Change Type { get; }
-    public FileEntry Item { get; private set; } = null;
+    public FileEntry Item { get; private set; } = null!;
     DataChangeInfo(Change type, FileEntry item) {
         Type = type;
         Item = item;

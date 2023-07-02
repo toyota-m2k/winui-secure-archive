@@ -1,16 +1,10 @@
 ﻿using Microsoft.Extensions.Logging;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using SecureArchive.Utils;
-using System;
-using System.Collections.Generic;
-using System.Collections.ObjectModel;
-using System.IO;
-using System.Linq;
-using System.Reactive.Subjects;
+using SecureArchive.Views;
 using System.Text;
-using System.Threading.Tasks;
-using System.Windows.Forms.Design.Behavior;
 
 namespace SecureArchive.DI.Impl;
 
@@ -27,6 +21,11 @@ internal class RemoteItem {
     public string Type { get; set; } = "";
     [JsonProperty("duration")]
     public long Duration { get; set; }
+    [JsonProperty("cloud")]
+    public long Cloud { get; set; } = 0;
+
+    [JsonIgnore]
+    public string UrlType => (Type == "mp4" || Type == ".mp4") ? "video" : "photo";
 }
 internal class RemoteItemResponse {
     [JsonProperty("cmd")]
@@ -37,18 +36,34 @@ internal class RemoteItemResponse {
     public List<RemoteItem> List { get; set; } = new();
 }
 
+internal class BackupCompletion {
+    [JsonProperty("auth")]
+    public string AuthToken { get; set; } = "";
+    [JsonProperty("id")]
+    public string Id { get; set; } = "";
+    [JsonProperty("owner")]
+    public string OwnerId { get; set; } = "";
+    [JsonProperty("status")]
+    public bool Status { get; set; } = false;
+}
+
 internal class BackupService : IBackupService {
     private readonly ILogger _logger;
     private ISecureStorageService _secureStorageService;
-    private BehaviorSubject<bool> _executing = new (false);
-    private BehaviorSubject<RemoteItem?> _currentItem = new(null);
-    private BehaviorSubject<IList<RemoteItem>?> _remoteItems = new(null);
-    private BehaviorSubject<Exception?> _exception = new(null);
-    private BehaviorSubject<int> _totalCount = new(0);
-    private BehaviorSubject<int> _currentIndex = new(0);
-    private BehaviorSubject<long> _totalBytes = new(0);
-    private BehaviorSubject<long> _currentBytes = new(0);
-    private CancellationTokenSource _cancellationTokenSource = new();
+    private IPageService _pageService;
+    private IMainThreadService _mainThreadService;
+
+    //private BehaviorSubject<Status> _executing = new (Status.NONE);
+    //private BehaviorSubject<RemoteItem?> _currentItem = new(null);
+    //private BehaviorSubject<int> _totalCount = new(0);
+    //private BehaviorSubject<int> _currentIndex = new(0);
+    //private BehaviorSubject<long> _totalBytes = new(0);
+    //private BehaviorSubject<long> _currentBytes = new(0);
+    //private CancellationTokenSource _cancellationTokenSource = new();
+
+    //public Exception? LastError { get; private set; } = null;
+
+    private bool _isBusy = false;
 
     private HttpClient? _httpClient;
 
@@ -59,70 +74,139 @@ internal class BackupService : IBackupService {
         }
     }
 
-    public bool IsBusy {
-        get { lock(this) { return _executing.Value; } }
-    }
+    //public Status GetStatus() {
+    //    lock(this) {
+    //        return _executing.Value;
+    //    }
+    //}       
+    //public bool IsBusy {
+    //    get { lock(this) { return _executing.Value!=Status.NONE; } }
+    //}
+    //public bool IsDownloading {
+    //    get { lock (this) { return _executing.Value != Status.DOWNLOADING; } }
+    //}
+    //public bool IsListing{
+    //    get { lock (this) { return _executing.Value != Status.LISTING; } }
+    //}
 
-    public IObservable<bool> Executing => _executing;
-    public IObservable<IList<RemoteItem>?> RemoteItems => _remoteItems;
+    //public IObservable<Status> Executing => _executing;
+    public IList<RemoteItem> RemoteItems { get; private set; } = null!;
 
-    public BackupService(ISecureStorageService secureStorageService, ILoggerFactory loggerFactory) {
+    //public IObservable<RemoteItem?> CurrentItem => _currentItem;
+
+    //public IObservable<int> TotalCount => _totalCount;
+
+    //public IObservable<int> CurrentIndex => _currentIndex;
+
+    //public IObservable<long> TotalBytes => _totalBytes;
+
+    //public IObservable<long> CurrentBytes => _currentBytes;
+
+    public BackupService(ISecureStorageService secureStorageService, IPageService pageService, IMainThreadService mainThreadSercice, ILoggerFactory loggerFactory) {
         _logger = loggerFactory.CreateLogger<BackupService>();
         _secureStorageService = secureStorageService;
+        _pageService = pageService;
+        _mainThreadService = mainThreadSercice;
     }
 
-    public bool Backup(string ownerId, string token, string address) {
+    private string OwnerId = null!;
+    private string Token = null!;
+    private string Address = null!;
+
+
+    public bool Request(string ownerId, string token, string address) {
         lock(this) {
-            if(_executing.Value) {
+            if(_isBusy) { 
+                _logger.Warn("cannot accept new backup request, because it is busy.");
                 return false;
             }
-            _executing.OnNext(true);
+            _isBusy = true;
         }
-        BackupProc(ownerId, token, address);
+        OwnerId = ownerId;
+        Token = token;
+        Address = address;
+        _ = ListProc();
         return true;
     }
 
+    //public async Task BeginBackup(IList<RemoteItem> targets) {
+    //    lock(this) {
+    //        if(_executing.Value != Status.NONE) {
+    //            return;
+    //        }
+    //        _executing.OnNext(Status.DOWNLOADING);
+    //    }
+    //    await BackupProc(targets);
+    //}
 
-    public void Cancel() {
-        lock (this) {
-            _cancellationTokenSource.Cancel();
-        }
-    }
 
     private void Reset() {
-        _remoteItems.OnNext(null);
-        _exception.OnNext(null);
-        _totalCount.OnNext(0);
-        _currentIndex.OnNext(0);
-        _totalBytes.OnNext(0);
-        _currentBytes.OnNext(0);
-        _cancellationTokenSource = new();
+        RemoteItems = null!;
     }
 
-    private void BackupProc(string ownerId, string token, string address) {
+    private async Task<bool> ListProc() {         
         Reset();
-        Task.Run(async () => {
+        return await Task.Run(async () => {
             try {
-                var ct = _cancellationTokenSource.Token;
-                var list = await GetList($"http://{address}/list?auth={token}");
-                _totalCount.OnNext(list.Count);
-                _currentIndex.OnNext(0);
-                foreach (var item in list) {
-                    ct.ThrowIfCancellationRequested();
-                    _currentItem.OnNext(item);
-                    _currentIndex.OnNext(_currentIndex.Value + 1);
-                    if (!_secureStorageService.IsRegistered(ownerId, item.Id)) {
-                        await GetVideo($"http://{address}/video?id={item.Id}&auth={token}", ownerId, item, ct);
-                    }
-                }
+                var list = await GetList($"http://{Address}/list?auth={Token}&type=all&backup");
+                if(list.Count==0) {
+                    return false;
+                }   
+                RemoteItems = list;
+                await _mainThreadService.Run(async () => {
+                    var dialog = new ContentDialog();
+
+                    // XamlRoot must be set in the case of a ContentDialog running in a Desktop app
+                    dialog.XamlRoot = _pageService.CurrentPage!.XamlRoot;
+                    dialog.Style = Application.Current.Resources["DefaultContentDialogStyle"] as Style;
+                    dialog.Title = "Backup";
+                    //dialog.PrimaryButtonText = "Backup";
+                    //dialog.SecondaryButtonText = "Don't Save";
+                    dialog.CloseButtonText = "Close";
+                    dialog.DefaultButton = ContentDialogButton.Close;
+                    dialog.Content = new BackupDialogPage();
+
+                    await dialog.ShowAsync();
+                });
+                return true;
             }
             catch (Exception ex) {
-                _exception.OnNext(ex);
-            } finally {
-                _executing.OnNext(false);
+                _logger.Error(ex);
+                return false;
+            }
+            finally {
+                lock (this) {
+                    _isBusy = false;
+                }
             }
         });
     }
+
+
+
+    //private async Task BackupTarget(IList<RemoteItem> targets, CancellationToken cancellationToken) {
+    //    await Task.Run(async () => {
+    //        try {
+    //            _totalCount.OnNext(targets.Count);
+    //            _currentIndex.OnNext(0);
+    //            foreach (var item in targets) {
+    //                ct.ThrowIfCancellationRequested();
+    //                _currentItem.OnNext(item);
+    //                _currentIndex.OnNext(_currentIndex.Value + 1);
+    //                if (!_secureStorageService.IsRegistered(OwnerId, item.Id)) {
+    //                    await DownloadTarget($"http://{Address}/{item.UrlType}/?id={item.Id}&auth={Token}", OwnerId, item, ct);
+    //                }
+    //            }
+    //        }
+    //        catch (Exception ex) {
+    //            LastError = ex;
+    //        } finally {
+    //            lock(this) {
+    //                _executing.OnNext(Status.NONE);
+    //            }
+    //        }
+    //    });
+    //}
 
     private async Task<List<RemoteItem>> GetList(string url) {
         using (var response = (await httpClient.GetAsync(url)).EnsureSuccessStatusCode()) {
@@ -151,32 +235,58 @@ internal class BackupService : IBackupService {
         }
     }
 
-    const int BUFF_SIZE = 1 * 1024 * 1024;
-    private async Task GetVideo(string url, string ownerId, RemoteItem item, CancellationToken ct) {
-        using (var response = (await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)).EnsureSuccessStatusCode()) {
-            using (var content = response.Content)
-            using (var inStream = await content.ReadAsStreamAsync())
-            using (var entryCreator = await _secureStorageService.CreateEntry(ownerId, item.Id)) {
-                if (entryCreator == null) { throw new InvalidOperationException("cannot create entry."); }
-                var total = content.Headers.ContentLength ?? 0L;
-                _totalBytes.OnNext(total);
-                var buff = new byte[BUFF_SIZE];
-                var recv = 0L;
-                while (true) {
-                    ct.ThrowIfCancellationRequested();
-                    int len = await inStream.ReadAsync(buff, 0, BUFF_SIZE, ct);
-                    if (len == 0) {
-                        entryCreator.Complete(item.Name, item.Size, item.Type, item.Date, null);
-                        break;
-                    }
-                    recv += len;
-                    _currentBytes.OnNext(recv);
-                    await entryCreator.OutputStream.WriteAsync(buff, 0, len);
-                    ct.ThrowIfCancellationRequested();
+    private async Task<bool> NotifyCompletion(RemoteItem item) {
+        var url = $"http://{Address}/backup/done";
+        var bc = new BackupCompletion() { AuthToken = Token, Id = item.Id, OwnerId = OwnerId, Status=true };
+        var json = JsonConvert.SerializeObject(bc);
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+        try {
+            using (var response = await httpClient.PutAsync(url, content)) {
+                if (!response.IsSuccessStatusCode) {
+                    return false;
                 }
+                return true;
             }
+        } catch(Exception ex) {
+            _logger.Error(ex);
+            return false;
         }
     }
 
+
+    private const int BUFF_SIZE = 1 * 1024 * 1024;
+    public async Task<bool> DownloadTarget(RemoteItem item, ProgressProc progress, CancellationToken ct) {
+        var url = $"http://{Address}/{item.UrlType}?id={item.Id}&auth={Token}";
+        try {
+            using (var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
+                if (!response.IsSuccessStatusCode) return false;
+                using (var content = response.Content)
+                using (var inStream = await content.ReadAsStreamAsync())
+                using (var entryCreator = await _secureStorageService.CreateEntry(OwnerId, item.Id, true)) {
+                    if (entryCreator == null) { throw new InvalidOperationException("cannot create entry."); }
+                    var total = content.Headers.ContentLength ?? 0L;
+                    var buff = new byte[BUFF_SIZE];
+                    var recv = 0L;
+                    while (true) {
+                        ct.ThrowIfCancellationRequested();
+                        int len = await inStream.ReadAsync(buff, 0, BUFF_SIZE, ct);
+                        if (len == 0) {
+                            entryCreator.Complete(item.Name, item.Size, item.Type, item.Date, null);
+                            break;
+                        }
+                        recv += len;
+                        await entryCreator.OutputStream.WriteAsync(buff, 0, len);
+                        progress(recv, total);
+                        ct.ThrowIfCancellationRequested();
+                    }
+                    _logger.Debug("downloaded {0}", item.Name);
+                    return await NotifyCompletion(item);
+                }
+            }
+        } catch(Exception ex) {
+            _logger.Error(ex);
+            return false;
+        }
+    }
 
 }

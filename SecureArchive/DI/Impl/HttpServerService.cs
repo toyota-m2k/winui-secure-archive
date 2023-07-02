@@ -456,7 +456,7 @@ internal class HttpServerService : IHttpServreService {
                         return HttpErrorResponse.BadRequest(request);
                     }
                     RegisterOwner(dic);
-                    if(!_backupService.Backup(ownerId!, token!, address!)) {
+                    if(!_backupService.Request(ownerId!, token!, address!)) {
                         return HttpErrorResponse.Conflict(request);
                     }
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "backup" }, {"status", "accepted"} });

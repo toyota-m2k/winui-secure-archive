@@ -66,7 +66,11 @@ public class OwnerInfoList : IMutableOwnerInfoList {
                 _owners.Add(owner);
                 return true;
             } else if(owner!=org) {
-                _owners.Update(owner);
+                org.Name = name;
+                org.Type = type;
+                org.Flags = flag;
+                org.Option = option;
+                _owners.Update(org);
                 return true;
             } else {
                 return false;

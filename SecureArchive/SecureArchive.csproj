@@ -17,6 +17,7 @@
 	<ImplicitUsings>enable</ImplicitUsings>
   </PropertyGroup>
   <ItemGroup>
+    <None Remove="Views\BackupDialogPage.xaml" />
     <None Remove="Views\Converters.xaml" />
     <None Remove="Views\ListPage.xaml" />
     <None Remove="Views\MenuPage.xaml" />
@@ -59,6 +60,11 @@
   -->
   <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <ProjectCapability Include="Msix" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Update="Views\BackupDialogPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <Page Update="Views\TitleBar.xaml">
