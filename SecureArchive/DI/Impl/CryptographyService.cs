@@ -99,11 +99,7 @@ namespace SecureArchive.DI.Impl {
                 throw new InvalidOperationException("call SetPassword to set old password earlier.");
             }
             await Task.Run(() => {
-                var aes = Aes.Create();
-                //aes.Key = HashHelper.SHA256(_cryptoKey, CRYPT_SEED).Hash;
-                aes.Key = Guid.Parse(_cryptoKey).ToByteArray();     // 128ビット ... AES の最短鍵長 ... これで十分。
-                aes.IV = HashHelper.MD5(_cryptoKey, IV_SEED).Hash;  // 16バイト(128ビット）
-                using (CryptoStream cryptoStream = new CryptoStream(outputStream, aes.CreateEncryptor(), CryptoStreamMode.Write)) {
+                using (CryptoStream cryptoStream = OpenStreamForEncryption(outputStream)) {
                     var buffer = new byte[4096];
                     int len;
                     long total = inputStream.Length;

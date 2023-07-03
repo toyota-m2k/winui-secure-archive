@@ -31,42 +31,56 @@ public class HttpProcessor {
     #region Public Methods
     public void HandleClient(TcpClient tcpClient) {
         Task.Run(() => {
-            using (tcpClient)
-            using (Stream inputStream = GetInputStream(tcpClient))
-            using (Stream outputStream = GetOutputStream(tcpClient)) {
+            using (tcpClient) {
+                Stream inputStream = GetInputStream(tcpClient);
+                Stream outputStream = GetOutputStream(tcpClient);
                 Logger.Debug("Started.");
-    
+
                 IHttpResponse response = ProcessRequest(inputStream, outputStream);
 
-
-                //// HttpRequest request = GetRequest(inputStream, outputStream);
-
-                //// route and handle the request...
-                ////var route = GetRoute(request, out var httpResponse);
-                //if (route != null) {
-                //    try {
-                //        response = route.Process(request);
-                //    } catch(Exception e) {
-                //        Logger.LogError(e, "Route.Process");
-                //    }
-                //}
-                //if(response == null) {
-                //    response = HttpErrorResponse.InternalServerError(request);
-                //}
-
-                //Console.WriteLine("{0} {1}", response.ToString(), request.Url);
                 try {
                     Logger.Info($"Responding: {response.Request?.Url ?? "?"}");
                     response.WriteResponse(outputStream);
                     outputStream.Flush();
-                    Logger.Info($"Complete: {response.Request?.Url ?? "?"}");
+                    Logger.Info($"Succeeded: {response.Request?.Url ?? "?"}");
                 }
                 catch (Exception e) {
-                    Logger.Error(e, $"WriteResponse {response.Request?.Url ?? "?"}");
+                    Logger.Error(e, $"Failed: {response.Request?.Url ?? "?"}");
                 }
+                Logger.Debug("Shutdown Send Socket.");
+                var lingerOption = new LingerOption(true, 10);
+                tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, lingerOption);
+                tcpClient.Client.Shutdown(SocketShutdown.Send);
+
+                // クライアントが接続を切るまで待機
+                Logger.Debug($"Finishing: {response.Request?.Url ?? "?"} ...");
+                if (SocketConnected(tcpClient.Client)) {
+                    WaitForClosed(inputStream);
+                }
+                Logger.Debug($"Finished: {response.Request?.Url ?? "?"}");
             }
-            Logger.Debug("Finished.");
         });
+    }
+
+    bool SocketConnected(Socket s) {
+        bool part1 = s.Poll(1000, SelectMode.SelectRead);
+        bool part2 = (s.Available == 0);
+        if (part1 && part2)
+            return false;
+        else
+            return true;
+    }
+
+    private void WaitForClosed(Stream inputStream) {
+        try {
+            byte[] buffer = new byte[1024];
+            int byteCount;
+            while ((byteCount = inputStream.Read(buffer, 0, buffer.Length)) > 0) {
+                //何もしない
+            }
+        } catch (Exception e) {
+            Logger.Error(e);
+        }
     }
 
     // this formats the HTTP response...
