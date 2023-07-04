@@ -54,7 +54,7 @@ public class HttpProcessor {
 
                 // クライアントが接続を切るまで待機
                 Logger.Debug($"Finishing: {response.Request?.Url ?? "?"} ...");
-                if (SocketConnected(tcpClient.Client)) {
+                if (IsSocketConnected(tcpClient.Client)) {
                     WaitForClosed(inputStream);
                 }
                 Logger.Debug($"Finished: {response.Request?.Url ?? "?"}");
@@ -62,13 +62,17 @@ public class HttpProcessor {
         });
     }
 
-    bool SocketConnected(Socket s) {
+    private bool IsSocketConnected(Socket s) {
         bool part1 = s.Poll(1000, SelectMode.SelectRead);
         bool part2 = (s.Available == 0);
-        if (part1 && part2)
+        if (part1 && part2) {
+            Logger.Debug("Disconnected.");
             return false;
-        else
+        }
+        else {
+            Logger.Debug("Connected.");
             return true;
+        }
     }
 
     private void WaitForClosed(Stream inputStream) {
