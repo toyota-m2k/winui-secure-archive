@@ -34,6 +34,11 @@ internal class SecureStorageService : ISecureStorageService {
     public bool IsRegistered(string ownerId, string originalId) {
         return null != _databaseService.Entries.GetByOriginalId(ownerId, originalId);
     }
+    public bool IsRegistered(string ownerId, string originalId, long lastModified) {
+        var item = _databaseService.Entries.GetByOriginalId(ownerId, originalId);
+        if(item==null) return false;
+        return item.OriginalDate >= lastModified;
+    }
 
     public async Task<FileEntry?> RegisterFile(string filePath, string ownerId, string? name, long originalDate, string? originalId, string? metaInfo, ProgressProc? progress) {
         var type = Path.GetExtension(filePath) ?? "*";

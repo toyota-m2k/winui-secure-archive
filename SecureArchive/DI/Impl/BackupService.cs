@@ -148,10 +148,15 @@ internal class BackupService : IBackupService {
         Reset();
         return await Task.Run(async () => {
             try {
-                var list = await GetList($"http://{Address}/list?auth={Token}&type=all&backup");
+                var rawList = await GetList($"http://{Address}/list?auth={Token}&type=all&backup");
+                if(rawList.Count==0) {
+                    return false;
+                }
+                var list = rawList.Where(it => !_secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToList();
                 if(list.Count==0) {
                     return false;
-                }   
+                }
+
                 RemoteItems = list;
                 await _mainThreadService.Run(async () => {
                     var dialog = new ContentDialog();

@@ -82,8 +82,9 @@ public class HttpProcessor {
             while ((byteCount = inputStream.Read(buffer, 0, buffer.Length)) > 0) {
                 //何もしない
             }
+            Logger.Debug("Closed.");
         } catch (Exception e) {
-            Logger.Error(e);
+            Logger.Debug("Closed (with error).");
         }
     }
 
