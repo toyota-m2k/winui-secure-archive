@@ -19,6 +19,8 @@ public class HttpRequest
     public string? Path { get; set; } = null;
     public Stream OutputStream { get; }
 
+    public int Id { get; } = GenerateId();
+
     public HttpRequest(string method, string url, Dictionary<string, string>? headers, Stream outputStream)
     {
         Method = method;
@@ -34,4 +36,9 @@ public class HttpRequest
 
     //    return string.Format("{0} {1} HTTP/1.0\r\n{2}\r\n\r\n{3}", Method, Url, string.Join("\r\n", Headers.Select(x => string.Format("{0}: {1}", x.Key, x.Value))), Content);
     //}
+
+    static int IdGenerator = 0;
+    static int GenerateId() {
+        return Interlocked.Increment(ref IdGenerator);
+    }
 }
