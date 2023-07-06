@@ -269,6 +269,7 @@ internal class BackupService : IBackupService {
     public async Task<bool> DownloadTarget(RemoteItem item, ProgressProc progress, CancellationToken ct) {
         var url = $"http://{Address}/{item.UrlType}?id={item.Id}&auth={Token}";
         try {
+            await Task.Delay(500);
             using (var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
                 if (!response.IsSuccessStatusCode) return false;
                 using (var content = response.Content)
@@ -291,10 +292,12 @@ internal class BackupService : IBackupService {
                         ct.ThrowIfCancellationRequested();
                     }
                     _logger.Debug("downloaded {0}", item.Name);
-                    return await NotifyCompletion(item);
                 }
             }
-        } catch(Exception ex) {
+            await Task.Delay(500);
+            return await NotifyCompletion(item);
+        }
+        catch (Exception ex) {
             _logger.Error(ex);
             return false;
         }
