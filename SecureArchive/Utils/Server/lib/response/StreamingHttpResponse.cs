@@ -1,44 +1,66 @@
 ﻿using SecureArchive.Utils.Server.lib.model;
+using System.Diagnostics;
 
 namespace SecureArchive.Utils.Server.lib.response;
 
 public class StreamingHttpResponse : AbstractHttpResponse {
-    public long Start { get; set; } = -1;
-    public long End { get; set; } = 0;
-    private Stream InputStream;         // Seek可能なストリーム ... 無理なら SeekableInputStream でラップしよう。
-    private long TotalLength = -1;
+    private long Start { get; set; }
+    private long End { get; set; }
+    private Stream InputStream { get; }         // Seek可能なストリーム ... 無理なら SeekableInputStream でラップしよう。
+    private long TotalLength { get; }
+    
     private byte[]? Buffer = null;
     private int PartialLength = 0;
     private UtLog Logger = new UtLog(typeof(StreamingHttpResponse));
 
+    /**
+     * Range指定をサポートするか？
+     */
     private bool SupportRange { get; } = true;
-    public StreamingHttpResponse(HttpRequest req, string contentType, Stream inStream, long start, long end, long totalLength=-1)
+
+    public event Action? OnComplete;
+
+    private string F(long size) {
+        return string.Format("{0:#,0}",size);
+    }
+    /**
+     * コンストラクタ
+     * @param totalLength   不明の場合は、-1を指定する。
+     */
+    public StreamingHttpResponse(HttpRequest req, string contentType, Stream inStream, bool supportRange, long start, long end, long totalLength/*=-1*/, Action? onComplete)
         : base(req, HttpStatusCode.Ok) {
         InputStream = inStream;
         TotalLength = (totalLength>0) ? totalLength : inStream.Length;
         ContentType = contentType;
         Start = start;
         End = end;
+        SupportRange = supportRange;
         if (TotalLength > 0) {
             ContentLength = TotalLength;
-        } else {
-            //ContentLength = 100000;
+        } 
+        if(onComplete!=null) {
+            OnComplete += onComplete;
         }
+        Logger.Debug($"[{F(req.Id)}] Start={F(start)} End={F(end)} Total={F(totalLength)}");
     }
-    public StreamingHttpResponse(HttpRequest req, string contentType, Stream inStream, long totalLength=-1)
-        : base(req, HttpStatusCode.Ok) {
-        InputStream = inStream;
-        TotalLength = (totalLength > 0) ? totalLength : inStream.Length;
-        ContentType = contentType;
-        Start = -1;
-        End = 0;
-        SupportRange = false;
-        if (TotalLength > 0) {
-            ContentLength = TotalLength;
-        }
-        else {
-            //ContentLength = 100000;
-        }
+
+    /**
+     * Rangeをサポートするストリーミングレスポンス（初回用）を生成する。
+     */
+    public static StreamingHttpResponse CreateForRangedInitial(HttpRequest req, string contentType, Stream inStream, long totalLength/*=-1*/, Action? onComplete) {
+        return new StreamingHttpResponse(req, contentType, inStream, true, -1, 0, totalLength, onComplete);
+    }
+    /**
+     * Range指定付き要求に対するストリーミングレスポンス。
+     */
+    public static StreamingHttpResponse CreateForRanged(HttpRequest req, string contentType, Stream inStream, long start, long end, long totalLength/*=-1*/, Action? onComplete) {
+        return new StreamingHttpResponse(req, contentType, inStream, true, start, end, totalLength, onComplete);
+    }
+    /**
+     * Rangeをサポートしないストリーミングレスポンスを生成する。
+     */
+    public static StreamingHttpResponse CreateForNoRanged(HttpRequest req, string contentType, Stream inStream, long totalLength/*=-1*/, Action? onComplete) {
+        return new StreamingHttpResponse(req, contentType, inStream, false, -1, 0, totalLength, onComplete);
     }
 
     // ファイル長が不明の場合、クライアントからはバッファサイズが要求されない（End=0）。
@@ -72,10 +94,11 @@ public class StreamingHttpResponse : AbstractHttpResponse {
             if (SupportRange) {
                 Headers["Accept-Ranges"] = "bytes";
             }
-            Logger.Debug("No Range Requested");
+            InputStream.Seek(0, SeekOrigin.Begin);
+            Logger.Debug($"[{Request?.Id??0}] No Range Requested");
         }
         else {
-            Logger.Debug($"Requested Range: {Start} - {End} ({string.Format("{0:#,0}", End - Start + 1)} bytes)");
+            Logger.Debug($"[{Request?.Id ?? 0}] Requested Range: {F(Start)} - {F(End)} ({F(End - Start + 1)} bytes in {F(TotalLength)})");
             StatusCode = HttpStatusCode.PartialContent;
             Buffer = null;
             var total = "*";
@@ -85,10 +108,12 @@ public class StreamingHttpResponse : AbstractHttpResponse {
                 if (End <= 0) {
                     End = TotalLength - 1;
                 }
+                Debug.Assert(Start < TotalLength);
             }
             int buffSize = AUTO_BUFFER_SIZE;
             if (End > 0) {
                 buffSize = (int)Math.Min((long)AUTO_BUFFER_SIZE, End - Start + 1);
+                Debug.Assert(AUTO_BUFFER_SIZE > 0);
             }
             Buffer = new byte[buffSize];
             InputStream.Seek(Start, SeekOrigin.Begin);
@@ -98,28 +123,49 @@ public class StreamingHttpResponse : AbstractHttpResponse {
                 ContentLength = PartialLength;
                 total = eos ? $"{End+1}" :"*";
             }
-            Logger.Debug($"Actual Range: {Start}-{End}/{total} ({string.Format("{0:#,0}", PartialLength)} Bytes)");
+            Logger.Debug($"[{Request?.Id??0}] Actual Range: {Start}-{End}/{total} ({string.Format("{0:#,0}", PartialLength)} Bytes)");
             Headers["Content-Range"] = $"bytes {Start}-{End}/{total}";
             Headers["Accept-Ranges"] = "bytes";
         }
     }
 
+    private void ExecuteWithLog(string msg, Action action) {
+        try {
+            action();
+        }
+        catch (IOException e) {
+            if ((uint)e.HResult == 0x80131620) {
+                Logger.Debug($"[{Request?.Id ?? 0}] {msg}: Maybe cancelled by the client.");
+            }
+            else {
+                Logger.Error(e, $"[{Request?.Id ?? 0}] {msg}: Unexpected IOException.");
+            }
+        }
+        catch (Exception e) {
+            Logger.Error(e, $"[{Request?.Id ?? 0}] {msg}: Error");
+            throw;
+        }
+    }   
+
     protected override void WriteBody(Stream output) {
         if (Start == -1) {
-            output.Flush();
-            try {
+            ExecuteWithLog("No-Range", () => {
                 InputStream.CopyTo(output, AUTO_BUFFER_SIZE);
                 output.Flush();
-            } catch (Exception e) {
-                Logger.Error(e);
-                throw;
-            }
+            });
         }
         else {
             if(Buffer==null) {
                 throw new Exception("Internal error: Buffer is null");
             }
-            output.Write(Buffer, 0, PartialLength);
+            ExecuteWithLog($"Range({Start}-{End})", () => {
+                output.Write(Buffer, 0, PartialLength);
+            });
         }
+    }
+
+    override public void Dispose() {
+        OnComplete?.Invoke();
+        OnComplete = null;
     }
 }

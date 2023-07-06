@@ -12,11 +12,11 @@ public class SeekableInputStream : Stream
     private ReopenStreamProc? _reopenStream;
     private UtLog _logger = new (typeof(SeekableInputStream));
 
-    public SeekableInputStream(Stream inStream, ReopenStreamProc? reopenStream)
+    public SeekableInputStream(Stream inStream, ReopenStreamProc? reopenStreamProc)
     {
         Debug.Assert(inStream.CanRead);
         _internalStream = inStream;
-        _reopenStream = reopenStream;
+        _reopenStream = reopenStreamProc;
         Length = getLength();
     }
 

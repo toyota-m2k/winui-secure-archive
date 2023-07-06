@@ -159,19 +159,25 @@ internal class BackupService : IBackupService {
 
                 RemoteItems = list;
                 await _mainThreadService.Run(async () => {
-                    var dialog = new ContentDialog();
+                    await CustomDialogBuilder<BackupDialogPage,bool>
+                        .Create(_pageService.CurrentPage!.XamlRoot, new BackupDialogPage())
+                        .SetTitle("Backup")
+                        .ShowAsync();
 
-                    // XamlRoot must be set in the case of a ContentDialog running in a Desktop app
-                    dialog.XamlRoot = _pageService.CurrentPage!.XamlRoot;
-                    dialog.Style = Application.Current.Resources["DefaultContentDialogStyle"] as Style;
-                    dialog.Title = "Backup";
-                    //dialog.PrimaryButtonText = "Backup";
-                    //dialog.SecondaryButtonText = "Don't Save";
-                    dialog.CloseButtonText = "Close";
-                    dialog.DefaultButton = ContentDialogButton.Close;
-                    dialog.Content = new BackupDialogPage();
 
-                    await dialog.ShowAsync();
+                    //var dialog = new ContentDialog();
+
+                    //// XamlRoot must be set in the case of a ContentDialog running in a Desktop app
+                    //dialog.XamlRoot = _pageService.CurrentPage!.XamlRoot;
+                    //dialog.Style = Application.Current.Resources["DefaultContentDialogStyle"] as Style;
+                    //dialog.Title = "Backup";
+                    ////dialog.PrimaryButtonText = "Backup";
+                    ////dialog.SecondaryButtonText = "Don't Save";
+                    //dialog.CloseButtonText = "Close";
+                    //dialog.DefaultButton = ContentDialogButton.Close;
+                    //dialog.Content = new BackupDialogPage();
+
+                    //await dialog.ShowAsync();
                 });
                 return true;
             }

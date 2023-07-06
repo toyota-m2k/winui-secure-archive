@@ -36,57 +36,61 @@ public class HttpProcessor {
                 Stream outputStream = GetOutputStream(tcpClient);
                 Logger.Debug("Started.");
 
-                IHttpResponse response = ProcessRequest(inputStream, outputStream);
+                int id = 0;
+                string url = "?";
+                using (IHttpResponse response = ProcessRequest(inputStream, outputStream)) {
+                    try {
+                        id = response.Request?.Id ?? 0;
+                        url = response.Request?.Url ?? "?";
+                        Logger.Info($"[{id}] Responding: {url}");
+                        response.WriteResponse(outputStream);
+                        outputStream.Flush();
+                        Logger.Info($"[{id}] Succeeded: {url}");
+                    }
+                    catch (Exception e) {
+                        Logger.Error(e, $"[{id}] Failed: {url}");
+                    }
+                }
+                //Logger.Debug($"[{id}] Shutdown Send-Socket: {url}");
+                ////var lingerOption = new LingerOption(true, 60);
+                ////tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, lingerOption);
+                //tcpClient.Client.Shutdown(SocketShutdown.Send);
 
-                try {
-                    Logger.Info($"Responding: {response.Request?.Url ?? "?"}");
-                    response.WriteResponse(outputStream);
-                    outputStream.Flush();
-                    Logger.Info($"Succeeded: {response.Request?.Url ?? "?"}");
-                }
-                catch (Exception e) {
-                    Logger.Error(e, $"Failed: {response.Request?.Url ?? "?"}");
-                }
-                Logger.Debug("Shutdown Send Socket.");
-                var lingerOption = new LingerOption(true, 10);
-                tcpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.Linger, lingerOption);
-                tcpClient.Client.Shutdown(SocketShutdown.Send);
-
-                // クライアントが接続を切るまで待機
-                Logger.Debug($"Finishing: {response.Request?.Url ?? "?"} ...");
-                if (IsSocketConnected(tcpClient.Client)) {
-                    WaitForClosed(inputStream);
-                }
-                Logger.Debug($"Finished: {response.Request?.Url ?? "?"}");
+                //// クライアントが接続を切るまで待機
+                //Logger.Debug($"[{id}] Finishing: {url} ...");
+                //if (IsSocketConnected(tcpClient.Client)) {
+                //    WaitForClosed(inputStream);
+                //}
+                Logger.Debug($"[{id}] Finished: {url}");
             }
         });
     }
 
-    private bool IsSocketConnected(Socket s) {
-        bool part1 = s.Poll(1000, SelectMode.SelectRead);
-        bool part2 = (s.Available == 0);
-        if (part1 && part2) {
-            Logger.Debug("Disconnected.");
-            return false;
-        }
-        else {
-            Logger.Debug("Connected.");
-            return true;
-        }
-    }
+    //private bool IsSocketConnected(Socket s) {
+    //    bool part1 = s.Poll(1000, SelectMode.SelectRead);
+    //    bool part2 = (s.Available == 0);
+    //    if (part1 && part2) {
+    //        Logger.Debug("Disconnected.");
+    //        return false;
+    //    }
+    //    else {
+    //        Logger.Debug("Connected.");
+    //        return true;
+    //    }
+    //}
 
-    private void WaitForClosed(Stream inputStream) {
-        try {
-            byte[] buffer = new byte[1024];
-            int byteCount;
-            while ((byteCount = inputStream.Read(buffer, 0, buffer.Length)) > 0) {
-                //何もしない
-            }
-            Logger.Debug("Closed.");
-        } catch (Exception e) {
-            Logger.Debug("Closed (with error).");
-        }
-    }
+    //private void WaitForClosed(Stream inputStream) {
+    //    try {
+    //        byte[] buffer = new byte[1024];
+    //        int byteCount;
+    //        while ((byteCount = inputStream.Read(buffer, 0, buffer.Length)) > 0) {
+    //            //何もしない
+    //        }
+    //        Logger.Debug("Closed.");
+    //    } catch (Exception e) {
+    //        Logger.Debug("Closed (with error).");
+    //    }
+    //}
 
     // this formats the HTTP response...
 

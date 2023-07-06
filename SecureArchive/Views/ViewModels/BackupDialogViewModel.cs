@@ -15,6 +15,8 @@ internal class BackupDialogViewModel {
     
     public ReactiveCommandSlim StartCommand { get; } = new ReactiveCommandSlim();
     public ReactiveCommandSlim StopCommand { get; } = new ReactiveCommandSlim();
+    public ReactiveCommandSlim SelectAllCommand { get; } = new ReactiveCommandSlim();
+    public ReactiveCommandSlim CloseCommand { get; } = new ReactiveCommandSlim();
 
     public ReactivePropertySlim<bool> Downloading { get; } = new ReactivePropertySlim<bool>(false);
     public ReactivePropertySlim<bool> Selected { get; } = new ReactivePropertySlim<bool>(false); 
@@ -83,6 +85,9 @@ internal class BackupDialogViewModel {
             } finally {
                 _mainThreadService.Run(() => {
                     Downloading.Value = false;
+                    if(RemoteItems.Count == 0) {
+                        CloseCommand.Execute();
+                    }
                 });
                 _cts = null;
             }

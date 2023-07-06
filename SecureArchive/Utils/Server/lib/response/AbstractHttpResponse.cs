@@ -3,7 +3,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 namespace SecureArchive.Utils.Server.lib.response {
-    public interface IHttpResponse
+    public interface IHttpResponse : IDisposable
     {
         HttpRequest? Request { get; }
         void WriteResponse(Stream outputStream);
@@ -95,6 +95,9 @@ namespace SecureArchive.Utils.Server.lib.response {
         {
             byte[] bytes = Encoding.UTF8.GetBytes(text);
             output.Write(bytes, 0, bytes.Length);
+        }
+
+        public virtual void Dispose() {
         }
     }
 }

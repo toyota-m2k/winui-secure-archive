@@ -6,7 +6,7 @@ public static class LogUtils {
     static string composeMessage(string msg, string filePath, string memberName, int sourceLineNumber) {
         var index = filePath.LastIndexOf(@"\");
         if(0<index && index<filePath.Length-1) filePath = filePath.Substring(index+1);
-        return $"{DateTime.Now.ToLocalTime()}: {filePath}: {memberName}({sourceLineNumber}) {msg}";
+        return $"{DateTime.Now.ToLocalTime()}: {filePath}: {memberName} {msg}";
     }
 
     public static void Debug(this ILogger logger, string message="", [CallerFilePath] string filePath = "", [CallerMemberName] string memberName = "", [CallerLineNumber] int sourceLineNumber = 0) {

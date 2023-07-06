@@ -9,6 +9,7 @@ namespace SecureArchive.Utils.Server.lib.model;
 
 public class HttpRequest
 {
+    public int Id { get; } = GenerateId();
     public string Method { get; }
     public string Url { get; }
     public Dictionary<string, string> Headers { get; }
@@ -27,11 +28,9 @@ public class HttpRequest
         OutputStream = outputStream;
     }
 
-    //public override string ToString() {
-    //    if (!string.IsNullOrWhiteSpace(Content))
-    //        if (!Headers.ContainsKey("Content-Length"))
-    //            Headers.Add("Content-Length", Content.Length.ToString());
 
-    //    return string.Format("{0} {1} HTTP/1.0\r\n{2}\r\n\r\n{3}", Method, Url, string.Join("\r\n", Headers.Select(x => string.Format("{0}: {1}", x.Key, x.Value))), Content);
-    //}
+    static int IdGenerator = 0;
+    static int GenerateId() {
+        return Interlocked.Increment(ref IdGenerator);
+    }
 }

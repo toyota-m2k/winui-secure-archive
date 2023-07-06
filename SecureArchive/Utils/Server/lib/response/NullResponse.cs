@@ -21,5 +21,7 @@ namespace SecureArchive.Utils.Server.lib.response {
             return new NullResponse(req); 
         }
 
+        public void Dispose() {
+        }
     }
 }

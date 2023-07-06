@@ -36,8 +36,10 @@
                     />
             
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
+                <Button x:Name="SelectAll" Content="Select All" Command="{x:Bind ViewModel.SelectAllCommand}" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource NegBoolVisibilityConverter}}"/>
                 <Button x:Name="Start" Content="Start" Command="{x:Bind ViewModel.StartCommand}" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource NegBoolVisibilityConverter}}" IsEnabled="{x:Bind ViewModel.Selected.Value}"/>
                 <Button x:Name="Stop" Content="Stop" Command="{x:Bind ViewModel.StopCommand}" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource BoolVisibilityConverter}}"/>
+                <Button x:Name="Close" Content="Close" Command="{x:Bind ViewModel.CloseCommand}" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource NegBoolVisibilityConverter}}"/>
             </StackPanel>
 
             <StackPanel Orientation="Vertical" HorizontalAlignment="Stretch" Spacing="5" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource BoolVisibilityConverter}}">

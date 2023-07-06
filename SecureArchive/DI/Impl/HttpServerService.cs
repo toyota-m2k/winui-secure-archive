@@ -16,6 +16,7 @@ using System.Text.RegularExpressions;
 using System.Windows.Controls;
 using System.Windows.Navigation;
 using Windows.Security.Cryptography;
+using static SecureArchive.Utils.SeekableInputStream;
 using static SecureArchive.Utils.Server.lib.model.HttpContent;
 using HttpContent = SecureArchive.Utils.Server.lib.model.HttpContent;
 
@@ -28,6 +29,7 @@ internal class HttpServerService : IHttpServreService {
     private IDatabaseService _databaseService;
     private IPasswordService _passwordService;
     private IBackupService _backupService;
+    private CryptoStreamHandler _cryptoStreamHandler;
 
     //private IUserSettingsService _userSettingsService;
     public HttpServerService(
@@ -43,6 +45,8 @@ internal class HttpServerService : IHttpServreService {
         _backupService = backupService;
 
         _server = new HttpServer(Routes(), _logger);
+
+        _cryptoStreamHandler = new CryptoStreamHandler(_secureStorageService, _logger);
     }
 
     #region Uploading
@@ -127,6 +131,44 @@ internal class HttpServerService : IHttpServreService {
         }
     }
 
+    class CryptoStreamHandler {
+        private FileEntry? _currentEntry = null;
+        private SeekableInputStream? _seekableInputStream = null;
+        private Mutex _mutex = new Mutex();
+        private ISecureStorageService _secureStorageService;
+        private ILogger _logger;
+        
+        public CryptoStreamHandler(ISecureStorageService secureStorageService, ILogger logger) {
+            _secureStorageService = secureStorageService;
+            _logger = logger;
+        }
+        
+        public Stream LockStream(FileEntry entry) {
+            _mutex.WaitOne();
+            _logger.Debug($"Locked: [Entry={entry.Id}]");
+            if (_seekableInputStream != null) {
+                if (_currentEntry?.Id == entry.Id) {
+                    return _seekableInputStream;
+                } else {
+                    _seekableInputStream.Dispose();
+                }
+            }
+            _currentEntry = entry;
+            _seekableInputStream = new SeekableInputStream(_secureStorageService.OpenEntry(entry), reopenStreamProc: (oldStream) => {
+                oldStream.Dispose();
+                return _secureStorageService.OpenEntry(entry);
+            });
+            return _seekableInputStream;
+        }
+
+        public void UnlockStream(FileEntry entry) {
+            if (_currentEntry?.Id == entry.Id) {
+                _logger.Debug($"Unlocked: [Entry={entry.Id}]");
+                _mutex.ReleaseMutex();
+            }
+        }
+    }
+
     #endregion
     #region Authentication
 
@@ -194,8 +236,6 @@ internal class HttpServerService : IHttpServreService {
     public Regex RegUploading = new Regex(@"/uploading/(?<hid>[^?/]+)(?:[?].*)*");
 
     private List<Route> Routes() {
-        FileEntry? currentEntry = null;
-        SeekableInputStream? seekableInputStream = null;
         var oneTimePasscode = new OneTimePasscode(_passwordService);
 
         return new List<Route> {
@@ -358,17 +398,9 @@ internal class HttpServerService : IHttpServreService {
                         return HttpErrorResponse.NotFound(request);
                     }
 
-                    if(currentEntry?.Id != entry.Id) {
-                        currentEntry = entry;
-                        seekableInputStream?.Dispose();
-                        seekableInputStream = new SeekableInputStream(_secureStorageService.OpenEntry(entry), (oldStream) => {
-                            oldStream.Dispose();
-                            return _secureStorageService.OpenEntry(entry);
-                        });
-                    }
                     if(!request.Headers.TryGetValue("range", out var range)) {
                         //Source?.StandardOutput($"BooServer: cmd=video({id})");
-                        return new StreamingHttpResponse(request, "video/mp4", seekableInputStream!, -1, 0, entry.Size);
+                        return StreamingHttpResponse.CreateForRangedInitial(request, "video/mp4", _cryptoStreamHandler.LockStream(entry), entry.Size, ()=>_cryptoStreamHandler.UnlockStream(entry));
                     }
 
                     var match = RegRange.Match(range);
@@ -377,10 +409,10 @@ internal class HttpServerService : IHttpServreService {
                     var start = ms.Success ? Convert.ToInt64(ms.Value) : 0;
                     var end = me.Success ? Convert.ToInt64(me.Value) : 0;
 
-                    return new StreamingHttpResponse(request, "video/mp4", seekableInputStream!, start, end, entry.Size);
+                    return StreamingHttpResponse.CreateForRanged(request, "video/mp4", _cryptoStreamHandler.LockStream(entry), start, end, entry.Size, ()=>_cryptoStreamHandler.UnlockStream(entry));
                 }),
             Route.get(
-                name: "image",
+                name: "photo",
                 regex: @"/photo\?\w+",
                 process: (HttpRequest request) => {
                     var p = QueryParser.Parse(request.Url);
@@ -400,17 +432,7 @@ internal class HttpServerService : IHttpServreService {
                     if(entry==null) {
                         return HttpErrorResponse.NotFound(request);
                     }
-
-                    if(currentEntry?.Id != entry.Id) {
-                        currentEntry = entry;
-                        seekableInputStream?.Dispose();
-                        seekableInputStream = new SeekableInputStream(_secureStorageService.OpenEntry(entry), (oldStream) => {
-                            oldStream.Dispose();
-                            return _secureStorageService.OpenEntry(entry);
-                        });
-                    }
-                    seekableInputStream!.Position = 0;
-                    return new StreamingHttpResponse(request, "image/jpeg", seekableInputStream!, 0, 0);
+                    return StreamingHttpResponse.CreateForNoRanged(request, "image/jpeg", _cryptoStreamHandler.LockStream(entry), entry.Size, ()=>_cryptoStreamHandler.UnlockStream(entry));
                 }),
             Route.get(
                 name: "chapters",
