@@ -21,6 +21,7 @@
     <None Remove="Views\Converters.xaml" />
     <None Remove="Views\ListPage.xaml" />
     <None Remove="Views\MenuPage.xaml" />
+    <None Remove="Views\RemotePasswordDialogPage.xaml" />
     <None Remove="Views\SettingsPage.xaml" />
     <None Remove="Views\TitleBar.xaml" />
   </ItemGroup>
@@ -61,6 +62,11 @@
   -->
   <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <ProjectCapability Include="Msix" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Update="Views\RemotePasswordDialogPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <Page Update="Views\BackupDialogPage.xaml">

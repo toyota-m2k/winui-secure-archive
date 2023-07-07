@@ -40,7 +40,7 @@ internal class SecureStorageService : ISecureStorageService {
         return item.OriginalDate >= lastModified;
     }
 
-    public async Task<FileEntry?> RegisterFile(string filePath, string ownerId, string? name, long originalDate, string? originalId, string? metaInfo, ProgressProc? progress) {
+    public async Task<FileEntry?> RegisterFile(string filePath, string ownerId, string? name, long originalDate, string originalId, string? metaInfo, ProgressProc? progress) {
         var type = Path.GetExtension(filePath) ?? "*";
         var info = new FileInfo(filePath);
         var fileName = name ?? Path.GetFileName(filePath);
@@ -49,7 +49,7 @@ internal class SecureStorageService : ISecureStorageService {
         }
     }
 
-    public async Task<FileEntry?> Register(Stream inStream, string ownerId, string name, long size, string type, long originalDate, string? originalId, string? metaInfo, ProgressProc? progress) {
+    public async Task<FileEntry?> Register(Stream inStream, string ownerId, string name, long size, string type, long originalDate, string originalId, string? metaInfo, ProgressProc? progress) {
         var outFolder = await _fileStoreService.GetFolder();
         var cryptedFilePath = Path.Combine(outFolder!, Guid.NewGuid().ToString());
         try {

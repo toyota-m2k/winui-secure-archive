@@ -1,10 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using Newtonsoft.Json.Linq;
+using SecureArchive.Utils;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SecureArchive.Models.DB;
 
@@ -28,7 +25,7 @@ public class FileEntry {
 
     [Key, Required]
     public long Id { get; set; }
-    public string? OriginalId { get; set; }  // Owner App 内でのID
+    public string OriginalId { get; set; }  // Owner App 内でのID
     [Required]
     public string OwnerId { get; set; } = string.Empty;
     [Required]
@@ -47,4 +44,34 @@ public class FileEntry {
     //public OwnerInfo OwnerInfo { get; set; } = new OwnerInfo();
     [NotMapped]
     public OwnerInfo? OwnerInfo { get; set; } = null;
+
+    public Dictionary<string,object> ToDictionary() {
+        return new Dictionary<string, object>() {
+            { "id", Id },
+            { "originalId", OriginalId ?? ""},
+            { "ownerId", OwnerId },
+            { "name", Name },
+            { "size", Size },
+            { "type", Type },
+            //{ "path", Path },
+            { "registeredDate", RegisteredDate },
+            { "originalDate", OriginalDate },
+            { "metaInfo", MetaInfo ?? "" },
+        };
+    }
+
+    public static FileEntry FromDictionary(JObject dict) {
+        return new FileEntry() {
+            Id = dict.GetIntValue("id"),
+            OriginalId = dict.GetStringValue("originalId"),
+            OwnerId = dict.GetStringValue("ownerId", ""),
+            Name = dict.GetStringValue("name", ""),
+            Size = dict.GetLongValue("size"),
+            Type = dict.GetStringValue("type", ""),
+            //Path = (string)dict["path"],
+            RegisteredDate = dict.GetLongValue("registeredDate"),
+            OriginalDate = dict.GetLongValue("originalDate"),
+            MetaInfo = dict.GetStringValue("metaInfo"),
+        };
+    }
 }

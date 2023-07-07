@@ -357,18 +357,29 @@ internal class HttpServerService : IHttpServreService {
                     if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
                         return oneTimePasscode.UnauthorizedResponse(request);
                     }
+                    var sync = p.GetValue("sync")?.ToLower() == "true";
+                    var type = p.GetValue("type")?.ToLower() ?? "";
                     var list = _databaseService.Entries.List(
                         predicate: (it) => {
-                            return it.Type == "mp4";
+                            switch(type) {
+                                case "all": return true;
+                                case "photo": return it.Type == "jpg" || it.Type == "png";
+                                default: return it.Type == "mp4";
+                            }
                         }, 
                         select: (entry) => {
-                            return new Dictionary<string, object>() {
-                                { "id", entry.Id },
-                                { "name", entry.Name },
-                                { "type", entry.Type.Substring(1) },
-                                { "size", entry.Size },
-                        };
-                    });
+                            if(sync) {
+                                return entry.ToDictionary();
+                            } else {
+                                return new Dictionary<string, object>() {
+                                    { "id", entry.Id },
+                                    { "name", entry.Name },
+                                    { "type", entry.Type.Substring(1) },
+                                    { "size", entry.Size },
+                                };
+                            }
+                        }
+                    );
                     var dic = new Dictionary<string,object> {
                         {"cmd", "list" },
                         {"date", DateTime.UtcNow.ToFileTimeUtc() },

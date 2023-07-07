@@ -68,6 +68,7 @@ namespace SecureArchive {
                     .AddSingleton<IMainThreadService, MainThradService>()
                     .AddSingleton<IBackupService, BackupService>()
                     .AddTransient<ITaskQueueService, TaskQueueService>()
+                    .AddSingleton<ISyncArchiveService, SyncArchiveSevice>()
                     .AddTransient<IStatusNotificationService, StatusNotificationService>()
                     .AddLogging(builder => {
                         builder.AddFilter(level => true);
@@ -78,6 +79,8 @@ namespace SecureArchive {
                     .AddTransient<SettingsPageViewModel>()
                     .AddTransient<ListPageViewModel>()
                     .AddTransient<BackupDialogViewModel>()
+                    .AddTransient<RemotePasswordDialogViewModel>()
+                    .AddTransient<RemotePasswordDialogPage>()
                     ;
                 })
                 .Build();

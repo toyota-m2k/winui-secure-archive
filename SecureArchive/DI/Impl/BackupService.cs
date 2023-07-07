@@ -1,6 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
 using Newtonsoft.Json;
 using SecureArchive.Utils;
 using SecureArchive.Views;

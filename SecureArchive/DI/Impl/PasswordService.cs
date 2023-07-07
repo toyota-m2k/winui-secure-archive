@@ -41,7 +41,6 @@ namespace SecureArchive.DI.Impl {
             }
         }
 
-
         public async Task<bool> SetPasswordAsync(string newPassword) {
             await Initialize();
             if(string.IsNullOrEmpty(newPassword)) {
@@ -62,7 +61,7 @@ namespace SecureArchive.DI.Impl {
                 _logger.Error(ex, "change password error in CryptograpyService.");
                 return false;
             }
-            _hashedPassword = HashHelper.SHA256(newPassword, PWD_SEED).AsHexString;
+            _hashedPassword = CreateHashedPassword(newPassword); // HashHelper.SHA256(newPassword, PWD_SEED).AsHexString;
             await _localSettingsService.PutAsync(KEY_PASSWORD, _hashedPassword);
             _passwordStatus = PasswordStatus.Checked;
             return true;
@@ -101,8 +100,16 @@ namespace SecureArchive.DI.Impl {
                 throw new InvalidOperationException("no password has been set yet.");
             }
             if (remoteKey == null) return false;
-            return HashHelper.SHA256(challenge, _hashedPassword).AsBase64String == remoteKey;
+            return CreatePassPhrase(challenge, _hashedPassword) == remoteKey;
         }
+
+        public string CreateHashedPassword(string pwd) {
+            return HashHelper.SHA256(pwd, PWD_SEED).AsHexString;
+        }
+        public string CreatePassPhrase(string challenge, string pwd) {
+            return HashHelper.SHA256(challenge, pwd).AsBase64String;
+        }
+
 
     }
 }
