@@ -101,15 +101,21 @@ public class OwnerInfoList : IMutableOwnerInfoList {
     }
 
     public OwnerInfo? Get(string ownerId) {
-        return _owners.FirstOrDefault(it => it.OwnerId == ownerId);
+        lock (_connector) {
+            return _owners.FirstOrDefault(it => it.OwnerId == ownerId);
+        }
     }
 
     public void Remove(OwnerInfo entry) {
-        _owners.Remove(entry);
+        lock (_connector) {
+            _owners.Remove(entry);
+        }
     }
     public void Remove(Func<OwnerInfo, bool> predicate) {
-        var del = _owners.Where(predicate);
-        _owners.RemoveRange(del);
+        lock (_connector) {
+            var del = _owners.Where(predicate);
+            _owners.RemoveRange(del);
+        }
     }
 
 }

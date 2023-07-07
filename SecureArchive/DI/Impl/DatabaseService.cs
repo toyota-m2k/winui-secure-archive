@@ -29,71 +29,84 @@ public class DatabaseService : IDatabaseService, IMutableTables {
         _logger.Debug(appConfigService.DBPath);
 
         _connector = new DBConnector(appConfigService.DBPath);
-        _entries = new FileEntryList(_connector);
-        _ownerList = new OwnerInfoList(_connector);
-        _kvs = new KVList(_connector);
+        lock (_connector) {
+            _entries = new FileEntryList(_connector);
+            _ownerList = new OwnerInfoList(_connector);
+            _kvs = new KVList(_connector);
+        }
     }
 
     private IMutableTables mutableTables => this;
 
     public bool EditEntry(Func<IMutableFileEntryList, bool> fn) {
         bool result = false;
-        try {
-            result = fn(mutableTables.Entries);
-            return result;
-        } finally {
-            if (result) {
-                _connector.SaveChanges();
+        lock (_connector) {
+            try {
+                result = fn(mutableTables.Entries);
+                return result;
+            }
+            finally {
+                if (result) {
+                    _connector.SaveChanges();
+                }
             }
         }
     }
 
     public bool EditKVs(Func<IMutableKVList, bool> fn) {
         bool result = false;
-        try {
-            result = fn(mutableTables.KVs);
-            return result;
-        }
-        finally {
-            if (result) {
-                _connector.SaveChanges();
+        lock (_connector) {
+            try {
+                result = fn(mutableTables.KVs);
+                return result;
+            }
+            finally {
+                if (result) {
+                    _connector.SaveChanges();
+                }
             }
         }
     }
 
     public bool EditOwnerList(Func<IMutableOwnerInfoList, bool> fn) {
         bool result = false;
-        try {
-            result = fn(mutableTables.OwnerList);
-            return result;
-        }
-        finally {
-            if (result) {
-                _connector.SaveChanges();
+        lock (_connector) {
+            try {
+                result = fn(mutableTables.OwnerList);
+                return result;
+            }
+            finally {
+                if (result) {
+                    _connector.SaveChanges();
+                }
             }
         }
     }
 
     public bool Transaction(Func<IMutableTables, bool> fn) {
         bool result = false;
-        using (var txn = _connector.Database.BeginTransaction()) {
-            try {
-                result = fn(mutableTables);
-                return result;
-            }
-            finally {
-                if (result) {
-                    _connector.SaveChanges();
-                    txn.Commit();
+        lock (_connector) {
+            using (var txn = _connector.Database.BeginTransaction()) {
+                try {
+                    result = fn(mutableTables);
+                    return result;
                 }
-                else {
-                    txn.Rollback();
+                finally {
+                    if (result) {
+                        _connector.SaveChanges();
+                        txn.Commit();
+                    }
+                    else {
+                        txn.Rollback();
+                    }
                 }
             }
         }
     }
 
     public void Update() {
-        _connector.SaveChanges();
+        lock (_connector) {
+            _connector.SaveChanges();
+        }
     }
 }
