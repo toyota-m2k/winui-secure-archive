@@ -52,6 +52,7 @@ internal class BackupService : IBackupService {
     private ISecureStorageService _secureStorageService;
     private IPageService _pageService;
     private IMainThreadService _mainThreadService;
+    private IHttpClientFactory _httpClientFactory;
 
     //private BehaviorSubject<Status> _executing = new (Status.NONE);
     //private BehaviorSubject<RemoteItem?> _currentItem = new(null);
@@ -65,14 +66,9 @@ internal class BackupService : IBackupService {
 
     private bool _isBusy = false;
 
-    private HttpClient? _httpClient;
+    //private HttpClient? _httpClient;
 
-    private HttpClient httpClient {
-        get {
-            if (_httpClient==null) { _httpClient = new HttpClient(); }
-            return _httpClient;
-        }
-    }
+    private HttpClient httpClient => _httpClientFactory.CreateClient();
 
     //public Status GetStatus() {
     //    lock(this) {
@@ -102,11 +98,17 @@ internal class BackupService : IBackupService {
 
     //public IObservable<long> CurrentBytes => _currentBytes;
 
-    public BackupService(ISecureStorageService secureStorageService, IPageService pageService, IMainThreadService mainThreadSercice, ILoggerFactory loggerFactory) {
+    public BackupService(
+        ISecureStorageService secureStorageService, 
+        IPageService pageService, 
+        IMainThreadService mainThreadSercice, 
+        IHttpClientFactory httpClientFactory,
+        ILoggerFactory loggerFactory) {
         _logger = loggerFactory.CreateLogger<BackupService>();
         _secureStorageService = secureStorageService;
         _pageService = pageService;
         _mainThreadService = mainThreadSercice;
+        _httpClientFactory = httpClientFactory;
     }
 
     private string OwnerId = null!;
@@ -294,7 +296,7 @@ internal class BackupService : IBackupService {
                     _logger.Debug("downloaded {0}", item.Name);
                 }
             }
-            await Task.Delay(500);
+            //await Task.Delay(500);
             return await NotifyCompletion(item);
         }
         catch (Exception ex) {

@@ -54,6 +54,7 @@ namespace SecureArchive {
                 .UseContentRoot(AppContext.BaseDirectory)
                 .ConfigureServices((context, service) => {
                     service
+                    .AddHttpClient()
                     .AddSingleton<IAppConfigService, AppConfigService>()
                     .AddSingleton<ILocalSettingsService, LocalSettingsService>()
                     .AddSingleton<IUserSettingsService, UserSettingsService>()
