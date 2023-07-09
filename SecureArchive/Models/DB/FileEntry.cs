@@ -25,7 +25,7 @@ public class FileEntry {
 
     [Key, Required]
     public long Id { get; set; }
-    public string OriginalId { get; set; }  // Owner App 内でのID
+    public string OriginalId { get; set; } = string.Empty;  // Owner App 内でのID
     [Required]
     public string OwnerId { get; set; } = string.Empty;
     [Required]
@@ -63,7 +63,7 @@ public class FileEntry {
     public static FileEntry FromDictionary(JObject dict) {
         return new FileEntry() {
             Id = dict.GetIntValue("id"),
-            OriginalId = dict.GetStringValue("originalId"),
+            OriginalId = dict.GetStringValue("originalId", ""),
             OwnerId = dict.GetStringValue("ownerId", ""),
             Name = dict.GetStringValue("name", ""),
             Size = dict.GetLongValue("size"),

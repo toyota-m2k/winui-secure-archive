@@ -14,9 +14,9 @@ public interface IFileEntryList {
 }
 
 public interface IMutableFileEntryList : IFileEntryList {
-    FileEntry Add(string ownerId, string name, long size, string type, string path, long originalDate, string? originalId=null, string? metaInfo = null);
-    FileEntry Update(string ownerId, string name, long size, string type_, string path, long originalDate, string? originalId = null, string? metaInfo = null);
-    FileEntry AddOrUpdate(string ownerId, string name, long size, string type_, string path, long originalDate, string? originalId = null, string? metaInfo = null); 
+    FileEntry Add(string ownerId, string name, long size, string type, string path, long originalDate, string originalId, string? metaInfo = null);
+    FileEntry Update(string ownerId, string name, long size, string type_, string path, long originalDate, string originalId, string? metaInfo = null);
+    FileEntry AddOrUpdate(string ownerId, string name, long size, string type_, string path, long originalDate, string originalId, string? metaInfo = null); 
     void Remove(FileEntry entry);
     //void Remove(Func<FileEntry, bool> predicate);
 }
@@ -119,16 +119,16 @@ public class FileEntryList : IMutableFileEntryList {
         }
     }
 
-    public FileEntry AddOrUpdate(string ownerId, string name, long size, string type_, string path, long originalDate, string? originalId = null, string? metaInfo = null) {
-        if (GetByOriginalId(ownerId, originalId ?? "") != null) {
+    public FileEntry AddOrUpdate(string ownerId, string name, long size, string type_, string path, long originalDate, string originalId, string? metaInfo = null) {
+        if (GetByOriginalId(ownerId, originalId) != null) {
             return Update(ownerId, name, size, type_, path, originalDate, originalId, metaInfo);
         } else {
             return Add(ownerId, name, size, type_, path, originalDate, originalId, metaInfo);
         }
     }
     
-    public FileEntry Add(string ownerId, string name, long size, string type_, string path, long originalDate, string? originalId=null, string? metaInfo = null) {
-        if(GetByOriginalId(ownerId, originalId ?? "") != null) {
+    public FileEntry Add(string ownerId, string name, long size, string type_, string path, long originalDate, string originalId, string? metaInfo = null) {
+        if(GetByOriginalId(ownerId, originalId) != null) {
             throw new ArgumentException($"already exists: {ownerId}/{originalId}");
         }
         var type = type_;
@@ -144,8 +144,8 @@ public class FileEntryList : IMutableFileEntryList {
         return entry;
     }
 
-    public FileEntry Update(string ownerId, string name, long size, string type_, string path, long originalDate, string? originalId = null, string? metaInfo = null) {
-        var entry = GetByOriginalId(ownerId, originalId ?? "");
+    public FileEntry Update(string ownerId, string name, long size, string type_, string path, long originalDate, string originalId, string? metaInfo = null) {
+        var entry = GetByOriginalId(ownerId, originalId);
         if ( entry== null) {
             throw new ArgumentException($"no entry: {ownerId}/{originalId}");
         }

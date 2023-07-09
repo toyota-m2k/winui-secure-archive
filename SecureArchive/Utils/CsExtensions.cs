@@ -55,4 +55,12 @@ public static class CsExtensions {
 
         return defValue;
     }
+
+    public static T Also<T>(this T obj, Action<T> fn) {
+        fn(obj);
+        return obj;
+    }
+    public static R Let<T,R>(this T obj, Func<T,R> fn) {
+        return fn(obj);
+    }
 }

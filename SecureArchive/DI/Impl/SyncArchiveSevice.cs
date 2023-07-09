@@ -1,4 +1,5 @@
 ﻿using Microsoft.Extensions.Logging;
+using Microsoft.UI.Xaml;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SecureArchive.Models.DB;
@@ -7,6 +8,7 @@ using SecureArchive.Views;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace SecureArchive.DI.Impl;
 internal class SyncArchiveSevice : ISyncArchiveService {
@@ -23,9 +25,10 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     private string peerAddress = "";
     private string challenge = "";
     private string authToken = "";
+    private string rawPassword = "";
     private string hashedPwd = "";
 
-    private CancellationTokenSource _cancellationTokenSource = null!;
+    private CancellationTokenSource? _cancellationTokenSource = null;
 
     public SyncArchiveSevice(
         ISecureStorageService secureStorageService,
@@ -94,32 +97,41 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         if (await AuthWithToken(authToken)) {
             return true;
         }
+        authToken = "";
+
         // AuthWithTokenで challenge が設定されているはず
-        if(challenge.IsEmpty()) {
+        if (challenge.IsEmpty()) {
             throw new UnauthorizedAccessException("no challenge");
         }
 
-        authToken = "";
-        var hpwd = hashedPwd;
-        while (true) {
-            if (hpwd.IsEmpty()) {
-                var pwd = await _mainThreadService.Run(async () => {
-                    return await App.GetService<RemotePasswordDialogPage>().GetPassword(_pageService.CurrentPage!.XamlRoot);
-                });
-                if (pwd == null) {
-                    return false;
-                }
-                hpwd = _passwordService.CreateHashedPassword(pwd);
-            }
-
-            var passPhrase = _passwordService.CreatePassPhrase(challenge, hpwd);
-            authToken = await AuthWithPassPhrase(passPhrase);
-            if(authToken.IsNotEmpty()) {
-                hashedPwd = hpwd;
-                return true;
-            }   
-            hpwd = "";
+        hashedPwd = _passwordService.CreateHashedPassword(rawPassword);
+        var passPhrase = _passwordService.CreatePassPhrase(challenge, hashedPwd);
+        authToken = await AuthWithPassPhrase(passPhrase);
+        if (authToken.IsNotEmpty()) {
+            return true;
+        } else {
+            return false;
         }
+
+
+        //while (true) {
+        //    if (rawPassword.IsEmpty()) {
+        //        var pwd = await _mainThreadService.Run(async () => {
+        //            return await App.GetService<RemotePasswordDialogPage>().GetPassword(Parent?.GetValue()??_pageService.CurrentPage!.XamlRoot);
+        //        });
+        //        if (pwd == null) {
+        //            return false;
+        //        }
+        //        rawPassword = pwd;
+        //    }
+        //    hashedPwd = _passwordService.CreateHashedPassword(rawPassword);
+        //    var passPhrase = _passwordService.CreatePassPhrase(challenge, hashedPwd);
+        //    authToken = await AuthWithPassPhrase(passPhrase);
+        //    if(authToken.IsNotEmpty()) {
+        //        return true;
+        //    }
+        //    rawPassword = "";
+        //}
     }
 
     class FileEntryComparator : IEqualityComparer<FileEntry> {
@@ -160,20 +172,25 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     }
 
 
-    private async Task<bool> UploadEntry(FileEntry entry) {
+    private async Task<bool> UploadEntry(FileEntry entry, ProgressProc progress, CancellationToken ct) {
         try {
             using (var fileStream = _secureStorageService.OpenEntry(entry)) {
-                var body = new StreamContent(fileStream);
-                body.Headers.ContentType = new MediaTypeHeaderValue(entry.Type == "mp4" ? "video/mp4" : "image/jpeg");
+                var fileContent = new StreamContent(fileStream);
+                fileContent.Headers.ContentType = new MediaTypeHeaderValue(entry.Type == "mp4" ? "video/mp4" : "image/jpeg");
+                fileContent.Headers.ContentLength = entry.Size;
+                var body = new ProgressableStreamContent(fileContent, 4096, (sent, total) => {
+                    progress(sent, total ?? entry.Size);
+                });
 
-                var content = new MultipartFormDataContent();
-                content.Add(new StringContent(entry.OwnerId), "OwnerId");
-                content.Add(new StringContent(entry.OriginalId), "OriginalId");
-                content.Add(new StringContent($"{entry.OriginalDate}"), "FileDate");
-                content.Add(new StringContent(entry.MetaInfo ?? ""), "MetaInfo");
-                content.Add(body, "File", entry.Name);
+                var content = new MultipartFormDataContent {
+                    { new StringContent(entry.OwnerId), "OwnerId" },
+                    { new StringContent(entry.OriginalId), "OriginalId" },
+                    { new StringContent($"{entry.OriginalDate}"), "FileDate" },
+                    { new StringContent(entry.MetaInfo ?? ""), "MetaInfo" },
+                    { body, "File", entry.Name }
+                };
                 var url = $"http://{peerAddress}/upload";
-                using (var response = await httpClient.PostAsync(url, content)) {
+                using (var response = await httpClient.PostAsync(url, content, ct)) {
                     return response.IsSuccessStatusCode;
                 }
             }
@@ -185,10 +202,10 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
     private const int BUFF_SIZE = 1 * 1024 * 1024;
 
-    private async Task<bool> DownloadEntry(FileEntry entry, ProgressProc? progress) {
+    private async Task<bool> DownloadEntry(FileEntry entry, ProgressProc progress, CancellationToken ct) {
         string type = entry.Type == "mp4" ? "video" : "photo";
-        string url = $"http://{peerAddress}/{type}/?id={entry.Id}&auth={authToken}";
-        var ct = _cancellationTokenSource.Token;    
+        string url = $"http://{peerAddress}/{type}?id={entry.Id}&auth={authToken}";
+        progress(0, entry.Size);
         try {
             using (var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
                 if (!response.IsSuccessStatusCode) return false;
@@ -208,7 +225,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                         }
                         recv += len;
                         await entryCreator.OutputStream.WriteAsync(buff, 0, len);
-                        progress?.Invoke(recv, total);
+                        progress(recv, total);
                         ct.ThrowIfCancellationRequested();
                     }
                     _logger.Debug("downloaded {0}", entry.Name);
@@ -227,18 +244,69 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         public FileEntry my;
     }
 
-    public void Start(string peerAddress) {
+    WeakReference<XamlRoot>? Parent=null;
+    Regex regAddress = new Regex(@"(?:(?<ip>\d+\.\d+\.\d+\.\d+)|(?<name>[a-zA-Z]+\w*))(?::(?<port>\d+))?");
+
+    public async Task<bool> Start(
+        string peerAddress, 
+        string peerPassword, 
+        XamlRoot? parent, 
+        ErrorMessageProc errorMessageProc,
+        SyncStateProc syncTaskProc, 
+        ProgressProc countProgress, 
+        ProgressProc byteProgress) {
+        if(parent!=null) {
+            Parent = new WeakReference<XamlRoot>(parent);
+        }
         _cancellationTokenSource = new CancellationTokenSource();
-        this.peerAddress = peerAddress;
-        Task.Run(async () => {
+        var ct = _cancellationTokenSource.Token;
+
+        void errorProc(string message, bool fatal) {
+            _mainThreadService.Run(() => {
+                errorMessageProc(message, fatal);
+            });
+        }
+
+        var reg = regAddress.Match(peerAddress);
+        if(!reg.Success) {
+            errorProc("Wrong Peer Address.", true);
+            return false;
+        }
+        var ip = reg.Groups["ip"];
+        var name = reg.Groups["name"];
+        var port = reg.Groups["port"];
+        if(ip.Success) {
+            this.peerAddress = peerAddress;
+        } else if (name.Success) {
+            var ips = Dns.GetHostAddresses(name.Value);
+            if (ips == null) {
+                errorProc("Cannot resolve IP address.", true);
+                return false;
+            }
+            var ipv4addr = ips.Where(it=>it.AddressFamily==System.Net.Sockets.AddressFamily.InterNetwork).FirstOrDefault();
+            if (ipv4addr == null) {
+                errorProc("Bad peer address.", true);
+                return false;
+            }
+            this.peerAddress = $"{ipv4addr}:{port}";
+        } else {
+            errorProc("Invalid peer address.", true);
+            return false;
+        }
+
+
+        this.rawPassword = peerPassword;
+        return await Task.Run(async () => {
             try {
                 if(!await RemoteAuth()) {
-                    return;
+                    errorProc("Authentication Error.", false);
+                    return false;
                 }
                 var myList = _databaseService.Entries.List(false);
                 var peerList = await GetPeerList();
                 if(peerList == null) {
-                    return;
+                    errorProc("No peer items.", false);
+                    return false;
                 }
                 var comparator = new FileEntryComparator();
                 var peerNewFile = peerList.Except(myList, comparator).ToList();
@@ -253,34 +321,51 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
                 int counter = 0;
                 foreach (var entry in peerNewFile) {
+                    ct.ThrowIfCancellationRequested();
                     counter++;
                     _logger.Debug($"Download (NEW): [{counter}/{peerNewFile.Count}] {entry.Name}");
-                    //await DownloadEntry(entry, null);
+                    countProgress(counter, peerNewFile.Count);
+                    await DownloadEntry(entry, byteProgress, ct);
                 }
+                
                 counter = 0;
-                foreach(var pair in commonPair.Where(it=>it.peer.OriginalDate > it.my.OriginalDate)) {
+                var peerUpdates = commonPair.Where(it => it.peer.OriginalDate > it.my.OriginalDate).ToList();
+                foreach (var pair in peerUpdates) {
+                    ct.ThrowIfCancellationRequested();
                     counter++;
-                    _logger.Debug($"Download (UPD):  [{counter}/{peerNewFile.Count}] {pair.my.Name}: {new DateTime(pair.my.OriginalDate)} <-- {new DateTime(pair.peer.OriginalDate)}");
-                    //await DownloadEntry(pair.peer, null);
+                    _logger.Debug($"Download (UPD):  [{counter}/{peerUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.OriginalDate)} <-- {new DateTime(pair.peer.OriginalDate)}");
+                    countProgress(counter, peerUpdates.Count);
+                    await DownloadEntry(pair.peer, byteProgress, ct);
                 }
 
                 counter = 0;
                 foreach (var entry in myNewFile) {
+                    ct.ThrowIfCancellationRequested();
                     counter++;
-                    _logger.Debug($"Upload (NEW): [{counter}/{peerNewFile.Count}] {entry.Name}");
-                    //await UploadEntry(entry);
+                    _logger.Debug($"Upload (NEW): [{counter}/{myNewFile.Count}] {entry.Name}");
+                    countProgress(counter, myNewFile.Count);
+                    await UploadEntry(entry, byteProgress, ct);
                 }
                 counter = 0;
-                foreach (var pair in commonPair.Where(it => it.peer.OriginalDate > it.my.OriginalDate)) {
+                var myUpdates = commonPair.Where(it => it.peer.OriginalDate > it.my.OriginalDate).ToList();
+                foreach (var pair in myUpdates) {
+                    ct.ThrowIfCancellationRequested();
                     counter++;
-                    _logger.Debug($"Upload (UPD):  [{counter}/{peerNewFile.Count}] {pair.my.Name}: {new DateTime(pair.my.OriginalDate)} --> {new DateTime(pair.peer.OriginalDate)}");
-                    //await UploadEntry(pair.my);
+                    _logger.Debug($"Upload (UPD):  [{counter}/{myUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.OriginalDate)} --> {new DateTime(pair.peer.OriginalDate)}");
+                    countProgress(counter, myUpdates.Count);
+                    await UploadEntry(pair.my, byteProgress, ct);
                 }
-
+                return true;
             }
             catch (Exception ex) {
                 _logger.Error(ex);
+                errorProc("Sync Error.", true);
+                return false;
             }
         });
+    }
+
+    public void Cancel() {
+        _cancellationTokenSource?.Cancel();
     }
 }

@@ -200,7 +200,7 @@ namespace SecureArchive.Views.ViewModels {
                             //var outFilePath = Path.Combine(outFolder!, item.Name);
                             var ext = Path.GetExtension(item.Name) ?? "*";
                             try {
-                                var newEntry = await _secureStorageService.RegisterFile(item.Path, OwnerInfo.LOCAL_ID, item.Name, fileInfo.LastWriteTime.Ticks, null, null, progress);
+                                var newEntry = await _secureStorageService.RegisterFile(item.Path, OwnerInfo.LOCAL_ID, item.Name, fileInfo.LastWriteTime.Ticks, Guid.NewGuid().ToString("N"), null, progress);
                                 if (newEntry != null) {
                                     mainThread.Run(() => {
                                         FileList.Value.Add(newEntry);

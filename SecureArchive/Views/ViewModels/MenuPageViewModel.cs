@@ -24,7 +24,7 @@ namespace SecureArchive.Views.ViewModels {
             SettingsCommand.Subscribe(pageSercice.ShowSettingsPage);
             ListCommand.Subscribe(pageSercice.ShowListPage);
             ClearAllCommand.Subscribe(() => {
-                syncArchiveService.Start("192.168.0.151:6001");
+                App.GetService<SyncArchiveDialogPage>().ShowDialog(_pageService.CurrentPage!.XamlRoot);
             });
             IsServerRunning.Subscribe((it) => {
                 if (it) {
