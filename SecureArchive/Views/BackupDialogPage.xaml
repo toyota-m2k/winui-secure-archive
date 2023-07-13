@@ -24,7 +24,7 @@
                 </StackPanel>
             </DataTemplate>
         </Grid.Resources>
-        <StackPanel Orientation="Vertical" HorizontalAlignment="Stretch" x:DefaultBindMode="OneWay">
+        <StackPanel Orientation="Vertical" HorizontalAlignment="Stretch">
             <ListView 
                     x:Name="TargetListView"
                     HorizontalAlignment="Stretch"
@@ -36,28 +36,28 @@
                     />
             
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10">
-                <Button x:Name="SelectAll" Content="Select All" Command="{x:Bind ViewModel.SelectAllCommand}" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource NegBoolVisibilityConverter}}"/>
-                <Button x:Name="Start" Content="Start" Command="{x:Bind ViewModel.StartCommand}" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource NegBoolVisibilityConverter}}" IsEnabled="{x:Bind ViewModel.Selected.Value}"/>
-                <Button x:Name="Stop" Content="Stop" Command="{x:Bind ViewModel.StopCommand}" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource BoolVisibilityConverter}}"/>
-                <Button x:Name="Close" Content="Close" Command="{x:Bind ViewModel.CloseCommand}" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource NegBoolVisibilityConverter}}"/>
+                <Button x:Name="SelectAll" Content="Select All" Command="{x:Bind ViewModel.SelectAllCommand}" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource NegBoolVisibilityConverter}, Mode=OneWay}" Width="120"/>
+                <Button x:Name="Start" Content="Start" Command="{x:Bind ViewModel.StartCommand}" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource NegBoolVisibilityConverter}, Mode=OneWay}" IsEnabled="{x:Bind ViewModel.Selected.Value, Mode=OneWay}" Width="120"/>
+                <Button x:Name="Stop" Content="Stop" Command="{x:Bind ViewModel.StopCommand}" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource BoolVisibilityConverter}, Mode=OneWay}" Width="120"/>
+                <Button x:Name="Close" Content="Close" Command="{x:Bind ViewModel.CloseCommand}" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource NegBoolVisibilityConverter}, Mode=OneWay}" Width="120"/>
             </StackPanel>
 
-            <StackPanel Orientation="Vertical" HorizontalAlignment="Stretch" Spacing="5" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource BoolVisibilityConverter}}">
+            <StackPanel Orientation="Vertical" HorizontalAlignment="Stretch" Spacing="5" Visibility="{x:Bind ViewModel.Downloading.Value, Converter={StaticResource BoolVisibilityConverter}, Mode=OneWay}">
                 <TextBlock>
                     <Run Text="Processing... "/>
-                    <Run Text="{x:Bind ViewModel.CurrentItem.Value}"/>
+                    <Run Text="{x:Bind ViewModel.CurrentItem.Value, Mode=OneWay}"/>
                 </TextBlock>
-                <ProgressBar x:Name="CountProgressBar" Maximum="100" Minimum="0" Value="{x:Bind ViewModel.CountProgress.Value}"/>
+                <ProgressBar x:Name="CountProgressBar" Maximum="100" Minimum="0" Value="{x:Bind ViewModel.CountProgress.Value, Mode=OneWay}"/>
                 <TextBlock>
-                    <Run Text="{x:Bind ViewModel.CurrentIndex.Value}"/>
+                    <Run Text="{x:Bind ViewModel.CurrentIndex.Value, Mode=OneWay}"/>
                     <Run Text=" / "/>
-                    <Run Text="{x:Bind ViewModel.TotalCount.Value}"/>
+                    <Run Text="{x:Bind ViewModel.TotalCount.Value, Mode=OneWay}"/>
                 </TextBlock>
-                <ProgressBar x:Name="SizeProgressBar" Maximum="100" Minimum="0" Value="{x:Bind ViewModel.SizeProgress.Value}"/>
+                <ProgressBar x:Name="SizeProgressBar" Maximum="100" Minimum="0" Value="{x:Bind ViewModel.SizeProgress.Value, Mode=OneWay}"/>
                 <TextBlock>
-                    <Run Text="{x:Bind ViewModel.CurrentBytes.Value, Converter={StaticResource SizeStringConverter}}"/>
+                    <Run Text="{x:Bind ViewModel.CurrentBytes.Value, Converter={StaticResource SizeStringConverter}, Mode=OneWay}"/>
                     <Run Text=" / "/>
-                    <Run Text="{x:Bind ViewModel.TotalBytes.Value, Converter={StaticResource SizeStringConverter}}"/>
+                    <Run Text="{x:Bind ViewModel.TotalBytes.Value, Converter={StaticResource SizeStringConverter}, Mode=OneWay}"/>
                 </TextBlock>
             </StackPanel>
         </StackPanel>

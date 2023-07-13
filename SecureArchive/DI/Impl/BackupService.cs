@@ -1,6 +1,4 @@
 ﻿using Microsoft.Extensions.Logging;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
 using Newtonsoft.Json;
 using SecureArchive.Utils;
 using SecureArchive.Views;
@@ -41,6 +39,8 @@ internal class BackupCompletion {
     public string AuthToken { get; set; } = "";
     [JsonProperty("id")]
     public string Id { get; set; } = "";
+    [JsonProperty("ids")]
+    public List<string>? Ids { get; set; } = null;
     [JsonProperty("owner")]
     public string OwnerId { get; set; } = "";
     [JsonProperty("status")]
@@ -52,6 +52,7 @@ internal class BackupService : IBackupService {
     private ISecureStorageService _secureStorageService;
     private IPageService _pageService;
     private IMainThreadService _mainThreadService;
+    private IHttpClientFactory _httpClientFactory;
 
     //private BehaviorSubject<Status> _executing = new (Status.NONE);
     //private BehaviorSubject<RemoteItem?> _currentItem = new(null);
@@ -65,14 +66,9 @@ internal class BackupService : IBackupService {
 
     private bool _isBusy = false;
 
-    private HttpClient? _httpClient;
+    //private HttpClient? _httpClient;
 
-    private HttpClient httpClient {
-        get {
-            if (_httpClient==null) { _httpClient = new HttpClient(); }
-            return _httpClient;
-        }
-    }
+    private HttpClient httpClient => _httpClientFactory.CreateClient();
 
     //public Status GetStatus() {
     //    lock(this) {
@@ -102,11 +98,17 @@ internal class BackupService : IBackupService {
 
     //public IObservable<long> CurrentBytes => _currentBytes;
 
-    public BackupService(ISecureStorageService secureStorageService, IPageService pageService, IMainThreadService mainThreadSercice, ILoggerFactory loggerFactory) {
+    public BackupService(
+        ISecureStorageService secureStorageService, 
+        IPageService pageService, 
+        IMainThreadService mainThreadSercice, 
+        IHttpClientFactory httpClientFactory,
+        ILoggerFactory loggerFactory) {
         _logger = loggerFactory.CreateLogger<BackupService>();
         _secureStorageService = secureStorageService;
         _pageService = pageService;
         _mainThreadService = mainThreadSercice;
+        _httpClientFactory = httpClientFactory;
     }
 
     private string OwnerId = null!;
@@ -152,12 +154,18 @@ internal class BackupService : IBackupService {
                 if(rawList.Count==0) {
                     return false;
                 }
-                var list = rawList.Where(it => !_secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToList();
-                if(list.Count==0) {
+                var registeredList = rawList.Where(it => it.Cloud==0 && _secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToArray();
+                if(registeredList.Length>0) {
+                    await NotifyCompletion(registeredList);
+                }
+
+
+                var newList = rawList.Where(it => !_secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToList();
+                if(newList.Count==0) {
                     return false;
                 }
 
-                RemoteItems = list;
+                RemoteItems = newList;
                 await _mainThreadService.Run(async () => {
                     await CustomDialogBuilder<BackupDialogPage,bool>
                         .Create(_pageService.CurrentPage!.XamlRoot, new BackupDialogPage())
@@ -246,9 +254,16 @@ internal class BackupService : IBackupService {
         }
     }
 
-    private async Task<bool> NotifyCompletion(RemoteItem item) {
+    private async Task<bool> NotifyCompletion(params RemoteItem[] items) {
+        if(items.Length==0) return false;
+
+        BackupCompletion bc;
+        if (items.Length == 1) {
+            bc = new BackupCompletion() { AuthToken = Token, Id = items[0].Id, OwnerId = OwnerId, Status = true };
+        } else {
+            bc = new BackupCompletion() { AuthToken = Token, Ids = items.Select(it=>it.Id).ToList(), OwnerId = OwnerId, Status = true };
+        }
         var url = $"http://{Address}/backup/done";
-        var bc = new BackupCompletion() { AuthToken = Token, Id = item.Id, OwnerId = OwnerId, Status=true };
         var json = JsonConvert.SerializeObject(bc);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         try {
@@ -269,7 +284,7 @@ internal class BackupService : IBackupService {
     public async Task<bool> DownloadTarget(RemoteItem item, ProgressProc progress, CancellationToken ct) {
         var url = $"http://{Address}/{item.UrlType}?id={item.Id}&auth={Token}";
         try {
-            await Task.Delay(500);
+            await Task.Delay(500);          // これを入れないと、Pixel3 でエラーになる。
             using (var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
                 if (!response.IsSuccessStatusCode) return false;
                 using (var content = response.Content)
@@ -294,7 +309,7 @@ internal class BackupService : IBackupService {
                     _logger.Debug("downloaded {0}", item.Name);
                 }
             }
-            await Task.Delay(500);
+            await Task.Delay(500);          // これを入れないと、Pixel3 でエラーになる。
             return await NotifyCompletion(item);
         }
         catch (Exception ex) {

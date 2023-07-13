@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Page
+    x:Class="SecureArchive.Views.SyncArchiveDialogPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:SecureArchive.Views"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Width="400"
+    Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
+    <Page.Resources>
+        <ResourceDictionary Source="./Converters.xaml"/>
+    </Page.Resources>
+
+    <Grid>
+        <StackPanel Orientation="Vertical" HorizontalAlignment="Stretch" Spacing="10">
+            <TextBlock Text="Peer Address"/>
+            <TextBox Text="{x:Bind ViewModel.PeerAddress.Value, Mode=TwoWay}"/>
+            <TextBlock Text="Peer Password"/>
+            <PasswordBox Password="{x:Bind ViewModel.Password.Value, Mode=TwoWay}"/>
+            <TextBlock Text="{x:Bind ViewModel.ErrorMessage.Value, Mode=OneWay}"/>
+
+            <StackPanel Orientation="Horizontal" Spacing="20" HorizontalAlignment="Center" Visibility="{x:Bind ViewModel.Running.Value, Converter={StaticResource NegBoolVisibilityConverter}, Mode=OneWay}">
+                <Button Width="120" Content="Start" Command="{x:Bind ViewModel.StartCommand}"/>
+                <Button Width="120" Content="Cancel" Command="{x:Bind ViewModel.CloseCommand}"/>
+            </StackPanel>
+
+            <StackPanel x:Name="ProgressPanel" Orientation="Vertical" HorizontalAlignment="Stretch" Spacing="10" Visibility="{x:Bind ViewModel.Running.Value, Converter={StaticResource BoolVisibilityConverter}, Mode=OneWay}">
+                <TextBlock x:Name="MessageText" Text="{x:Bind ViewModel.ProgressMessage.Value, Mode=OneWay}"/>
+                <ProgressBar x:Name="CountProgressBar" Maximum="100" Minimum="0" Value="{x:Bind ViewModel.CountProgress.Value, Mode=OneWay}"/>
+                <TextBlock HorizontalAlignment="Center">
+                    <Run Text="{x:Bind ViewModel.CurrentIndex.Value, Mode=OneWay}"/>
+                    <Run Text=" / "/>
+                    <Run Text="{x:Bind ViewModel.TotalCount.Value, Mode=OneWay}"/>
+                </TextBlock>
+                <ProgressBar x:Name="SizeProgressBar" Maximum="100" Minimum="0" Value="{x:Bind ViewModel.SizeProgress.Value, Mode=OneWay}"/>
+                <TextBlock HorizontalAlignment="Center">
+                    <Run Text="{x:Bind ViewModel.CurrentBytes.Value, Converter={StaticResource SizeStringConverter}, Mode=OneWay}"/>
+                    <Run Text=" / "/>
+                    <Run Text="{x:Bind ViewModel.TotalLength.Value, Converter={StaticResource SizeStringConverter}, Mode=OneWay}"/>
+                </TextBlock>
+
+                <Button Width="120" Content="Cancel" Command="{x:Bind ViewModel.CancelCommand}" HorizontalAlignment="Center"/>
+            </StackPanel>
+        </StackPanel>
+    </Grid>
+</Page>

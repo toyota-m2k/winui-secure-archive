@@ -208,6 +208,9 @@ internal class HttpServerService : IHttpServreService {
             if(!await _passwordService.CheckRemoteKey(_challenge, authPhrase)) {
                 return UnauthorizedResponse(request);
             } else {
+                // 認証が成功した時点を有効期限の起点とする。
+                _tick = DateTime.Now;
+
                 var dic = new Dictionary<string, object> {
                     { "cmd", "auth" },
                     { "token", _authToken },
@@ -220,7 +223,12 @@ internal class HttpServerService : IHttpServreService {
         public bool CheckAuthToken(string? token) {
             Validate();
             if (token == null) return false;
-            return token == _authToken;
+            if (token != _authToken) return false;
+
+            // 認証が成功した時点を有効期限の起点とする。
+            // つまり、連続した要求は、常に成功するが、一定時間放置すると無効になる。
+            _tick = DateTime.Now;
+            return true;
         }
 
         public IHttpResponse UnauthorizedResponse(HttpRequest request) {
@@ -357,18 +365,29 @@ internal class HttpServerService : IHttpServreService {
                     if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
                         return oneTimePasscode.UnauthorizedResponse(request);
                     }
+                    var sync = p.GetValue("sync")?.ToLower() == "true";
+                    var type = p.GetValue("type")?.ToLower() ?? "";
                     var list = _databaseService.Entries.List(
                         predicate: (it) => {
-                            return it.Type == "mp4";
+                            switch(type) {
+                                case "all": return true;
+                                case "photo": return it.Type == "jpg" || it.Type == "png";
+                                default: return it.Type == "mp4";
+                            }
                         }, 
                         select: (entry) => {
-                            return new Dictionary<string, object>() {
-                                { "id", entry.Id },
-                                { "name", entry.Name },
-                                { "type", entry.Type.Substring(1) },
-                                { "size", entry.Size },
-                        };
-                    });
+                            if(sync) {
+                                return entry.ToDictionary();
+                            } else {
+                                return new Dictionary<string, object>() {
+                                    { "id", entry.Id },
+                                    { "name", entry.Name },
+                                    { "type", entry.Type },
+                                    { "size", entry.Size },
+                                };
+                            }
+                        }
+                    );
                     var dic = new Dictionary<string,object> {
                         {"cmd", "list" },
                         {"date", DateTime.UtcNow.ToFileTimeUtc() },

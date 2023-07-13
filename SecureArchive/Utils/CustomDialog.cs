@@ -7,14 +7,22 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SecureArchive.Utils; 
+namespace SecureArchive.Utils;
 
-public interface ICustomDialogPage<R> {
-    event Action<R>? Complete;
+public interface IDialogPage<R> {
     ContentDialog Dialog { get; set; }
 }
 
-public class CustomDialogBuilder<T,R> where T: Page, ICustomDialogPage<R> {
+public interface ICustomDialogPage<R>　: IDialogPage<R> {
+    event Action<R>? Complete;
+}
+
+public interface IStandardDialogPage<R> : IDialogPage<R> {
+    R GetResult(ContentDialogResult contentDialogResult);
+}
+
+
+public class CustomDialogBuilder<T,R> where T: Page, IDialogPage<R> {
     public static CustomDialogBuilder<T,R> Create(XamlRoot root, T page) {
         return new CustomDialogBuilder<T,R>() { 
             XamlRoot = root,
@@ -82,19 +90,24 @@ public class CustomDialogBuilder<T,R> where T: Page, ICustomDialogPage<R> {
     }
 
 
-
     public async Task<R?> ShowAsync() {
         Dialog.Content = Page;
         R? completionResult = default;
         bool completedByHandler = false;
-        Page.Complete += (r) => {
-            completedByHandler = true;
-            completionResult = r;
-            Dialog.Hide();
-        };
+
+        if (Page is ICustomDialogPage<R> customPage) {
+            customPage.Complete += (r) => {
+                completedByHandler = true;
+                completionResult = r;
+                Dialog.Hide();
+            };
+        }
+
         var result = await Dialog.ShowAsync();
-        if(completedByHandler) {
+        if (completedByHandler) {
             return completionResult;
+        } else if (Page is IStandardDialogPage<R> standardPage) {
+            return standardPage.GetResult(result);
         } else if(result == ContentDialogResult.Primary) {
             return primaryValue;
         } else if(result == ContentDialogResult.Secondary) {
@@ -103,5 +116,4 @@ public class CustomDialogBuilder<T,R> where T: Page, ICustomDialogPage<R> {
             return defaultValue;
         }
     }
-
 }

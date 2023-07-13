@@ -15,6 +15,7 @@ namespace SecureArchive.Views.ViewModels {
         public MenuPageViewModel(
             IPageService pageSercice, 
             IHttpServreService httpServreService, 
+            ISyncArchiveService syncArchiveService,
             IUserSettingsService userSettingsService) {
             _pageService = pageSercice;
             _httpServreService = httpServreService;
@@ -22,6 +23,9 @@ namespace SecureArchive.Views.ViewModels {
 
             SettingsCommand.Subscribe(pageSercice.ShowSettingsPage);
             ListCommand.Subscribe(pageSercice.ShowListPage);
+            ClearAllCommand.Subscribe(() => {
+                App.GetService<SyncArchiveDialogPage>().ShowDialog(_pageService.CurrentPage!.XamlRoot);
+            });
             IsServerRunning.Subscribe((it) => {
                 if (it) {
                     StartServer();

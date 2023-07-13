@@ -23,8 +23,8 @@
                 <TextBlock Text="Password (Confirm)" Margin="0,10,0,0"/>
                 <PasswordBox x:Name="EditPasswordConf" Password="{x:Bind ViewModel.PasswordConfirmString.Value, Mode=TwoWay}" HorizontalAlignment="Stretch" KeyDown="HandleEnterKey"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10" Margin="0,10,0,0" >
-                    <Button Content="Cancel" Visibility="{x:Bind ViewModel.ChangingPassword.Value, Converter={StaticResource BoolVisibilityConverter}}" Command="{x:Bind ViewModel.CancelPasswordCommand}" HorizontalAlignment="Center" Width="80"/>
-                    <Button Content="Set" IsEnabled="{x:Bind ViewModel.PasswordReady.Value, Mode=OneWay}" Command="{x:Bind ViewModel.PasswordCommand}" HorizontalAlignment="Center" Width="80"/>
+                    <Button Content="Cancel" Visibility="{x:Bind ViewModel.ChangingPassword.Value, Converter={StaticResource BoolVisibilityConverter}}" Command="{x:Bind ViewModel.CancelPasswordCommand, Mode=OneTime}" HorizontalAlignment="Center" Width="80"/>
+                    <Button Content="Set" IsEnabled="{x:Bind ViewModel.PasswordReady.Value, Mode=OneWay}" Command="{x:Bind ViewModel.PasswordCommand, Mode=OneTime}" HorizontalAlignment="Center" Width="80"/>
                 </StackPanel>
             </StackPanel>
         </Grid>
@@ -32,14 +32,14 @@
             <StackPanel Orientation="Vertical" MaxWidth="400" HorizontalAlignment="Stretch" VerticalAlignment="Center" Spacing="10">
                 <TextBlock Text="Password"/>
                 <PasswordBox x:Name="EditPasswordCheck" Password="{x:Bind ViewModel.PasswordString.Value, Mode=TwoWay}" HorizontalAlignment="Stretch" KeyDown="HandleEnterKey"/>
-                <Button Content="Check" IsEnabled="{x:Bind ViewModel.PasswordReady.Value, Mode=OneWay}" Command="{x:Bind ViewModel.PasswordCommand}" Margin="0,10,0,0" HorizontalAlignment="Center" Width="80"/>
+                <Button Content="Check" IsEnabled="{x:Bind ViewModel.PasswordReady.Value, Mode=OneWay}" Command="{x:Bind ViewModel.PasswordCommand, Mode=OneTime}" Margin="0,10,0,0" HorizontalAlignment="Center" Width="80"/>
             </StackPanel>
         </Grid>
         <Grid Visibility="{x:Bind ViewModel.PanelStatus.Value, Converter={StaticResource EnumVisibilityConverter}, ConverterParameter=NeedToSetDataFolder}">
             <StackPanel Orientation="Vertical" MaxWidth="400" HorizontalAlignment="Stretch" VerticalAlignment="Center" Spacing="10">
                 <TextBlock Text="Data Folder"/>
                 <TextBox IsReadOnly="True" Text="{x:Bind ViewModel.DataFolder.Value, Mode=TwoWay}" HorizontalAlignment="Stretch"/>
-                <Button x:Name="ButtonSelectFolder" Content="Select" Command="{x:Bind ViewModel.SelectFolderCommand}" HorizontalAlignment="Right"/>
+                <Button x:Name="ButtonSelectFolder" Content="Select" Command="{x:Bind ViewModel.SelectFolderCommand, Mode=OneTime}" HorizontalAlignment="Right"/>
             </StackPanel>
         </Grid>
 
@@ -63,17 +63,17 @@
 
                 <TextBlock Grid.Row="0" Grid.Column="0" Text="Password"/>
                 <TextBox Grid.Row="1" Grid.Column="0" IsReadOnly="True" Text="************"/>
-                <Button Grid.Row="1" Grid.Column="1" Content="Change" Command="{x:Bind ViewModel.ChangePasswordCommand}" Width="80"/>
+                <Button Grid.Row="1" Grid.Column="1" Content="Change" Command="{x:Bind ViewModel.ChangePasswordCommand, Mode=OneTime}" Width="80"/>
 
                 <TextBlock Grid.Row="2" Grid.Column="0" Text="Data Folder"/>
                 <TextBox Grid.Row="3" Grid.Column="0" IsReadOnly="True" Text="{x:Bind ViewModel.DataFolder.Value, Mode=TwoWay}" HorizontalAlignment="Stretch"/>
-                <Button Grid.Row="3" Grid.Column="1" Content="Select" Command="{x:Bind ViewModel.SelectFolderCommand}" HorizontalAlignment="Right" Width="80"/>
+                <Button Grid.Row="3" Grid.Column="1" Content="Select" Command="{x:Bind ViewModel.SelectFolderCommand, Mode=OneTime}" HorizontalAlignment="Right" Width="80"/>
 
                 <TextBlock Grid.Row="4" Grid.Column="0" Text="Server Port"/>
                 <NumberBox Grid.Row="5" Grid.Column="0" Text="{x:Bind ViewModel.PortNo.Value, Mode=TwoWay}" Width="150" HorizontalAlignment="Left"/>
                 <CheckBox Grid.Row="6" Grid.Column="0" Content="Auto Start" IsChecked="{x:Bind ViewModel.ServerAutoStart.Value, Mode=TwoWay}"/>
 
-                <Button Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" x:Name="ButtonDone" Content="Done" Command="{x:Bind ViewModel.DoneCommand}" HorizontalAlignment="Center" Style="{StaticResource AccentButtonStyle}" Margin="0,40,0,0" Width="80"/>
+                <Button Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" x:Name="ButtonDone" Content="Done" Command="{x:Bind ViewModel.DoneCommand, Mode=OneTime}" HorizontalAlignment="Center" Style="{StaticResource AccentButtonStyle}" Margin="0,40,0,0" Width="80"/>
             </Grid>
         </Grid>
     </Grid>
