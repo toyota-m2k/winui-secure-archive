@@ -142,9 +142,11 @@ internal class HttpServerService : IHttpServreService {
             _secureStorageService = secureStorageService;
             _logger = logger;
         }
-        
+
+        private long _tick = 0L;
         public Stream LockStream(FileEntry entry) {
             _mutex.WaitOne();
+            _tick = System.Environment.TickCount64;
             _logger.Debug($"Locked: [Entry={entry.Id}]");
             if (_seekableInputStream != null) {
                 if (_currentEntry?.Id == entry.Id) {
@@ -163,8 +165,10 @@ internal class HttpServerService : IHttpServreService {
 
         public void UnlockStream(FileEntry entry) {
             if (_currentEntry?.Id == entry.Id) {
-                _logger.Debug($"Unlocked: [Entry={entry.Id}]");
+                _logger.Debug($"Unlocked: [Entry={entry.Id}] ({(System.Environment.TickCount64-_tick)/1000} sec)");
                 _mutex.ReleaseMutex();
+            } else {
+                _logger.Debug($"Cannot Unlock: Entry Mismatch: {_currentEntry?.Id} - {entry.Id}");
             }
         }
     }

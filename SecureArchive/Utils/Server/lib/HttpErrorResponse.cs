@@ -10,7 +10,7 @@ class HttpErrorResponse : TextHttpResponse
 
     public HttpException Exception => new HttpException(this);
 
-    public static HttpErrorResponse InternalServerError(HttpRequest? req)
+    public static HttpErrorResponse InternalServerError(HttpRequest req)
     {
         // string content = File.ReadAllText("Resources/Pages/500.html"); 
 
@@ -19,7 +19,7 @@ class HttpErrorResponse : TextHttpResponse
                         "Internal Server Error.");
     }
 
-    public static HttpErrorResponse BadRequest(HttpRequest? req)
+    public static HttpErrorResponse BadRequest(HttpRequest req)
     {
         //string content = File.ReadAllText("Resources/Pages/404.html");
 

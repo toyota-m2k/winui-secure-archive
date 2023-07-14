@@ -29,18 +29,16 @@ public class HttpProcessor {
     #endregion
 
     #region Public Methods
-    public void HandleClient(TcpClient tcpClient) {
+    public void HandleClient(int id, TcpClient tcpClient) {
         Task.Run(() => {
             using (tcpClient) {
                 Stream inputStream = GetInputStream(tcpClient);
                 Stream outputStream = GetOutputStream(tcpClient);
-                Logger.Debug("Started.");
+                Logger.Debug($"[{id}] Request Accepted.");
 
-                int id = 0;
                 string url = "?";
-                using (IHttpResponse response = ProcessRequest(inputStream, outputStream)) {
+                using (IHttpResponse response = ProcessRequest(id, inputStream, outputStream)) {
                     try {
-                        id = response.Request?.Id ?? 0;
                         url = response.Request?.Url ?? "?";
                         Logger.Info($"[{id}] Responding: {url}");
                         response.WriteResponse(outputStream);
@@ -175,9 +173,9 @@ public class HttpProcessor {
         else return false;
     }
 
-    private IHttpResponse ProcessRequest(Stream inputStream, Stream outputStream) {
+    private IHttpResponse ProcessRequest(int id, Stream inputStream, Stream outputStream) {
         try {
-            var request = ParseHeader(inputStream, outputStream);
+            var request = ParseHeader(id, inputStream, outputStream);
             Route route = GetRoute(request);
             ParseContent(inputStream, request, route);
             return route.Process(request);
@@ -188,13 +186,13 @@ public class HttpProcessor {
                 return httpException.ErrorResponse;
             }
             else {
-                return HttpErrorResponse.InternalServerError(null);
+                return HttpErrorResponse.InternalServerError(HttpRequest.InvalidRequest(id));
             }
         }
     }
 
 
-    private HttpRequest ParseHeader(Stream inputStream, Stream outputStream) {
+    private HttpRequest ParseHeader(int id, Stream inputStream, Stream outputStream) {
         //Read Request Line
         string request = Readline(inputStream);
 
@@ -227,7 +225,7 @@ public class HttpProcessor {
             string value = line.Substring(pos, line.Length - pos);
             headers.Add(name.ToLower(), value);
         }
-        return new HttpRequest(method, url, headers, outputStream);
+        return new HttpRequest(id, method, url, headers, outputStream);
     }
 
     private Route GetRoute(HttpRequest request) {
