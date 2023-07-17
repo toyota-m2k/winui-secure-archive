@@ -36,8 +36,13 @@ public class HttpProcessor {
                 Stream outputStream = GetOutputStream(tcpClient);
                 Logger.Debug($"[{id}] Request Accepted.");
 
+                string peerAddress = "";
+                string? address_port = tcpClient.Client.RemoteEndPoint?.ToString();
+                if(address_port!= null && address_port.Contains(':')) {
+                    peerAddress = address_port.Substring(0,address_port.IndexOf(":"));
+                }
                 string url = "?";
-                using (IHttpResponse response = ProcessRequest(id, inputStream, outputStream)) {
+                using (IHttpResponse response = ProcessRequest(id, peerAddress, inputStream, outputStream)) {
                     try {
                         url = response.Request?.Url ?? "?";
                         Logger.Info($"[{id}] Responding: {url}");
@@ -173,9 +178,9 @@ public class HttpProcessor {
         else return false;
     }
 
-    private IHttpResponse ProcessRequest(int id, Stream inputStream, Stream outputStream) {
+    private IHttpResponse ProcessRequest(int id, string peerAddress, Stream inputStream, Stream outputStream) {
         try {
-            var request = ParseHeader(id, inputStream, outputStream);
+            var request = ParseHeader(id, peerAddress, inputStream, outputStream);
             Route route = GetRoute(request);
             ParseContent(inputStream, request, route);
             return route.Process(request);
@@ -192,7 +197,7 @@ public class HttpProcessor {
     }
 
 
-    private HttpRequest ParseHeader(int id, Stream inputStream, Stream outputStream) {
+    private HttpRequest ParseHeader(int id, string peerAddress, Stream inputStream, Stream outputStream) {
         //Read Request Line
         string request = Readline(inputStream);
 
@@ -225,7 +230,7 @@ public class HttpProcessor {
             string value = line.Substring(pos, line.Length - pos);
             headers.Add(name.ToLower(), value);
         }
-        return new HttpRequest(id, method, url, headers, outputStream);
+        return new HttpRequest(id, peerAddress, method, url, headers, outputStream);
     }
 
     private Route GetRoute(HttpRequest request) {
