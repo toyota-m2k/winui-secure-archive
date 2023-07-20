@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 
 namespace SecureArchive.Utils.Server.lib.response {
     public class NullResponse : IHttpResponse {
-        public HttpRequest? Request { get; }
+        public HttpRequest Request { get; }
 
-        public NullResponse(HttpRequest? request) {
+        public NullResponse(HttpRequest request) {
             Request = request;
         }
 

@@ -25,6 +25,12 @@ public class HttpServer
     private BehaviorSubject<bool> _running = new BehaviorSubject<bool>(false);
     public IObservable<bool> Running => _running;
 
+    private int IdGenerator = 0;
+    private int GenerateId() {
+        return Interlocked.Increment(ref IdGenerator);
+    }
+
+
     //private WeakReference<IReportOutput> mReportOutput;
     //private IReportOutput ReportOutput => mReportOutput?.GetValue();
 
@@ -83,8 +89,8 @@ public class HttpServer
                 try
                 {
                     TcpClient s = await Listener.AcceptTcpClientAsync();
-                    Processor.HandleClient(s);
-                    Logger.Debug("Processer Completed.");
+                    int id = GenerateId();
+                    Processor.HandleClient(id, s);
                 }
                 catch (Exception e)
                 {

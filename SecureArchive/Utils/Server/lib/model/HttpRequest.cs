@@ -9,7 +9,8 @@ namespace SecureArchive.Utils.Server.lib.model;
 
 public class HttpRequest
 {
-    public int Id { get; } = GenerateId();
+    public int Id { get; }
+    public string PeerAddress { get; }
     public string Method { get; }
     public string Url { get; }
     public Dictionary<string, string> Headers { get; }
@@ -20,17 +21,15 @@ public class HttpRequest
     public string? Path { get; set; } = null;
     public Stream OutputStream { get; }
 
-    public HttpRequest(string method, string url, Dictionary<string, string>? headers, Stream outputStream)
+    public HttpRequest(int id, string peerAddress, string method, string url, Dictionary<string, string>? headers, Stream outputStream)
     {
+        Id = id;
+        PeerAddress = peerAddress;
         Method = method;
         Url = url;
         Headers = headers ?? new Dictionary<string, string>();
         OutputStream = outputStream;
     }
 
-
-    static int IdGenerator = 0;
-    static int GenerateId() {
-        return Interlocked.Increment(ref IdGenerator);
-    }
+    public static HttpRequest InvalidRequest(int id) => new HttpRequest(id, "-", "-", "-", null, Stream.Null);
 }

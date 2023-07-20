@@ -17,7 +17,7 @@ public class TextHttpResponse : AbstractHttpResponse {
     public string Content { get; set; }
     private byte[] Buffer = null!;
 
-    public TextHttpResponse(HttpRequest? req, HttpStatusCode statusCode, string content, string contentType = CT_TEXT_PLAIN) : base(req, statusCode) {
+    public TextHttpResponse(HttpRequest req, HttpStatusCode statusCode, string content, string contentType = CT_TEXT_PLAIN) : base(req, statusCode) {
         Content = content;
         ContentType = contentType;
     }

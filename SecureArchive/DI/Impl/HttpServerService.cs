@@ -142,9 +142,17 @@ internal class HttpServerService : IHttpServreService {
             _secureStorageService = secureStorageService;
             _logger = logger;
         }
-        
+
+        private bool _locked = false;
+        private long _tick = 0L;
         public Stream LockStream(FileEntry entry) {
+            if(_locked) {
+                _seekableInputStream?.Dispose();
+                _seekableInputStream = null;
+            }
             _mutex.WaitOne();
+            _locked = true;
+            _tick = System.Environment.TickCount64;
             _logger.Debug($"Locked: [Entry={entry.Id}]");
             if (_seekableInputStream != null) {
                 if (_currentEntry?.Id == entry.Id) {
@@ -163,11 +171,24 @@ internal class HttpServerService : IHttpServreService {
 
         public void UnlockStream(FileEntry entry) {
             if (_currentEntry?.Id == entry.Id) {
-                _logger.Debug($"Unlocked: [Entry={entry.Id}]");
+                _logger.Debug($"Unlocked: [Entry={entry.Id}] ({(System.Environment.TickCount64-_tick)/1000} sec)");
+                _locked = false;
                 _mutex.ReleaseMutex();
+            } else {
+                _logger.Debug($"Cannot Unlock: Entry Mismatch: {_currentEntry?.Id} - {entry.Id}");
             }
         }
     }
+
+    //class CryptoStreamHandlerMap {
+    //    private Dictionary<string, CryptoStreamHandler> _map = new ();
+
+    //    public CryptoStreamHandler(string clientId) {
+    //        if(_map.ContainsKey(clientId)) {
+    //            return _map[clientId];
+    //        }
+    //    }
+    //}
 
     #endregion
     #region Authentication

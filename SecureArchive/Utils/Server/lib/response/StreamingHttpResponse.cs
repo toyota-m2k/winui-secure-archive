@@ -95,10 +95,10 @@ public class StreamingHttpResponse : AbstractHttpResponse {
                 Headers["Accept-Ranges"] = "bytes";
             }
             InputStream.Seek(0, SeekOrigin.Begin);
-            Logger.Debug($"[{Request?.Id??0}] No Range Requested");
+            Logger.Debug($"[{Request.Id}] No Range Requested");
         }
         else {
-            Logger.Debug($"[{Request?.Id ?? 0}] Requested Range: {F(Start)} - {F(End)} ({F(End - Start + 1)} bytes in {F(TotalLength)})");
+            Logger.Debug($"[{Request.Id}] Requested Range: {F(Start)} - {F(End)} ({F(End - Start + 1)} bytes in {F(TotalLength)})");
             StatusCode = HttpStatusCode.PartialContent;
             Buffer = null;
             var total = "*";
@@ -123,7 +123,7 @@ public class StreamingHttpResponse : AbstractHttpResponse {
                 ContentLength = PartialLength;
                 total = eos ? $"{End+1}" :"*";
             }
-            Logger.Debug($"[{Request?.Id??0}] Actual Range: {Start}-{End}/{total} ({string.Format("{0:#,0}", PartialLength)} Bytes)");
+            Logger.Debug($"[{Request.Id}] Actual Range: {Start}-{End}/{total} ({string.Format("{0:#,0}", PartialLength)} Bytes)");
             Headers["Content-Range"] = $"bytes {Start}-{End}/{total}";
             Headers["Accept-Ranges"] = "bytes";
         }
@@ -131,26 +131,44 @@ public class StreamingHttpResponse : AbstractHttpResponse {
 
     private void ExecuteWithLog(string msg, Action action) {
         try {
+            Logger.Debug($"[{Request.Id}] {msg}: Start Action.");
             action();
         }
         catch (IOException e) {
             if ((uint)e.HResult == 0x80131620) {
-                Logger.Debug($"[{Request?.Id ?? 0}] {msg}: Maybe cancelled by the client.");
+                Logger.Debug($"[{Request.Id}] {msg}: Maybe cancelled by the client.");
             }
             else {
-                Logger.Error(e, $"[{Request?.Id ?? 0}] {msg}: Unexpected IOException.");
+                Logger.Error(e, $"[{Request.Id}] {msg}: Unexpected IOException.");
             }
         }
         catch (Exception e) {
-            Logger.Error(e, $"[{Request?.Id ?? 0}] {msg}: Error");
+            Logger.Error(e, $"[{Request.Id}] {msg}: Error");
             throw;
         }
     }   
 
+
+    private void CopyStream(Stream input, Stream output) {
+        var buffer = new byte[AUTO_BUFFER_SIZE];
+        long length = 0L;
+        while (true) {
+            int read = input.Read(buffer, 0, AUTO_BUFFER_SIZE);
+            if (read == 0) {
+                output.Flush();
+                return;
+            }
+            output.Write(buffer, 0, read);
+            length += read;
+            Logger.Debug($"[{Request.Id}] CopyStream: {read} bytes (total={length})");
+        }
+    }
+
     protected override void WriteBody(Stream output) {
         if (Start == -1) {
-            ExecuteWithLog("No-Range", () => {
-                InputStream.CopyTo(output, AUTO_BUFFER_SIZE);
+            ExecuteWithLog("No-Range (Stream Copy)", () => {
+                //InputStream.CopyTo(output, AUTO_BUFFER_SIZE);
+                CopyStream(InputStream, output);
                 output.Flush();
             });
         }

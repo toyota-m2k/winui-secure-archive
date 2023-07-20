@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 namespace SecureArchive.Utils.Server.lib.response {
     public interface IHttpResponse : IDisposable
     {
-        HttpRequest? Request { get; }
+        HttpRequest Request { get; }
         void WriteResponse(Stream outputStream);
     }
 
@@ -14,10 +14,10 @@ namespace SecureArchive.Utils.Server.lib.response {
         private static Regex refererForCors = new Regex(@"(?<target>http://(?:localhost|127.0.0.1)(?::\d+)?)/");
         public HttpStatusCode StatusCode { get; set; }
         //public string ReasonPhrase { get; set; }
-        public HttpRequest? Request { get; }
+        public HttpRequest Request { get; }
 
 
-        protected AbstractHttpResponse(HttpRequest? req, HttpStatusCode statusCode)
+        protected AbstractHttpResponse(HttpRequest req, HttpStatusCode statusCode)
         {
             Request = req;
             StatusCode = statusCode;
