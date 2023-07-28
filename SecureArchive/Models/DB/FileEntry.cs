@@ -18,6 +18,7 @@ public class FileEntry {
             Path TEXT NOT NULL,
             RegisteredDate INTEGER DEFAULT 0,
             OriginalDate INTEGER DEFAULT 0,
+            CreationDate INTEGER DEFAULT 0,
             MetaInfo TEXT
         )",
         // FOREIGN KEY(OwnerId) REFERENCES t_owner_info(OwnerId)
@@ -39,6 +40,7 @@ public class FileEntry {
 
     public long RegisteredDate { get; set; }
     public long OriginalDate { get; set; }
+    public long CreationDate { get; set; }
 
     //[ForeignKey("OwnerId")]
     //public OwnerInfo OwnerInfo { get; set; } = new OwnerInfo();
@@ -56,6 +58,7 @@ public class FileEntry {
             //{ "path", Path },
             { "registeredDate", RegisteredDate },
             { "originalDate", OriginalDate },
+            { "creationDate", CreationDate },
             { "metaInfo", MetaInfo ?? "" },
         };
     }
@@ -71,6 +74,7 @@ public class FileEntry {
             //Path = (string)dict["path"],
             RegisteredDate = dict.GetLongValue("registeredDate"),
             OriginalDate = dict.GetLongValue("originalDate"),
+            CreationDate = dict.GetLongValue("creationDate"),
             MetaInfo = dict.GetStringValue("metaInfo"),
         };
     }

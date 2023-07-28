@@ -2,6 +2,7 @@
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
+using System.Globalization;
 
 namespace SecureArchive.DI.Impl;
 public class DatabaseService : IDatabaseService, IMutableTables {
@@ -34,6 +35,21 @@ public class DatabaseService : IDatabaseService, IMutableTables {
             _ownerList = new OwnerInfoList(_connector);
             _kvs = new KVList(_connector);
         }
+
+        EditEntry((entries) => {
+            bool modified = false;
+            string csharpFormat = "yyyy.MM.dd-HH:mm:ss";
+    
+            foreach (var entry in entries.List(false)) {
+                if (entry.CreationDate == 0 && (entry.Name.StartsWith("mov-")||entry.Name.StartsWith("img-"))) {
+                    var timeText = entry.Name.Substring(4, entry.Name.Length - 8);
+                    var dt = DateTime.ParseExact(timeText, csharpFormat, CultureInfo.InvariantCulture);
+                    entry.CreationDate = dt.Ticks;
+                    modified = true;
+                }
+            }
+            return modified;
+        });
     }
 
     private IMutableTables mutableTables => this;
