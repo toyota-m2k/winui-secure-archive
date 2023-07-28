@@ -186,6 +186,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     { new StringContent(entry.OwnerId), "OwnerId" },
                     { new StringContent(entry.OriginalId), "OriginalId" },
                     { new StringContent($"{entry.OriginalDate}"), "FileDate" },
+                    { new StringContent($"{entry.CreationDate}"), "CreationDate" },
                     { new StringContent(entry.MetaInfo ?? ""), "MetaInfo" },
                     { body, "File", entry.Name }
                 };
@@ -220,7 +221,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                         ct.ThrowIfCancellationRequested();
                         int len = await inStream.ReadAsync(buff, 0, BUFF_SIZE, ct);
                         if (len == 0) {
-                            entryCreator.Complete(entry.Name, entry.Size, entry.Type, entry.OriginalDate, entry.MetaInfo);
+                            entryCreator.Complete(entry.Name, entry.Size, entry.Type, entry.OriginalDate, entry.CreationDate, entry.MetaInfo);
                             break;
                         }
                         recv += len;

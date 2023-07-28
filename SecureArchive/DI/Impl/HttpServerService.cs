@@ -111,10 +111,15 @@ internal class HttpServerService : IHttpServreService {
             if (!Parameters.TryGetValue("FileDate", out var fileDateText)) {
                 originalDate = Convert.ToInt64(fileDateText);
             }
+            long creationDate = 0;
+            if (!Parameters.TryGetValue("CreationDate", out var creationDateText)) {
+                creationDate = Convert.ToInt64(creationDateText);
+            }
+
             if (!Parameters.TryGetValue("MetaInfo", out var metaInfo)) {
                 metaInfo = null;
             }
-            _entryCreator?.Complete(name, multipartBody.ContentLength, Path.GetExtension(name), originalDate, metaInfo);
+            _entryCreator?.Complete(name, multipartBody.ContentLength, Path.GetExtension(name), originalDate, creationDate, metaInfo);
             Dispose();
         }
 

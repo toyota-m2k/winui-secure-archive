@@ -15,6 +15,8 @@ internal class RemoteItem {
     public long Size { get; set; }
     [JsonProperty("date")]
     public long Date { get; set; }
+    [JsonProperty("creationDate")]
+    public long CreationDate { get; set; }
     [JsonProperty("type")]
     public string Type { get; set; } = "";
     [JsonProperty("duration")]
@@ -298,7 +300,7 @@ internal class BackupService : IBackupService {
                         ct.ThrowIfCancellationRequested();
                         int len = await inStream.ReadAsync(buff, 0, BUFF_SIZE, ct);
                         if (len == 0) {
-                            entryCreator.Complete(item.Name, item.Size, item.Type, item.Date, null);
+                            entryCreator.Complete(item.Name, item.Size, item.Type, item.Date, item.CreationDate, null);
                             break;
                         }
                         recv += len;

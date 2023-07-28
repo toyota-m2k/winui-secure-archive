@@ -196,11 +196,11 @@ namespace SecureArchive.Views.ViewModels {
                         int success = 0;
                         foreach (var item in list) {
                             updateMessage($"Importing File: {item.Name}");
-                            var fileInfo = new FileInfo(item.Path);
+                            //var fileInfo = new FileInfo(item.Path);
                             //var outFilePath = Path.Combine(outFolder!, item.Name);
                             var ext = Path.GetExtension(item.Name) ?? "*";
                             try {
-                                var newEntry = await _secureStorageService.RegisterFile(item.Path, OwnerInfo.LOCAL_ID, item.Name, fileInfo.LastWriteTime.Ticks, Guid.NewGuid().ToString("N"), null, progress);
+                                var newEntry = await _secureStorageService.RegisterFile(item.Path, OwnerInfo.LOCAL_ID, item.Name, Guid.NewGuid().ToString("N"), null, progress);
                                 if (newEntry != null) {
                                     mainThread.Run(() => {
                                         FileList.Value.Add(newEntry);

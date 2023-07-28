@@ -5,7 +5,7 @@ namespace SecureArchive.Utils.Server.lib;
 
 class HttpErrorResponse : TextHttpResponse
 {
-    public HttpErrorResponse(HttpRequest? req, HttpStatusCode statusCode, string content, string contentType = "text/plain") : base(req, statusCode, content, contentType) {
+    public HttpErrorResponse(HttpRequest req, HttpStatusCode statusCode, string content, string contentType = "text/plain") : base(req, statusCode, content, contentType) {
     }
 
     public HttpException Exception => new HttpException(this);
