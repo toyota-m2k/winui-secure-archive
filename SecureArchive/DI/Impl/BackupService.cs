@@ -100,6 +100,10 @@ internal class BackupService : IBackupService {
 
     //public IObservable<long> CurrentBytes => _currentBytes;
 
+    private string F(long size) {
+        return string.Format("{0:#,0}", size);
+    }
+
     public BackupService(
         ISecureStorageService secureStorageService, 
         IPageService pageService, 
@@ -296,11 +300,17 @@ internal class BackupService : IBackupService {
                     var total = content.Headers.ContentLength ?? 0L;
                     var buff = new byte[BUFF_SIZE];
                     var recv = 0L;
+                    var ok = false;
                     while (true) {
                         ct.ThrowIfCancellationRequested();
                         int len = await inStream.ReadAsync(buff, 0, BUFF_SIZE, ct);
                         if (len == 0) {
-                            entryCreator.Complete(item.Name, item.Size, item.Type, item.Date, item.CreationDate, null);
+                            if (total == 0L || total == recv) {
+                                entryCreator.Complete(item.Name, item.Size, item.Type, item.Date, item.CreationDate, null);
+                                ok = true;
+                            } else {
+                                _logger.Error($"{item.Name} : invalid length (req: {F(total)} -- {F(recv)}");
+                            }
                             break;
                         }
                         recv += len;
@@ -308,7 +318,7 @@ internal class BackupService : IBackupService {
                         progress(recv, total);
                         ct.ThrowIfCancellationRequested();
                     }
-                    _logger.Debug("downloaded {0}", item.Name);
+                    _logger.Debug($"download ({ok}): {item.Name} -- total length = {F(total)}");
                 }
             }
             await Task.Delay(500);          // これを入れないと、Pixel3 でエラーになる。

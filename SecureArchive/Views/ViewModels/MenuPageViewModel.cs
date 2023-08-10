@@ -9,13 +9,13 @@ namespace SecureArchive.Views.ViewModels {
 
         public ReactiveCommandSlim ListCommand { get; } = new ReactiveCommandSlim();
         public ReactiveCommandSlim SettingsCommand { get; } = new ReactiveCommandSlim();
-        public ReactiveCommandSlim ClearAllCommand { get; } = new ReactiveCommandSlim();
+        public ReactiveCommandSlim MirrorCommand { get; } = new ReactiveCommandSlim();
         public ReactivePropertySlim<bool> IsServerRunning { get; } = new ReactivePropertySlim<bool>(false);
 
         public MenuPageViewModel(
             IPageService pageSercice, 
             IHttpServreService httpServreService, 
-            ISyncArchiveService syncArchiveService,
+            //ISyncArchiveService syncArchiveService,
             IUserSettingsService userSettingsService) {
             _pageService = pageSercice;
             _httpServreService = httpServreService;
@@ -23,7 +23,7 @@ namespace SecureArchive.Views.ViewModels {
 
             SettingsCommand.Subscribe(pageSercice.ShowSettingsPage);
             ListCommand.Subscribe(pageSercice.ShowListPage);
-            ClearAllCommand.Subscribe(() => {
+            MirrorCommand.Subscribe(() => {
                 App.GetService<SyncArchiveDialogPage>().ShowDialog(_pageService.CurrentPage!.XamlRoot);
             });
             IsServerRunning.Subscribe((it) => {
