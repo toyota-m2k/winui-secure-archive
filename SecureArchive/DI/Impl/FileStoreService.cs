@@ -9,39 +9,36 @@ namespace SecureArchive.DI.Impl {
         }
 
 
-        public async Task<bool> IsRegistered() {
+        public async Task<bool> IsReady() {
             var path = (await _userSettingsService.GetAsync()).DataFolder; //GetStringAsync(SettingsKey.DataFolder);
             if(string.IsNullOrEmpty(path)) return false;
             return Path.Exists(path);
         }
 
-        public async Task<bool> Register(string newFolder) {
-            // 新しいフォルダに読み書きできることを確認
-            try {
-                var checkFile = Path.Combine(newFolder, "a.txt");
-                File.WriteAllText(checkFile, "abcdefg");
-                if (!File.Exists(checkFile)) {
-                    return false;
-                }
-                File.Delete(checkFile);
-            } catch(Exception) {
-                // 読み書きできないっぽい。
-                return false;
-            }
-
-            var oldFolder = await GetFolder();
-            if(oldFolder != null && Path.Exists(oldFolder)) {
-                if (!FileUtils.IsFolderEmpty(oldFolder)) {
-                    await FileUtils.MoveItemsInFolder(oldFolder, newFolder);
-                }
-                Directory.Delete(oldFolder, true);
-            }
+        public async Task SetFolder(string newFolder) {
+            //// 新しいフォルダに読み書きできることを確認
+            //try {
+            //    var checkFile = Path.Combine(newFolder, "a.txt");
+            //    File.WriteAllText(checkFile, "abcdefg");
+            //    if (!File.Exists(checkFile)) {
+            //        return false;
+            //    }
+            //    File.Delete(checkFile);
+            //} catch(Exception) {
+            //    // 読み書きできないっぽい。
+            //    return false;
+            //}
+            //var oldFolder = await GetFolder();
+            //if(oldFolder != null && Path.Exists(oldFolder)) {
+            //    if (!FileUtils.IsFolderEmpty(oldFolder)) {
+            //        await FileUtils.MoveItemsInFolder(oldFolder, newFolder);
+            //    }
+            //    Directory.Delete(oldFolder, true);
+            //}
             await _userSettingsService.EditAsync(editor => {
                 editor.DataFolder = newFolder;
                 return true;
             });
-            //await _userSettingsService.PutAsync<string>(SettingsKey.DataFolder, newFolder);
-            return true;
         }
 
         public async Task<string?> GetFolder() {

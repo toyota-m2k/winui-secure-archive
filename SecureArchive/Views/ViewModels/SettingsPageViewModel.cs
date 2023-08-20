@@ -11,6 +11,8 @@ namespace SecureArchive.Views.ViewModels {
         private IFileStoreService _fileStoreSercice;
         private IPageService _pageService;
         private IHttpServreService _httpServreService;
+        private ISecureStorageService _secureStorageService;
+        private IFileStoreService _fileStoreService;
 
         //public ReactivePropertySlim<bool> DataFolderRegistered = new(false);
         public ReactivePropertySlim<string> DataFolder { get; } = new ("");
@@ -62,7 +64,7 @@ namespace SecureArchive.Views.ViewModels {
                     if (await _passwordService.GetPasswordStatusAsync() != PasswordStatus.Checked) {
                         return;
                     }
-                    if (await _fileStoreSercice.IsRegistered()) {
+                    if (await _fileStoreSercice.IsReady()) {
                         if (CheckPasswordRequired) {
                             Done();
                             return;
@@ -74,7 +76,7 @@ namespace SecureArchive.Views.ViewModels {
                     }
                     break;
                 case Status.NeedToSetDataFolder:
-                    if(!await _fileStoreSercice.IsRegistered()) {
+                    if(!await _fileStoreSercice.IsReady()) {
                         return;
                     }
                     PanelStatus.Value = Status.Ready;
@@ -88,14 +90,18 @@ namespace SecureArchive.Views.ViewModels {
             IUserSettingsService userSettingsService, 
             IPasswordService passwordService,
             IFileStoreService fileStoreSercice,
+            ISecureStorageService secureStorageService,
             IPageService pageService,
-            IHttpServreService httpServreService
+            IHttpServreService httpServreService,
+            IFileStoreService fileStoreService
             ) {
             _userSettingsService = userSettingsService;
             _passwordService = passwordService;
             _fileStoreSercice = fileStoreSercice;
             _pageService = pageService;
             _httpServreService = httpServreService;
+            _secureStorageService = secureStorageService;
+            _fileStoreService = fileStoreService;
 
             //Initialized = CurrentPasswordStatus.Select((it) => it != null).ToReadOnlyReactivePropertySlim<bool>();
             //NeedToSetPassword = CurrentPasswordStatus.Select((it)=> it==PasswordStatus.NotSet).ToReadOnlyReactivePropertySlim<bool>();
@@ -164,7 +170,18 @@ namespace SecureArchive.Views.ViewModels {
                     return;
                 }
 
-                if (await _fileStoreSercice.Register(folder.Path)) {
+                var oldPath = await _fileStoreService.GetFolder();
+                if (oldPath != null && Directory.Exists(oldPath) && !FileUtils.IsFolderEmpty(oldPath)) {
+                    var result = await MessageBoxBuilder.Create(App.MainWindow)
+                        .SetMessage("Are you sure to move the data folder?")
+                        .AddButton("OK", null, true)
+                        .AddButton("Cancel", null, false)
+                        .ShowAsync();
+                    if((bool?)result != true) return;
+
+                }
+
+                if (await _secureStorageService.SetStorageFolder(folder.Path)) {
                     DataFolder.Value = folder.Path;
                 }
             }
