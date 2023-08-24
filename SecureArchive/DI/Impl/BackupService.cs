@@ -309,7 +309,8 @@ internal class BackupService : IBackupService {
                                 entryCreator.Complete(item.Name, item.Size, item.Type, item.Date, item.CreationDate, null);
                                 ok = true;
                             } else {
-                                _logger.Error($"{item.Name} : invalid length (req: {F(total)} -- {F(recv)}");
+                                // 受信したデータファイルのサイズが不正（途中で切れた、とか？）
+                                throw new Exception($"{item.Name} : invalid length (req: {F(total)} actual: {F(recv)}");
                             }
                             break;
                         }
