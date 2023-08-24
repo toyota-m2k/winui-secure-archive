@@ -21,4 +21,6 @@ internal interface ISecureStorageService {
     Stream OpenEntry(FileEntry entry);
     Task Export(FileEntry entry, string outPath);
     Task Export(FileEntry entry, string outPath, ProgressProc progress);
+
+    Task<bool> SetStorageFolder(string newPath);
 }

@@ -445,6 +445,7 @@ internal class HttpServerService : IHttpServreService {
 
                     if(!request.Headers.TryGetValue("range", out var range)) {
                         //Source?.StandardOutput($"BooServer: cmd=video({id})");
+                        _logger.Debug("No-Ranged Request.");
                         return StreamingHttpResponse.CreateForRangedInitial(request, "video/mp4", _cryptoStreamHandler.LockStream(entry), entry.Size, ()=>_cryptoStreamHandler.UnlockStream(entry));
                     }
 
@@ -454,6 +455,7 @@ internal class HttpServerService : IHttpServreService {
                     var start = ms.Success ? Convert.ToInt64(ms.Value) : 0;
                     var end = me.Success ? Convert.ToInt64(me.Value) : 0;
 
+                    _logger.Debug($"Ranged Request.");
                     return StreamingHttpResponse.CreateForRanged(request, "video/mp4", _cryptoStreamHandler.LockStream(entry), start, end, entry.Size, ()=>_cryptoStreamHandler.UnlockStream(entry));
                 }),
             Route.get(

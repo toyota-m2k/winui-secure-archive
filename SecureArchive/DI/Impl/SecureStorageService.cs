@@ -216,4 +216,79 @@ internal class SecureStorageService : ISecureStorageService {
     }
 
     #endregion
+
+    public async Task<bool> SetStorageFolder(string newPath) {
+        if (!Directory.Exists(newPath)) {
+            _logger.Error($"\"{newPath}\" is not exists.");
+            return false;
+        }
+        if (!FileUtils.IsFolderEmpty(newPath)) {
+            _logger.Error($"\"{newPath}\" is not empty.");
+            return false;
+        }
+        // 新しいフォルダに読み書きできることを確認
+        try {
+            var checkFile = Path.Combine(newPath, "a.txt");
+            File.WriteAllText(checkFile, "abcdefg");
+            if (!File.Exists(checkFile)) {
+                throw new Exception("file error");
+            }
+            File.Delete(checkFile);
+        }
+        catch (Exception) {
+            // 読み書きできないっぽい。
+            _logger.Error($"no file can be created in \"{newPath}\".");
+            return false;
+        }
+
+        var oldPath = await _fileStoreService.GetFolder();
+        if(oldPath != null && Directory.Exists(oldPath) && !FileUtils.IsFolderEmpty(oldPath)) {
+            if(!await MoveContents(oldPath, newPath)) {
+                _logger.Error("Cannot move contents to new folder.");
+                return false;
+            }
+        }
+        await _fileStoreService.SetFolder(newPath);
+        return true;
+    }
+
+    private async Task<bool> MoveContents(string from, string to) {
+        return await Task.Run(() => {
+            try {
+                if(from.EndsWith("\\")) {
+                    from = from.Substring(0, from.Length - 1);
+                }
+                _databaseService.EditEntry(entries => {
+                    bool result = false;
+                    foreach (var e in entries.List(false)) {
+                        var dir = Path.GetDirectoryName(e.Path);
+                        var name = Path.GetFileName(e.Path);
+                        if (dir == null || name == null) {
+                            _logger.Info($"Invalid Path: {e.Path} (id={e.Id})");
+                            continue;
+                        }
+                        if (string.Compare(from, dir, StringComparison.OrdinalIgnoreCase) == 0) {
+                            // needs to move.
+                            var dstPath = Path.Combine(to, name);
+                            File.Copy(e.Path, dstPath);
+                            _logger.Debug($"Moved: {e.Path} --> {dstPath}");
+                            e.Path = dstPath;
+                            result = true;
+                        }
+                    }
+                    return result;
+                });
+
+                //_logger.Debug("Removing Original Folder...");
+                //await FileUtils.DeleteFolder(from);
+                //_logger.Debug("Removed...");
+                _logger.Info("All contents moved.");
+                return true;
+            }
+            catch (Exception ex) {
+                _logger.Error(ex);
+                return false;
+            }
+        });
+    }
 }

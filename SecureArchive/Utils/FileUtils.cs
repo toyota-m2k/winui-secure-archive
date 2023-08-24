@@ -1,4 +1,5 @@
-﻿using System.Text.RegularExpressions;
+﻿using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using Windows.Storage;
 
 namespace SecureArchive.Utils;
@@ -29,7 +30,7 @@ internal static class FileUtils {
             foreach (var file in Directory.GetFiles(src)) {
                 var name = Path.GetFileName(file);
                 var dstPath = Path.Combine(dst, name);
-                File.Copy(file, dst);
+                File.Copy(file, dstPath);
             }
             foreach (var dir in Directory.GetDirectories(src)) {
                 var name = Path.GetFileName(dir);
@@ -39,9 +40,31 @@ internal static class FileUtils {
         });
     }
 
+    public static async Task DeleteFolder(string path) {
+        if (!Directory.Exists(path)) {
+            return; // 最初から存在しない
+        }
+
+        async Task delete(string path) {
+            foreach (var file in Directory.GetFiles(path)) {
+                var name = Path.GetFileName(file);
+                var dstPath = Path.Combine(path, name);
+                File.Delete(dstPath);
+            }
+            foreach (var dir in Directory.GetDirectories(path)) {
+                var name = Path.GetFileName(dir);
+                var dstPath = Path.Combine(path, name);
+                await delete(dstPath);
+            }
+        }
+
+        await Task.Run(async () => {
+            await delete(path);
+        });
+    }
+
     public static bool IsFolderEmpty(string path) {
-        if(!Path.Exists(path)) return true;
-        return Directory.EnumerateFileSystemEntries(path).Any();
+        return !Directory.EnumerateFileSystemEntries(path).Any();
     }
 
 
