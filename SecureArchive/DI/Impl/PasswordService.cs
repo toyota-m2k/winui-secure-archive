@@ -73,7 +73,7 @@ namespace SecureArchive.DI.Impl {
                 _logger.Error("given password is empty.");
                 return false;
             }
-            if(_hashedPassword != HashHelper.SHA256(password, PWD_SEED).AsHexString) {
+            if (_hashedPassword != HashHelper.SHA256(password, PWD_SEED).AsHexString) {
                 _logger.Error("given password is not match.");
                 return false;
             }

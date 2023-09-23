@@ -40,6 +40,12 @@ internal class SecureStorageService : ISecureStorageService {
         return item.OriginalDate >= lastModified;
     }
 
+    public IList<FileEntry> GetList(string ownerId, Func<FileEntry, bool>? predicate) {
+        return _databaseService.Entries.List((entry) => {
+            return entry.OwnerId == ownerId && (predicate?.Invoke(entry) ?? true);
+        }, true);
+    }
+
     public async Task<FileEntry?> RegisterFile(string filePath, string ownerId, string? name, string originalId, string? metaInfo, ProgressProc? progress) {
         var type = Path.GetExtension(filePath) ?? "*";
         var info = new FileInfo(filePath);
@@ -283,6 +289,23 @@ internal class SecureStorageService : ISecureStorageService {
                 //await FileUtils.DeleteFolder(from);
                 //_logger.Debug("Removed...");
                 _logger.Info("All contents moved.");
+                return true;
+            }
+            catch (Exception ex) {
+                _logger.Error(ex);
+                return false;
+            }
+        });
+    }
+
+    public async Task<bool> DeleteEntry(FileEntry entry) {
+        return await Task.Run(() => {
+            try {
+                File.Delete(entry.Path);
+                _databaseService.EditEntry(entries => {
+                    entries.Remove(entry);
+                    return true;
+                });
                 return true;
             }
             catch (Exception ex) {
