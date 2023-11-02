@@ -2,6 +2,7 @@
 using SecureArchive.Models.DB;
 using SecureArchive.Utils;
 using System.Security.Cryptography;
+using System.Xml.Linq;
 using Windows.Storage.Streams;
 
 namespace SecureArchive.DI.Impl;
@@ -11,7 +12,7 @@ internal class SecureStorageService : ISecureStorageService {
     private IFileStoreService _fileStoreService;
     private IDatabaseService _databaseService;
     private ITaskQueueService _taskQueueService;
-    private IStatusNotificationService _statusNotificationService;
+    //private IStatusNotificationService _statusNotificationService;
     private ILogger _logger;
 
     public SecureStorageService(
@@ -19,13 +20,13 @@ internal class SecureStorageService : ISecureStorageService {
             IFileStoreService fileStoreService,
             IDatabaseService databaseService,
             ITaskQueueService taskQueueService,
-            IStatusNotificationService statusNotificationService,
+            //IStatusNotificationService statusNotificationService,
             ILoggerFactory loggerFactory) {
         _cryptoService = cryptographyService;
         _fileStoreService = fileStoreService;   
         _databaseService = databaseService; 
         _taskQueueService = taskQueueService;
-        _statusNotificationService = statusNotificationService;
+        //_statusNotificationService = statusNotificationService;
         _logger = loggerFactory.CreateLogger<SecureStorageService>();
     }
 
@@ -38,6 +39,12 @@ internal class SecureStorageService : ISecureStorageService {
         var item = _databaseService.Entries.GetByOriginalId(ownerId, originalId);
         if(item==null) return false;
         return item.OriginalDate >= lastModified;
+    }
+
+    public IList<FileEntry> GetList(string ownerId, Func<FileEntry, bool>? predicate) {
+        return _databaseService.Entries.List((entry) => {
+            return entry.OwnerId == ownerId && (predicate?.Invoke(entry) ?? true);
+        }, true);
     }
 
     public async Task<FileEntry?> RegisterFile(string filePath, string ownerId, string? name, string originalId, string? metaInfo, ProgressProc? progress) {
@@ -290,5 +297,90 @@ internal class SecureStorageService : ISecureStorageService {
                 return false;
             }
         });
+    }
+
+    public async Task<bool> DeleteEntry(FileEntry entry) {
+        return await Task.Run(() => {
+            try {
+                File.Delete(entry.Path);
+                _databaseService.EditEntry(entries => {
+                    entries.Remove(entry);
+                    return true;
+                });
+                return true;
+            }
+            catch (Exception ex) {
+                _logger.Error(ex);
+                return false;
+            }
+        });
+    }
+
+    private bool RenameFile(string src, string dst) {
+        try {
+            File.Move(src, dst);
+            return true;
+        } catch(Exception) {
+            return false;
+        }
+    }
+
+    private async Task<bool> ConvertFastStart(FileEntry entry, IStatusNotificationService? notificationService) {
+        bool success = false;
+        string backupPath = entry.Path + ".bak";
+        if(!RenameFile(entry.Path, backupPath)) {
+            return false;
+        }
+
+        try {
+            var srcStream = _cryptoService.OpenStreamForDecryption(File.OpenRead(backupPath));
+
+            using (var inputStream = new SeekableInputStream(srcStream, (oldStream) => {
+                oldStream.Dispose();
+                return _cryptoService.OpenStreamForDecryption(File.OpenRead(backupPath));
+            })) {
+                var fs = new MovieFastStart() { TaskName = entry.Name };
+                success = await fs.Process(inputStream, () => {
+                    var outStream = new FileStream(entry.Path, FileMode.Create, FileAccess.Write, FileShare.None);
+                    return _cryptoService.OpenStreamForEncryption(outStream);
+                }, notificationService);
+                if (success) {
+                    // 成功すれば、データベースを更新。
+                    _databaseService.EditEntry((entryList) => {
+                        // Overwrite
+                        var mutableEntry = entryList.GetById(entry.Id)!;
+                        mutableEntry.Size = fs.OutputLength;
+                        return true;
+                    });
+                }
+                return success;
+            }
+        } catch (Exception e) {
+            _logger.Error(e);
+            return false;
+        } finally {
+            if (!success) {
+                // 失敗したら元に戻す。
+                _logger.Error($"Error: {entry.Name}");
+                RenameFile(backupPath, entry.Path);
+            }
+        }
+    }
+    public async Task ConvertFastStart(IStatusNotificationService? notificationService) {
+        var entries = _databaseService.Entries.List((entry) => {
+            return entry.Type == "mp4";
+        }, true);
+        //var entry = entries.FirstOrDefault();
+        //if (entry == null) {
+        //    _logger.Info("No mp4 files.");
+        //    return;
+        //}
+        //_logger.Debug(entry.Name);
+        //_logger.Debug(entry.Path);
+        //await ConvertFastStart(entry);
+
+        foreach (var entry in entries) {
+            await ConvertFastStart(entry, notificationService);
+        }
     }
 }

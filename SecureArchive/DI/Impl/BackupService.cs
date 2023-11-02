@@ -1,7 +1,9 @@
 ﻿using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using SecureArchive.Models.DB;
 using SecureArchive.Utils;
 using SecureArchive.Views;
+using System.Diagnostics;
 using System.Text;
 
 namespace SecureArchive.DI.Impl;
@@ -14,9 +16,9 @@ internal class RemoteItem {
     [JsonProperty("size")]
     public long Size { get; set; }
     [JsonProperty("date")]
-    public long Date { get; set; }
+    public long Date { get; set; }              // ファイルのタイムスタンプ --> OriginalDate
     [JsonProperty("creationDate")]
-    public long CreationDate { get; set; }
+    public long CreationDate { get; set; }      // ファイル名から取り出される日付
     [JsonProperty("type")]
     public string Type { get; set; } = "";
     [JsonProperty("duration")]
@@ -55,6 +57,7 @@ internal class BackupService : IBackupService {
     private IPageService _pageService;
     private IMainThreadService _mainThreadService;
     private IHttpClientFactory _httpClientFactory;
+    private IDatabaseService _databaseService;
 
     //private BehaviorSubject<Status> _executing = new (Status.NONE);
     //private BehaviorSubject<RemoteItem?> _currentItem = new(null);
@@ -88,7 +91,9 @@ internal class BackupService : IBackupService {
     //}
 
     //public IObservable<Status> Executing => _executing;
-    public IList<RemoteItem> RemoteItems { get; private set; } = null!;
+    public IList<RemoteItem> RemoteNewItems { get; private set; } = null!;
+    public IList<FileEntry> RemoteRemovedItems { get; private set; } = null!;
+
 
     //public IObservable<RemoteItem?> CurrentItem => _currentItem;
 
@@ -109,12 +114,14 @@ internal class BackupService : IBackupService {
         IPageService pageService, 
         IMainThreadService mainThreadSercice, 
         IHttpClientFactory httpClientFactory,
+        IDatabaseService databaseService,
         ILoggerFactory loggerFactory) {
         _logger = loggerFactory.CreateLogger<BackupService>();
         _secureStorageService = secureStorageService;
         _pageService = pageService;
         _mainThreadService = mainThreadSercice;
         _httpClientFactory = httpClientFactory;
+        _databaseService = databaseService;
     }
 
     private string OwnerId = null!;
@@ -149,7 +156,13 @@ internal class BackupService : IBackupService {
 
 
     private void Reset() {
-        RemoteItems = null!;
+        RemoteNewItems = null!;
+    }
+
+    enum CloudState {
+        Local = 0,      // ファイルはスマホのローカルにのみ存在
+        Uploaded = 1,   // アップロード済（ファイルはローカルとサーバーの両方に存在）
+        Cloud = 2,      // ファイルはサーバー(SecureArchive)にのみ存在
     }
 
     private async Task<bool> ListProc() {         
@@ -157,26 +170,80 @@ internal class BackupService : IBackupService {
         return await Task.Run(async () => {
             try {
                 var rawList = await GetList($"http://{Address}/list?auth={Token}&type=all&backup");
-                if(rawList.Count==0) {
-                    return false;
-                }
-                var registeredList = rawList.Where(it => it.Cloud==0 && _secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToArray();
+                //if(rawList.Count==0) {
+                //    return false;
+                //}
+
+                //foreach (var e in rawList) {
+                //    _logger.Debug($"Remote: {e.Id} - {e.Name}");
+                //}
+
+                /**
+                 * リモート側で「ローカルにだけ存在する」と思っているが、実は、SecureArchive にアップロード済み、というものがあれば、ここでバックアップ完了通知を送っておく。
+                 */
+                var registeredList = rawList.Where(it => it.Cloud==(int)CloudState.Local && _secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToArray();
                 if(registeredList.Length>0) {
                     await NotifyCompletion(registeredList);
                 }
+                var remoteMap = rawList.Aggregate(new Dictionary<string, RemoteItem>(), (map, item) => {
+                    map[item.Id] = item;
+                    return map;
+                });
+
+                //Debug.Assert(rawList.All((it) => remoteMap.ContainsKey(it.Id)));
+
+                var removedList = _secureStorageService.GetList(OwnerId, (it) => {
+                    return !remoteMap.ContainsKey(it.OriginalId);
+                });
+
+                // 初期バージョンの不具合で、OriginalDate/CreationDate が 0 になっているものがある。
+                _databaseService.EditEntry((entries) => {
+                    var list = entries.List(e => e.OriginalDate == 0 || e.CreationDate == 0, false);
+                    if(list==null || list.FirstOrDefault()==null) return false;
+                    bool modified = false;
+                    foreach(var e in list) {
+                        var item = remoteMap[e.OriginalId];
+                        if (item != null && (e.OriginalDate!=item.Date || e.CreationDate!=item.Date)) {
+                            e.OriginalDate = item.Date;
+                            e.CreationDate = item.CreationDate;
+                            modified = true;
+                        }
+                    }
+                    return modified;
+                });
 
 
-                var newList = rawList.Where(it => !_secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToList();
-                if(newList.Count==0) {
+                /**
+                 * リモート側で追加または更新されたファイルのリスト
+                 */
+                var newList = rawList.Where(it => it.Cloud!=(int)CloudState.Cloud && !_secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToList();
+                if(newList.Count==0 && removedList.Count==0) {
                     return false;
                 }
 
-                RemoteItems = newList;
+                //foreach (var f in newList) {
+                //    _logger.Debug($"Appending: {f.Id} - {f.Name}");
+                //}
+                //foreach (var f in removedList) {
+                //    _logger.Debug($"Removing: {f.OriginalId} - {f.Name}");
+                //}
+
+                RemoteNewItems = newList;
+                RemoteRemovedItems = removedList;
                 await _mainThreadService.Run(async () => {
-                    await CustomDialogBuilder<BackupDialogPage,bool>
-                        .Create(_pageService.CurrentPage!.XamlRoot, new BackupDialogPage())
-                        .SetTitle("Backup")
-                        .ShowAsync();
+                    if (newList.Count > 0) {
+                        await CustomDialogBuilder<BackupDialogPage, bool>
+                            .Create(_pageService.CurrentPage!.XamlRoot, new BackupDialogPage())
+                            .SetTitle("Backup")
+                            .ShowAsync();
+                    }
+
+                    if (removedList.Count > 0) {
+                        await CustomDialogBuilder<DeleteBackupDialogPage, bool>
+                            .Create(_pageService.CurrentPage!.XamlRoot, new DeleteBackupDialogPage())
+                            .SetTitle("Delete Files Removed on the Device")
+                            .ShowAsync();
+                    }
 
 
                     //var dialog = new ContentDialog();
@@ -306,7 +373,7 @@ internal class BackupService : IBackupService {
                         int len = await inStream.ReadAsync(buff, 0, BUFF_SIZE, ct);
                         if (len == 0) {
                             if (total == 0L || total == recv) {
-                                entryCreator.Complete(item.Name, item.Size, item.Type, item.Date, item.CreationDate, null);
+                                entryCreator.Complete(item.Name, total!=0L ? total : item.Size, item.Type, item.Date, item.CreationDate, null);
                                 ok = true;
                             } else {
                                 // 受信したデータファイルのサイズが不正（途中で切れた、とか？）
@@ -331,4 +398,7 @@ internal class BackupService : IBackupService {
         }
     }
 
+    public Task<bool> DeleteBackupEntry(FileEntry entry) {
+        return _secureStorageService.DeleteEntry(entry);
+    }
 }

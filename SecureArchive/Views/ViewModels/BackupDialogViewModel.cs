@@ -35,7 +35,7 @@ internal class BackupDialogViewModel {
         _backupService = backupService;
         _mainThreadService = mainThreadService;
         _logger = loggerFactory.CreateLogger<BackupDialogViewModel>();
-        RemoteItems = new ObservableCollection<RemoteItem>(_backupService.RemoteItems);
+        RemoteItems = new ObservableCollection<RemoteItem>(_backupService.RemoteNewItems);
         CountProgress = CurrentIndex.CombineLatest(TotalCount, (current, total) => total>0 ? (double)current*100.0 / (double)total: 0).ToReadOnlyReactivePropertySlim();
         SizeProgress = CurrentBytes.CombineLatest(TotalBytes, (current, total) => total>0 ? (double)current*100.0 / (double)total : 0).ToReadOnlyReactivePropertySlim();
         StopCommand.Subscribe(Stop);
@@ -97,7 +97,7 @@ internal class BackupDialogViewModel {
     public void Stop() {
         if(_cts != null) {
             _cts.Cancel();
-            _cts = null;
+            //_cts = null;
         }
     }
 }

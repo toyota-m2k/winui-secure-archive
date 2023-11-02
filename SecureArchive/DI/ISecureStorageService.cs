@@ -14,6 +14,7 @@ public interface IEntryCreator : IDisposable {
 internal interface ISecureStorageService {
     bool IsRegistered(string ownerId, string originalId);
     bool IsRegistered(string ownerId, string originalId, long lastModified);
+    IList<FileEntry> GetList(string ownerId, Func<FileEntry, bool>? predicate);
     Task<FileEntry?> RegisterFile(string filePath, string ownerId, string? name, string originalId, string? metaInfo, ProgressProc? progress);
     Task<FileEntry?> Register(Stream inStream, string ownerId, string name, long size, string type, long originalDate, long creationDate, string originalId, string? metaInfo, ProgressProc? progress);
     Task<IEntryCreator?> CreateEntry(string ownerId, string originalId, bool overwrite=false);
@@ -23,4 +24,9 @@ internal interface ISecureStorageService {
     Task Export(FileEntry entry, string outPath, ProgressProc progress);
 
     Task<bool> SetStorageFolder(string newPath);
+
+    Task<bool> DeleteEntry(FileEntry entry);
+
+    Task ConvertFastStart(IStatusNotificationService? notificationService);
+
 }
