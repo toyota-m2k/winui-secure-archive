@@ -26,4 +26,7 @@ internal interface ISecureStorageService {
     Task<bool> SetStorageFolder(string newPath);
 
     Task<bool> DeleteEntry(FileEntry entry);
+
+    Task ConvertFastStart(IStatusNotificationService? notificationService);
+
 }

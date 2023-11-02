@@ -16,9 +16,9 @@ internal class RemoteItem {
     [JsonProperty("size")]
     public long Size { get; set; }
     [JsonProperty("date")]
-    public long Date { get; set; }
+    public long Date { get; set; }              // ファイルのタイムスタンプ --> OriginalDate
     [JsonProperty("creationDate")]
-    public long CreationDate { get; set; }
+    public long CreationDate { get; set; }      // ファイル名から取り出される日付
     [JsonProperty("type")]
     public string Type { get; set; } = "";
     [JsonProperty("duration")]
@@ -57,6 +57,7 @@ internal class BackupService : IBackupService {
     private IPageService _pageService;
     private IMainThreadService _mainThreadService;
     private IHttpClientFactory _httpClientFactory;
+    private IDatabaseService _databaseService;
 
     //private BehaviorSubject<Status> _executing = new (Status.NONE);
     //private BehaviorSubject<RemoteItem?> _currentItem = new(null);
@@ -113,12 +114,14 @@ internal class BackupService : IBackupService {
         IPageService pageService, 
         IMainThreadService mainThreadSercice, 
         IHttpClientFactory httpClientFactory,
+        IDatabaseService databaseService,
         ILoggerFactory loggerFactory) {
         _logger = loggerFactory.CreateLogger<BackupService>();
         _secureStorageService = secureStorageService;
         _pageService = pageService;
         _mainThreadService = mainThreadSercice;
         _httpClientFactory = httpClientFactory;
+        _databaseService = databaseService;
     }
 
     private string OwnerId = null!;
@@ -171,7 +174,7 @@ internal class BackupService : IBackupService {
                 //    return false;
                 //}
 
-                //foreach(var e in rawList) {
+                //foreach (var e in rawList) {
                 //    _logger.Debug($"Remote: {e.Id} - {e.Name}");
                 //}
 
@@ -191,6 +194,22 @@ internal class BackupService : IBackupService {
 
                 var removedList = _secureStorageService.GetList(OwnerId, (it) => {
                     return !remoteMap.ContainsKey(it.OriginalId);
+                });
+
+                // 初期バージョンの不具合で、OriginalDate/CreationDate が 0 になっているものがある。
+                _databaseService.EditEntry((entries) => {
+                    var list = entries.List(e => e.OriginalDate == 0 || e.CreationDate == 0, false);
+                    if(list==null || list.FirstOrDefault()==null) return false;
+                    bool modified = false;
+                    foreach(var e in list) {
+                        var item = remoteMap[e.OriginalId];
+                        if (item != null && (e.OriginalDate!=item.Date || e.CreationDate!=item.Date)) {
+                            e.OriginalDate = item.Date;
+                            e.CreationDate = item.CreationDate;
+                            modified = true;
+                        }
+                    }
+                    return modified;
                 });
 
 
@@ -354,7 +373,7 @@ internal class BackupService : IBackupService {
                         int len = await inStream.ReadAsync(buff, 0, BUFF_SIZE, ct);
                         if (len == 0) {
                             if (total == 0L || total == recv) {
-                                entryCreator.Complete(item.Name, item.Size, item.Type, item.Date, item.CreationDate, null);
+                                entryCreator.Complete(item.Name, total!=0L ? total : item.Size, item.Type, item.Date, item.CreationDate, null);
                                 ok = true;
                             } else {
                                 // 受信したデータファイルのサイズが不正（途中で切れた、とか？）

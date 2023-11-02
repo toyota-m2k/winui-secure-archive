@@ -31,6 +31,14 @@
                         <TextBlock Text="Mirror"  HorizontalAlignment="Center"/>
                     </StackPanel>
                 </Button>
+                <!--
+                <Button Padding="30" Style="{StaticResource AccentButtonStyle}" Command="{x:Bind ViewModel.RepairCommand}">
+                    <StackPanel Orientation="Vertical" Spacing="10" >
+                        <PathIcon Data="M21,9L17,5V8H10V10H17V13M7,11L3,15L7,19V16H14V14H7V11Z" HorizontalAlignment="Center"/>
+                        <TextBlock Text="Patch"  HorizontalAlignment="Center"/>
+                    </StackPanel>
+                </Button>
+                -->
             </StackPanel>
             <ToggleSwitch OffContent="Server Stopped." OnContent="Server Running." IsOn="{x:Bind ViewModel.IsServerRunning.Value, Mode=TwoWay}"/>
         </StackPanel>

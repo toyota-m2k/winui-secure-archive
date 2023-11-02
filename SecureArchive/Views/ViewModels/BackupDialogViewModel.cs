@@ -97,7 +97,7 @@ internal class BackupDialogViewModel {
     public void Stop() {
         if(_cts != null) {
             _cts.Cancel();
-            _cts = null;
+            //_cts = null;
         }
     }
 }

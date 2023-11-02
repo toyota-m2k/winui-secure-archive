@@ -108,11 +108,11 @@ internal class HttpServerService : IHttpServreService {
             }
             var name = string.IsNullOrEmpty(multipartBody.Filename) ? multipartBody.Name : multipartBody.Filename;
             long originalDate = 0;
-            if (!Parameters.TryGetValue("FileDate", out var fileDateText)) {
+            if (Parameters.TryGetValue("FileDate", out var fileDateText)) {
                 originalDate = Convert.ToInt64(fileDateText);
             }
             long creationDate = 0;
-            if (!Parameters.TryGetValue("CreationDate", out var creationDateText)) {
+            if (Parameters.TryGetValue("CreationDate", out var creationDateText)) {
                 creationDate = Convert.ToInt64(creationDateText);
             }
 
@@ -452,10 +452,14 @@ internal class HttpServerService : IHttpServreService {
                     var match = RegRange.Match(range);
                     var ms = match.Groups["start"];
                     var me = match.Groups["end"];
-                    var start = ms.Success ? Convert.ToInt64(ms.Value) : 0;
-                    var end = me.Success ? Convert.ToInt64(me.Value) : 0;
+                    var start = ms.Success ? Convert.ToInt64(ms.Value) : 0L;
+                    var end = me.Success ? Convert.ToInt64(me.Value) : 0L;
+                    if(start<0 || end<0 || (end>0 && start>end)) {
+                        _logger.Error($"Hah? Start={start} End={end}");
+                    }
 
-                    _logger.Debug($"Ranged Request.");
+
+                    _logger.Debug($"Ranged Request. {start} - {end}");
                     return StreamingHttpResponse.CreateForRanged(request, "video/mp4", _cryptoStreamHandler.LockStream(entry), start, end, entry.Size, ()=>_cryptoStreamHandler.UnlockStream(entry));
                 }),
             Route.get(

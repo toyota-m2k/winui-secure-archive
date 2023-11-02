@@ -29,6 +29,7 @@ public class StreamingHttpResponse : AbstractHttpResponse {
      */
     public StreamingHttpResponse(HttpRequest req, string contentType, Stream inStream, bool supportRange, long start, long end, long totalLength/*=-1*/, Action? onComplete)
         : base(req, HttpStatusCode.Ok) {
+        Logger.Debug($"Start={start} End={end} TotalLength={totalLength} Stream.Length={inStream.Length}");
         InputStream = inStream;
         TotalLength = (totalLength>0) ? totalLength : inStream.Length;
         ContentType = contentType;
@@ -105,9 +106,13 @@ public class StreamingHttpResponse : AbstractHttpResponse {
             if (TotalLength>0) {
                 total = $"{TotalLength}";
                 ContentLength = TotalLength;
-                if (End <= 0) {
+                if (End <= 0 || End>=TotalLength) {
                     End = TotalLength - 1;
                 }
+                if(Start>End) {
+                    Start = End;
+                }
+                
                 Debug.Assert(Start < TotalLength);
             }
             int buffSize = AUTO_BUFFER_SIZE;

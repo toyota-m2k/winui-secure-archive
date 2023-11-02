@@ -63,7 +63,7 @@ public class FileEntryList : IMutableFileEntryList {
         _entries = connector.Entries;
     }
 
-    private IEnumerable<FileEntry> rawList => _entries.OrderBy(it => it.CreationDate);
+    private IEnumerable<FileEntry> rawList => _entries.OrderBy(it => it.Name);
 
     public IList<FileEntry> List(bool resolveOwnerInfo) {
         lock (_connector) {

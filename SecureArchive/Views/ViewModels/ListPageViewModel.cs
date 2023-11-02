@@ -29,6 +29,7 @@ namespace SecureArchive.Views.ViewModels {
         public ReactiveCommandSlim AddCommand { get; } = new ReactiveCommandSlim();
         public ReactiveCommandSlim ExportCommand { get; } = new ReactiveCommandSlim();
         public ReactiveCommandSlim GoBackCommand { get; } = new ReactiveCommandSlim();
+        public ReactiveCommandSlim PatchCommand { get; } = new ReactiveCommandSlim();
 
         public ReactivePropertySlim<ObservableCollection<FileEntry>> FileList { get; } = new (new ObservableCollection<FileEntry>());
         public IReadOnlyReactiveProperty<string> Message { get; }
@@ -58,6 +59,7 @@ namespace SecureArchive.Views.ViewModels {
             
             GoBackCommand.Subscribe(_pageService.ShowMenuPage);
             AddCommand.Subscribe(AddLocalFile);
+            PatchCommand.Subscribe(() => Task.Run(()=>_secureStorageService.ConvertFastStart(_statusNotificationService)));
 
             FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(true));
             Message = _statusNotificationService.Message;

@@ -4,16 +4,14 @@ using System.Diagnostics;
 
 namespace SecureArchive.Utils;
 
-public class SeekableInputStream : Stream
-{
+public class SeekableInputStream : Stream {
     private const int BUFFER_SIZE = 8192;
     private Stream _internalStream;
     public delegate Stream ReopenStreamProc(Stream currentStream);
     private ReopenStreamProc? _reopenStream;
-    private UtLog _logger = new (typeof(SeekableInputStream));
+    private UtLog _logger = new(typeof(SeekableInputStream));
 
-    public SeekableInputStream(Stream inStream, ReopenStreamProc? reopenStreamProc)
-    {
+    public SeekableInputStream(Stream inStream, ReopenStreamProc? reopenStreamProc) {
         Debug.Assert(inStream.CanRead);
         _internalStream = inStream;
         _reopenStream = reopenStreamProc;
@@ -45,8 +43,7 @@ public class SeekableInputStream : Stream
     //}
 
     private long _position = 0L;
-    public override long Position
-    {
+    public override long Position {
         get => _position;
         set => Seek(value, SeekOrigin.Begin);
     }
@@ -57,32 +54,34 @@ public class SeekableInputStream : Stream
 
     public override bool CanWrite => false;
 
-    public override void Flush()
-    {
+    public override void Flush() {
 
     }
 
-    public override int Read(byte[] buffer, int offset, int count)
-    {
+    public override int Read(byte[] buffer, int offset, int count) {
         var len = _internalStream.Read(buffer, offset, count);
+        if (len == 0) return 0;    // EOS
         _position += len;
+        while (len < count) {
+            var l = _internalStream.Read(buffer, offset + len, count - len);
+            if (l == 0) return len;
+            len += l;
+            _position += l;
+        }
         return len;
         //var len = _internalStream.Read(buffer, offset, count);
         //_logger.Debug($"buffer size = {count} / read = {len}");
         //return len;
     }
 
-    public override long Seek(long offset, SeekOrigin origin)
-    {
+    public override long Seek(long offset, SeekOrigin origin) {
         _logger.Debug($"Seek: currentPosition={_position} / requested={offset}");
-        if (_internalStream.CanSeek)
-        {
+        if (_internalStream.CanSeek) {
             return _internalStream.Seek(offset, origin);
         }
 
         long seekTo = 0;
-        switch (origin)
-        {
+        switch (origin) {
             case SeekOrigin.Begin:
                 seekTo = offset;
                 break;
@@ -91,18 +90,15 @@ public class SeekableInputStream : Stream
                 break;
             case SeekOrigin.End:
                 var length = Length;
-                if (length < 0)
-                {
+                if (length < 0) {
                     throw new InvalidOperationException("End position is not undefined.");
                 }
                 seekTo = length;
                 break;
         }
         if (seekTo == _position) return seekTo;
-        if (seekTo < _position)
-        {
-            if (_reopenStream == null)
-            {
+        if (seekTo < _position) {
+            if (_reopenStream == null) {
                 throw new InvalidOperationException("cannot seek backword.");
             }
             _internalStream = _reopenStream(_internalStream);
@@ -114,25 +110,24 @@ public class SeekableInputStream : Stream
         return seekTo;
     }
 
-    private void Skip(long offset)
-    {
+    private void Skip(long offset) {
         if (offset == 0) return;
         if (offset < 0) throw new InvalidOperationException("offset must be positive.");
         var buffer = new byte[Math.Min(offset, BUFFER_SIZE)];
         long remain = offset;
-        while (remain > 0)
-        {
-            remain -= Read(buffer, 0, (int)Math.Min(remain, buffer.Length));
+        while (remain > 0) {
+            var len = _internalStream.Read(buffer, 0, (int)Math.Min(remain, buffer.Length));
+            if (len == 0) throw new InvalidOperationException("unexpected end of stream.");
+            _position += len;
+            remain -= len;
         }
     }
 
-    public override void SetLength(long value)
-    {
+    public override void SetLength(long value) {
         throw new NotSupportedException("cannot set length to readonly stream.");
     }
 
-    public override void Write(byte[] buffer, int offset, int count)
-    {
+    public override void Write(byte[] buffer, int offset, int count) {
         throw new NotSupportedException("cannot set length to readonly stream.");
     }
 
