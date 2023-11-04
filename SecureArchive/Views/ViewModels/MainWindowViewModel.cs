@@ -7,7 +7,7 @@ namespace SecureArchive.Views.ViewModels {
     internal class MainWindowViewModel {
         private IAppConfigService _appConfigService;
         private IPageService _pageService;
-        private string AppTitle => _appConfigService.AppTitle;
+        private string AppTitle => $"{_appConfigService.AppTitle} ({_appConfigService.AppVersion.ToString()})";
         public ReactivePropertySlim<string> Title { get; } = new("");
         public ReadOnlyReactivePropertySlim<bool> CanGoBack { get; }
         public ReadOnlyReactivePropertySlim<Visibility> GoBackVisibility { get; }

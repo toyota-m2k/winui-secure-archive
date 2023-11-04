@@ -28,8 +28,8 @@ public sealed partial class MainWindow : WindowEx, IMainFrameContract {
         this.InitializeComponent();
         
 
-        // Alt+Tab ‚Åƒ^ƒXƒNˆê——‚ğ•\¦‚µ‚½‚Æ‚«‚ÌƒAƒCƒRƒ“BBB
-        // csproj <ApplicationIcon> ‚ÆAAppWindow.SetIcon() ‚Ì—¼•û‚Åw’è‚µ‚È‚¢‚Æ³‚µ‚­•\¦‚³‚ê‚È‚¢B
+        // Alt+Tab ã§ã‚¿ã‚¹ã‚¯ä¸€è¦§ã‚’è¡¨ç¤ºã—ãŸã¨ãã®ã‚¢ã‚¤ã‚³ãƒ³ã€‚ã€‚ã€‚
+        // csproj <ApplicationIcon> ã¨ã€AppWindow.SetIcon() ã®ä¸¡æ–¹ã§æŒ‡å®šã—ãªã„ã¨æ­£ã—ãè¡¨ç¤ºã•ã‚Œãªã„ã€‚
         AppWindow.SetIcon(Path.Combine(AppContext.BaseDirectory, "Assets/WindowIcon.ico"));
 
         this.Title = "AppTitle/Text".GetLocalized();
@@ -37,7 +37,8 @@ public sealed partial class MainWindow : WindowEx, IMainFrameContract {
         // Custom Title Bar
         ExtendsContentIntoTitleBar = true;
         SetTitleBar(_appTitleBar);
-        //this.Content = RootFrame; <-- ‚±‚ê‚ÍƒGƒ‰[B‚Ç‚¤‚µ‚Ä‚à‚â‚é‚È‚çAˆê’UAContext=null ‚É‚µ‚Ä‚©‚ç‚â‚é‚±‚ÆB
+        //this.Content = RootFrame; <-- ã“ã‚Œã¯ã‚¨ãƒ©ãƒ¼ã€‚ã©ã†ã—ã¦ã‚‚ã‚„ã‚‹ãªã‚‰ã€ä¸€æ—¦ã€Context=null ã«ã—ã¦ã‹ã‚‰ã‚„ã‚‹ã“ã¨ã€‚
+
 
 
         Settings.ColorValuesChanged += Settings_ColorValuesChanged; // cannot use FrameworkElement.ActualThemeChanged event
@@ -51,6 +52,6 @@ public sealed partial class MainWindow : WindowEx, IMainFrameContract {
     private void OnActivated(object sender, WindowActivatedEventArgs args) {
         var resource = args.WindowActivationState == WindowActivationState.Deactivated ? "WindowCaptionForegroundDisabled" : "WindowCaptionForeground";
         _appTitleBar.TitleText.Foreground = (SolidColorBrush)App.Current.Resources[resource];
-        //TitleBarHelper.ApplySystemThemeToCaptionButtons();    ‚±‚±‚Å‚â‚é‚Æ–³ŒÀƒ‹[ƒv‚É‚È‚Á‚ÄƒXƒ^ƒbƒNƒI[ƒo[ƒtƒ[‚·‚é
+        //TitleBarHelper.ApplySystemThemeToCaptionButtons();    ã“ã“ã§ã‚„ã‚‹ã¨ç„¡é™ãƒ«ãƒ¼ãƒ—ã«ãªã£ã¦ã‚¹ã‚¿ãƒƒã‚¯ã‚ªãƒ¼ãƒãƒ¼ãƒ•ãƒ­ãƒ¼ã™ã‚‹
     }
 }
