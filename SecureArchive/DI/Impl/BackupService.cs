@@ -193,7 +193,7 @@ internal class BackupService : IBackupService {
                 //Debug.Assert(rawList.All((it) => remoteMap.ContainsKey(it.Id)));
 
                 var removedList = _secureStorageService.GetList(OwnerId, (it) => {
-                    return !remoteMap.ContainsKey(it.OriginalId);
+                    return !it.IsDeleted && !remoteMap.ContainsKey(it.OriginalId);
                 });
 
                 // 初期バージョンの不具合で、LastModifiedDate/CreationDate が 0 になっているものがある。
@@ -218,6 +218,11 @@ internal class BackupService : IBackupService {
                  */
                 var newList = rawList.Where(it => it.Cloud!=(int)CloudState.Cloud && !_secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToList();
                 if(newList.Count==0 && removedList.Count==0) {
+                    await MessageBoxBuilder.Create(App.MainWindow)
+                        .SetTitle("Backup")
+                        .SetMessage("Everything is up to date.")
+                        .AddButton("OK")
+                        .ShowAsync();
                     return false;
                 }
 
