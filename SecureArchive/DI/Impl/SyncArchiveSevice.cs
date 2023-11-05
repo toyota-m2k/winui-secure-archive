@@ -383,7 +383,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     counter++;
                     _logger.Debug($"Delete:  [{counter}/{deletedFile.Count}] {entry.Name}");
                     countProgress(counter, deletedFile.Count);
-                    //await _secureStorageService.DeleteEntry(entry);
+                    await _secureStorageService.DeleteEntry(entry);
                 }
 
                 return true;
