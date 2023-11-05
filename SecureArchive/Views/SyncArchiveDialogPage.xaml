@@ -23,7 +23,7 @@
 
             <StackPanel Orientation="Horizontal" Spacing="20" HorizontalAlignment="Center" Visibility="{x:Bind ViewModel.Running.Value, Converter={StaticResource NegBoolVisibilityConverter}, Mode=OneWay}">
                 <Button Width="120" Content="Start" Command="{x:Bind ViewModel.StartCommand}"/>
-                <Button Width="120" Content="Cancel" Command="{x:Bind ViewModel.CloseCommand}"/>
+                <Button Width="120" Content="Cancel" Command="{x:Bind ViewModel.CancelCommand}"/>
             </StackPanel>
 
             <StackPanel x:Name="ProgressPanel" Orientation="Vertical" HorizontalAlignment="Stretch" Spacing="10" Visibility="{x:Bind ViewModel.Running.Value, Converter={StaticResource BoolVisibilityConverter}, Mode=OneWay}">

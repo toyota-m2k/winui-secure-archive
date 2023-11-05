@@ -17,9 +17,10 @@ public class FileEntry {
             Type TEXT NOT NULL,
             Path TEXT NOT NULL,
             RegisteredDate INTEGER DEFAULT 0,
-            OriginalDate INTEGER DEFAULT 0,
+            LastModifiedDate INTEGER DEFAULT 0,
             CreationDate INTEGER DEFAULT 0,
-            MetaInfo TEXT
+            MetaInfo TEXT,
+            Deleted INTEGER DEFAULT 0
         )",
         // FOREIGN KEY(OwnerId) REFERENCES t_owner_info(OwnerId)
     };
@@ -39,13 +40,17 @@ public class FileEntry {
     public string Path { get; set; } = string.Empty;
 
     public long RegisteredDate { get; set; }
-    public long OriginalDate { get; set; }
+    public long LastModifiedDate { get; set; }
     public long CreationDate { get; set; }
+    public long Deleted { get; set; }
 
     //[ForeignKey("OwnerId")]
     //public OwnerInfo OwnerInfo { get; set; } = new OwnerInfo();
     [NotMapped]
     public OwnerInfo? OwnerInfo { get; set; } = null;
+
+    [NotMapped]
+    public bool IsDeleted => Deleted != 0;
 
     public Dictionary<string,object> ToDictionary() {
         return new Dictionary<string, object>() {
@@ -57,9 +62,10 @@ public class FileEntry {
             { "type", Type },
             //{ "path", Path },
             { "registeredDate", RegisteredDate },
-            { "originalDate", OriginalDate },
+            { "lastModifiedDate", LastModifiedDate },
             { "creationDate", CreationDate },
             { "metaInfo", MetaInfo ?? "" },
+            { "deleted", Deleted },
         };
     }
 
@@ -73,9 +79,10 @@ public class FileEntry {
             Type = dict.GetStringValue("type", ""),
             //Path = (string)dict["path"],
             RegisteredDate = dict.GetLongValue("registeredDate"),
-            OriginalDate = dict.GetLongValue("originalDate"),
+            LastModifiedDate = dict.GetLongValue("lastModifiedDate"),
             CreationDate = dict.GetLongValue("creationDate"),
             MetaInfo = dict.GetStringValue("metaInfo"),
+            Deleted = dict.GetIntValue("deleted")
         };
     }
 }

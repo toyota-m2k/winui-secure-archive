@@ -7,6 +7,7 @@ using SecureArchive.Utils;
 using SecureArchive.Views;
 using System.Net;
 using System.Net.Http.Headers;
+using System.Net.PeerToPeer.Collaboration;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -185,7 +186,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 var content = new MultipartFormDataContent {
                     { new StringContent(entry.OwnerId), "OwnerId" },
                     { new StringContent(entry.OriginalId), "OriginalId" },
-                    { new StringContent($"{entry.OriginalDate}"), "FileDate" },
+                    { new StringContent($"{entry.LastModifiedDate}"), "FileDate" },
                     { new StringContent($"{entry.CreationDate}"), "CreationDate" },
                     { new StringContent(entry.MetaInfo ?? ""), "MetaInfo" },
                     { body, "File", entry.Name }
@@ -221,7 +222,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                         ct.ThrowIfCancellationRequested();
                         int len = await inStream.ReadAsync(buff, 0, BUFF_SIZE, ct);
                         if (len == 0) {
-                            entryCreator.Complete(entry.Name, entry.Size, entry.Type, entry.OriginalDate, entry.CreationDate, entry.MetaInfo);
+                            entryCreator.Complete(entry.Name, entry.Size, entry.Type, entry.LastModifiedDate, entry.CreationDate, entry.MetaInfo);
                             break;
                         }
                         recv += len;
@@ -243,6 +244,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     private struct Pair {
         public FileEntry peer;
         public FileEntry my;
+        public bool IsDeleted => peer.IsDeleted || my.IsDeleted;
     }
 
     WeakReference<XamlRoot>? Parent=null;
@@ -310,27 +312,29 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     return false;
                 }
                 var comparator = new FileEntryComparator();
-                var peerNewFile = peerList.Except(myList, comparator).ToList();
-                var myNewFile = myList.Except(peerList, comparator).ToList();
+                var peerNewFile = peerList.Except(myList, comparator).Where(it=>!it.IsDeleted).ToList();
+                var myNewFile = myList.Except(peerList, comparator).Where(it=>!it.IsDeleted).ToList();
                 var myCommonFileDic = myList.Intersect(peerList, comparator).Aggregate(new Dictionary<string, FileEntry>(), (dic, entry) => {
                     try {
                         dic.Add(entry.Name + entry.OwnerId, entry); return dic;
-                    } catch(Exception ex) {
+                    } catch(Exception) {
+                        // entry.Name に重複があると、このエラーになる。一時、SecureCameraの不具合で、Idがつけ変わってしまうケースがあって、これが発生した。
                         _logger.Error($"{entry.Name} {entry.OwnerId}");
                         var x = myList.Where(it=>it.Name== entry.Name).ToList();
                         var y = peerList.Where(it => it.Name == entry.Name).ToList();
                         x.ForEach(it => _logger.Error($"{it.Id}"));
                         y.ForEach(it => _logger.Error($"{it.Id}"));
-                        throw ex;
+                        throw;
                     }
                 });
-                var commonPair = peerList.Intersect(myList, comparator).Select(it => new Pair { peer = it, my = myCommonFileDic[it.Name + it.OwnerId] }).Where(it => it.peer.OriginalDate != it.my.OriginalDate).ToList();
+                var commonPair = peerList.Intersect(myList, comparator).Select(it => new Pair { peer = it, my = myCommonFileDic[it.Name + it.OwnerId] }).Where(it => !it.IsDeleted && it.peer.LastModifiedDate != it.my.LastModifiedDate).ToList();
 
                 //var peerCommonFile = peerList.Intersect(myList, comparator).ToList();
-                
-                //var peerUpdateFile = peerCommonFile.Where(it => it.OriginalDate > myCommonFileDic[it.Name+it.OwnerId].OriginalDate);
-                //var myUpdateFile = peerCommonFile.Where(it=> it.OriginalDate < myCommonFileDic[it.Name+it.OwnerId].OriginalDate).Select(it=>myCommonFileDic[it.Name+it.OwnerId]);
 
+                //var peerUpdateFile = peerCommonFile.Where(it => it.LastModifiedDate > myCommonFileDic[it.Name+it.OwnerId].LastModifiedDate);
+                //var myUpdateFile = peerCommonFile.Where(it=> it.LastModifiedDate < myCommonFileDic[it.Name+it.OwnerId].LastModifiedDate).Select(it=>myCommonFileDic[it.Name+it.OwnerId]);
+
+                // リモート側に新しく追加されたファイルをダウンロード
                 int counter = 0;
                 foreach (var entry in peerNewFile) {
                     ct.ThrowIfCancellationRequested();
@@ -340,16 +344,18 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     await DownloadEntry(entry, byteProgress, ct);
                 }
                 
+                // リモート側の更新日時が新しいものをダウンロードして上書き
                 counter = 0;
-                var peerUpdates = commonPair.Where(it => it.peer.OriginalDate > it.my.OriginalDate).ToList();
+                var peerUpdates = commonPair.Where(it => it.peer.LastModifiedDate > it.my.LastModifiedDate).ToList();
                 foreach (var pair in peerUpdates) {
                     ct.ThrowIfCancellationRequested();
                     counter++;
-                    _logger.Debug($"Download (UPD):  [{counter}/{peerUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.OriginalDate)} <-- {new DateTime(pair.peer.OriginalDate)}");
+                    _logger.Debug($"Download (UPD):  [{counter}/{peerUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.LastModifiedDate)} <-- {new DateTime(pair.peer.LastModifiedDate)}");
                     countProgress(counter, peerUpdates.Count);
                     await DownloadEntry(pair.peer, byteProgress, ct);
                 }
 
+                // ローカル側に新しく追加されたファイルをアップロード
                 counter = 0;
                 foreach (var entry in myNewFile) {
                     ct.ThrowIfCancellationRequested();
@@ -358,15 +364,28 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     countProgress(counter, myNewFile.Count);
                     await UploadEntry(entry, byteProgress, ct);
                 }
+                // ローカル側の更新日時が新しいものをアップロード
                 counter = 0;
-                var myUpdates = commonPair.Where(it => it.peer.OriginalDate > it.my.OriginalDate).ToList();
+                var myUpdates = commonPair.Where(it => it.peer.LastModifiedDate > it.my.LastModifiedDate).ToList();
                 foreach (var pair in myUpdates) {
                     ct.ThrowIfCancellationRequested();
                     counter++;
-                    _logger.Debug($"Upload (UPD):  [{counter}/{myUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.OriginalDate)} --> {new DateTime(pair.peer.OriginalDate)}");
+                    _logger.Debug($"Upload (UPD):  [{counter}/{myUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.LastModifiedDate)} --> {new DateTime(pair.peer.LastModifiedDate)}");
                     countProgress(counter, myUpdates.Count);
                     await UploadEntry(pair.my, byteProgress, ct);
                 }
+
+                // リモート側で削除されたファイルをローカルからも削除
+                counter = 0;
+                var deletedFile = myList.Where(it => !it.IsDeleted).Intersect(peerList.Where(it => it.IsDeleted), comparator).ToList();
+                foreach(var entry in deletedFile) {
+                    ct.ThrowIfCancellationRequested();
+                    counter++;
+                    _logger.Debug($"Delete:  [{counter}/{deletedFile.Count}] {entry.Name}");
+                    countProgress(counter, deletedFile.Count);
+                    await _secureStorageService.DeleteEntry(entry);
+                }
+
                 return true;
             }
             catch (Exception ex) {

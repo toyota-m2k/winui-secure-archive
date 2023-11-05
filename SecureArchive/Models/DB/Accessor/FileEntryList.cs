@@ -14,10 +14,10 @@ public interface IFileEntryList {
 }
 
 public interface IMutableFileEntryList : IFileEntryList {
-    FileEntry Add(string ownerId, string name, long size, string type, string path, long originalDate, long creationDate, string originalId, string? metaInfo = null);
-    FileEntry Update(string ownerId, string name, long size, string type_, string path, long originalDate, string originalId, string? metaInfo = null);
-    FileEntry AddOrUpdate(string ownerId, string name, long size, string type_, string path, long originalDate, long creationDate, string originalId, string? metaInfo = null); 
-    void Remove(FileEntry entry);
+    FileEntry Add(string ownerId, string name, long size, string type, string path, long lastModifiedDate, long creationDate, string originalId, string? metaInfo = null);
+    FileEntry Update(string ownerId, string name, long size, string type_, string path, long lastModifiedDate, string originalId, string? metaInfo = null);
+    FileEntry AddOrUpdate(string ownerId, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, string? metaInfo = null); 
+    void Remove(FileEntry entry, bool deleteDbEntry = false);
     //void Remove(Func<FileEntry, bool> predicate);
 }
 
@@ -119,15 +119,15 @@ public class FileEntryList : IMutableFileEntryList {
         }
     }
 
-    public FileEntry AddOrUpdate(string ownerId, string name, long size, string type_, string path, long originalDate, long creationDate, string originalId, string? metaInfo = null) {
+    public FileEntry AddOrUpdate(string ownerId, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, string? metaInfo = null) {
         if (GetByOriginalId(ownerId, originalId) != null) {
-            return Update(ownerId, name, size, type_, path, originalDate, originalId, metaInfo);
+            return Update(ownerId, name, size, type_, path, lastModifiedDate, originalId, metaInfo);
         } else {
-            return Add(ownerId, name, size, type_, path, originalDate, creationDate, originalId, metaInfo);
+            return Add(ownerId, name, size, type_, path, lastModifiedDate, creationDate, originalId, metaInfo);
         }
     }
     
-    public FileEntry Add(string ownerId, string name, long size, string type_, string path, long originalDate, long creationDate, string originalId, string? metaInfo = null) {
+    public FileEntry Add(string ownerId, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, string? metaInfo = null) {
         if(GetByOriginalId(ownerId, originalId) != null) {
             throw new ArgumentException($"already exists: {ownerId}/{originalId}");
         }
@@ -137,14 +137,14 @@ public class FileEntryList : IMutableFileEntryList {
         }
         FileEntry entry;
         lock (_connector) {
-            entry = new FileEntry { OwnerId = ownerId, OriginalId = originalId, Name = name, Size = size, Type = type, Path = path, MetaInfo = metaInfo, OriginalDate = originalDate, CreationDate = creationDate, RegisteredDate = DateTime.UtcNow.Ticks };
+            entry = new FileEntry { OwnerId = ownerId, OriginalId = originalId, Name = name, Size = size, Type = type, Path = path, MetaInfo = metaInfo, LastModifiedDate = lastModifiedDate, CreationDate = creationDate, RegisteredDate = DateTime.UtcNow.Ticks };
             _entries.Add(entry);
         }
         _changes.OnNext(DataChangeInfo.Add(ResolveOwnerInfo(entry)));
         return entry;
     }
 
-    public FileEntry Update(string ownerId, string name, long size, string type_, string path, long originalDate, string originalId, string? metaInfo = null) {
+    public FileEntry Update(string ownerId, string name, long size, string type_, string path, long lastModifiedDate, string originalId, string? metaInfo = null) {
         var entry = GetByOriginalId(ownerId, originalId);
         if ( entry== null) {
             throw new ArgumentException($"no entry: {ownerId}/{originalId}");
@@ -160,7 +160,7 @@ public class FileEntryList : IMutableFileEntryList {
             entry.Size = size;
             entry.Type = type;
             entry.RegisteredDate = DateTime.UtcNow.Ticks;
-            entry.OriginalDate = originalDate;
+            entry.LastModifiedDate = lastModifiedDate;
             entry.OriginalId = originalId;
             entry.MetaInfo = metaInfo;
             _entries.Update(entry);
@@ -170,9 +170,16 @@ public class FileEntryList : IMutableFileEntryList {
 
     }
 
-    public void Remove(FileEntry entry) {
+    public void Remove(FileEntry entry, bool deleteDbEntry) {
         lock (_connector) {
-            _entries.Remove(entry);
+            if (deleteDbEntry) {
+                _entries.Remove(entry);
+            } else {
+                if (entry.Deleted == 0) {
+                    entry.Deleted = 1;
+                    _entries.Update(entry);
+                }
+            }
         }
         _changes.OnNext(DataChangeInfo.Remove(entry));
     }

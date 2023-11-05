@@ -16,11 +16,13 @@ internal interface IReadonlyUserSettingsAccessor {
     string? DataFolder { get; }
     int PortNo { get; }
     bool ServerAutoStart { get; }
+    string? PreviousPeerAddress { get; }
 }
 internal interface IUserSettingsAccessor : IReadonlyUserSettingsAccessor {
     new string? DataFolder { get; set; }
     new int PortNo { get; set; }
     new bool ServerAutoStart { get; set; }
+    new string? PreviousPeerAddress { get; set; }
 }
 
 internal interface IUserSettingsService {
