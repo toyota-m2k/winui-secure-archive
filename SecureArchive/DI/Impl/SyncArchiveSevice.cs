@@ -312,7 +312,18 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 var comparator = new FileEntryComparator();
                 var peerNewFile = peerList.Except(myList, comparator).ToList();
                 var myNewFile = myList.Except(peerList, comparator).ToList();
-                var myCommonFileDic = myList.Intersect(peerList, comparator).Aggregate(new Dictionary<string, FileEntry>(), (dic, entry) => { dic.Add(entry.Name+entry.OwnerId, entry); return dic; });
+                var myCommonFileDic = myList.Intersect(peerList, comparator).Aggregate(new Dictionary<string, FileEntry>(), (dic, entry) => {
+                    try {
+                        dic.Add(entry.Name + entry.OwnerId, entry); return dic;
+                    } catch(Exception ex) {
+                        _logger.Error($"{entry.Name} {entry.OwnerId}");
+                        var x = myList.Where(it=>it.Name== entry.Name).ToList();
+                        var y = peerList.Where(it => it.Name == entry.Name).ToList();
+                        x.ForEach(it => _logger.Error($"{it.Id}"));
+                        y.ForEach(it => _logger.Error($"{it.Id}"));
+                        throw ex;
+                    }
+                });
                 var commonPair = peerList.Intersect(myList, comparator).Select(it => new Pair { peer = it, my = myCommonFileDic[it.Name + it.OwnerId] }).Where(it => it.peer.OriginalDate != it.my.OriginalDate).ToList();
 
                 //var peerCommonFile = peerList.Intersect(myList, comparator).ToList();

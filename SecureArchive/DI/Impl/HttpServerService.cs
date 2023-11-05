@@ -497,6 +497,15 @@ internal class HttpServerService : IHttpServreService {
                     };
                     return TextHttpResponse.FromJson(request, dic);
                 }),
+            Route.get(
+                name: "category",   // Categoryは非サポートだが、BooDroidにバグがあって、これを返さないと死んでしまう。
+                regex: @"/category",
+                process: (request) => {
+                    var dic = new Dictionary<string, object>(){
+                        { "cmd", "category"},
+                    };
+                    return TextHttpResponse.FromJson(request, dic);
+                }),
             Route.put(
                 name:"register owner",
                 regex: @"/owner",
