@@ -139,7 +139,7 @@ namespace SecureArchive.Views.ViewModels {
 
         private void AddItem(FileEntry entry) {
             var list = FileList.Value;
-            var next = list.FirstOrDefault((it) => it.OriginalDate > entry.OriginalDate);
+            var next = list.FirstOrDefault((it) => it.LastModifiedDate > entry.LastModifiedDate);
             if(next==null) {
                 list.Add(entry);
             } else {

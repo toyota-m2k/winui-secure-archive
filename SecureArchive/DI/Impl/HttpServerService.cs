@@ -107,9 +107,9 @@ internal class HttpServerService : IHttpServreService {
                 return;
             }
             var name = string.IsNullOrEmpty(multipartBody.Filename) ? multipartBody.Name : multipartBody.Filename;
-            long originalDate = 0;
+            long lastModifiedDate = 0;
             if (Parameters.TryGetValue("FileDate", out var fileDateText)) {
-                originalDate = Convert.ToInt64(fileDateText);
+                lastModifiedDate = Convert.ToInt64(fileDateText);
             }
             long creationDate = 0;
             if (Parameters.TryGetValue("CreationDate", out var creationDateText)) {
@@ -119,7 +119,7 @@ internal class HttpServerService : IHttpServreService {
             if (!Parameters.TryGetValue("MetaInfo", out var metaInfo)) {
                 metaInfo = null;
             }
-            _entryCreator?.Complete(name, multipartBody.ContentLength, Path.GetExtension(name), originalDate, creationDate, metaInfo);
+            _entryCreator?.Complete(name, multipartBody.ContentLength, Path.GetExtension(name), lastModifiedDate, creationDate, metaInfo);
             Dispose();
         }
 
@@ -395,6 +395,7 @@ internal class HttpServerService : IHttpServreService {
                     var type = p.GetValue("type")?.ToLower() ?? "";
                     var list = _databaseService.Entries.List(
                         predicate: (it) => {
+                            if(!sync && it.IsDeleted) return false;
                             switch(type) {
                                 case "all": return true;
                                 case "photo": return it.Type == "jpg" || it.Type == "png";

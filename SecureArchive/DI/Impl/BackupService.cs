@@ -16,7 +16,7 @@ internal class RemoteItem {
     [JsonProperty("size")]
     public long Size { get; set; }
     [JsonProperty("date")]
-    public long Date { get; set; }              // ファイルのタイムスタンプ --> OriginalDate
+    public long Date { get; set; }              // ファイルのタイムスタンプ --> LastModifiedDate
     [JsonProperty("creationDate")]
     public long CreationDate { get; set; }      // ファイル名から取り出される日付
     [JsonProperty("type")]
@@ -196,15 +196,15 @@ internal class BackupService : IBackupService {
                     return !remoteMap.ContainsKey(it.OriginalId);
                 });
 
-                // 初期バージョンの不具合で、OriginalDate/CreationDate が 0 になっているものがある。
+                // 初期バージョンの不具合で、LastModifiedDate/CreationDate が 0 になっているものがある。
                 _databaseService.EditEntry((entries) => {
-                    var list = entries.List(e => e.OriginalDate == 0 || e.CreationDate == 0, false);
+                    var list = entries.List(e => e.LastModifiedDate == 0 || e.CreationDate == 0, false);
                     if(list==null || list.FirstOrDefault()==null) return false;
                     bool modified = false;
                     foreach(var e in list) {
                         var item = remoteMap[e.OriginalId];
-                        if (item != null && (e.OriginalDate!=item.Date || e.CreationDate!=item.Date)) {
-                            e.OriginalDate = item.Date;
+                        if (item != null && (e.LastModifiedDate!=item.Date || e.CreationDate!=item.Date)) {
+                            e.LastModifiedDate = item.Date;
                             e.CreationDate = item.CreationDate;
                             modified = true;
                         }
@@ -399,6 +399,6 @@ internal class BackupService : IBackupService {
     }
 
     public Task<bool> DeleteBackupEntry(FileEntry entry) {
-        return _secureStorageService.DeleteEntry(entry);
+        return _secureStorageService.DeleteEntry(entry, deleteDbEntry:false);
     }
 }

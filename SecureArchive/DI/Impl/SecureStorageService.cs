@@ -38,7 +38,7 @@ internal class SecureStorageService : ISecureStorageService {
     public bool IsRegistered(string ownerId, string originalId, long lastModified) {
         var item = _databaseService.Entries.GetByOriginalId(ownerId, originalId);
         if(item==null) return false;
-        return item.OriginalDate >= lastModified;
+        return item.LastModifiedDate >= lastModified;
     }
 
     public IList<FileEntry> GetList(string ownerId, Func<FileEntry, bool>? predicate) {
@@ -56,7 +56,7 @@ internal class SecureStorageService : ISecureStorageService {
         }
     }
 
-    public async Task<FileEntry?> Register(Stream inStream, string ownerId, string name, long size, string type, long originalDate, long creationDate, string originalId, string? metaInfo, ProgressProc? progress) {
+    public async Task<FileEntry?> Register(Stream inStream, string ownerId, string name, long size, string type, long lastModifiedDate, long creationDate, string originalId, string? metaInfo, ProgressProc? progress) {
         var outFolder = await _fileStoreService.GetFolder();
         var cryptedFilePath = Path.Combine(outFolder!, Guid.NewGuid().ToString());
         try {
@@ -65,7 +65,7 @@ internal class SecureStorageService : ISecureStorageService {
             }
             FileEntry entry = null!;
             _databaseService.EditEntry((entryList) => {
-                entry = entryList.Add(ownerId, name, size, type, cryptedFilePath, originalDate, creationDate, originalId, metaInfo);
+                entry = entryList.Add(ownerId, name, size, type, cryptedFilePath, lastModifiedDate, creationDate, originalId, metaInfo);
                 return true;
             });
             return entry;
@@ -79,7 +79,7 @@ internal class SecureStorageService : ISecureStorageService {
         }
     }
 
-    //public async Task<FileEntry?> CreateEntry(Func<Stream, bool> writer, string ownerId, string name, long size, string type, long originalDate, string? originalId, string? metaInfo) {
+    //public async Task<FileEntry?> CreateEntry(Func<Stream, bool> writer, string ownerId, string name, long size, string type, long lastModifiedDate, string? originalId, string? metaInfo) {
     //    var outFolder = await _fileStoreService.GetFolder();
     //    var cryptedFilePath = Path.Combine(outFolder!, Guid.NewGuid().ToString());
     //    try {
@@ -90,7 +90,7 @@ internal class SecureStorageService : ISecureStorageService {
     //        }
     //        FileEntry? entry = null;
     //        _databaseService.EditEntry((entryList) => {
-    //            entry = entryList.Add(ownerId, name, size, type, cryptedFilePath, originalDate, originalId, metaInfo);
+    //            entry = entryList.Add(ownerId, name, size, type, cryptedFilePath, lastModifiedDate, originalId, metaInfo);
     //            return true;
     //        });
     //        return entry;
@@ -129,7 +129,7 @@ internal class SecureStorageService : ISecureStorageService {
             
         }
 
-        public FileEntry Complete(string name, long size, string type_, long originalDate, long creationDate, string? metaInfo) {
+        public FileEntry Complete(string name, long size, string type_, long lastModifiedDate, long creationDate, string? metaInfo) {
             _completed = true;
             _cryptoStream.FlushFinalBlock();
             _cryptoStream.Flush();
@@ -150,13 +150,13 @@ internal class SecureStorageService : ISecureStorageService {
                     entry.Name = name;
                     entry.Size = size;
                     entry.Type = type;
-                    entry.OriginalDate = originalDate;
+                    entry.LastModifiedDate = lastModifiedDate;
                     entry.MetaInfo = metaInfo;
                     return true;
                 }
                 else {
                     // New entry.
-                    entry = entryList.Add(_ownerId, name, size, type, _cryptedFilePath, originalDate, creationDate, _originalId, metaInfo);
+                    entry = entryList.Add(_ownerId, name, size, type, _cryptedFilePath, lastModifiedDate, creationDate, _originalId, metaInfo);
                     return true;
                 }
             });
@@ -299,12 +299,12 @@ internal class SecureStorageService : ISecureStorageService {
         });
     }
 
-    public async Task<bool> DeleteEntry(FileEntry entry) {
+    public async Task<bool> DeleteEntry(FileEntry entry, bool deleteDbEntry) {
         return await Task.Run(() => {
             try {
                 File.Delete(entry.Path);
                 _databaseService.EditEntry(entries => {
-                    entries.Remove(entry);
+                    entries.Remove(entry, deleteDbEntry);
                     return true;
                 });
                 return true;
