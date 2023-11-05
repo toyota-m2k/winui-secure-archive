@@ -377,7 +377,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
                 // リモート側で削除されたファイルをローカルからも削除
                 counter = 0;
-                var deletedFile = myList.Where(it => !it.IsDeleted).Intersect(peerList.Where(it => it.IsDeleted)).ToList();
+                var deletedFile = myList.Where(it => !it.IsDeleted).Intersect(peerList.Where(it => it.IsDeleted), comparator).ToList();
                 foreach(var entry in deletedFile) {
                     ct.ThrowIfCancellationRequested();
                     counter++;

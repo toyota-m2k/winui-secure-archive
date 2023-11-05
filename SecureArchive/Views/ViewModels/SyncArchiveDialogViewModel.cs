@@ -15,6 +15,7 @@ namespace SecureArchive.Views.ViewModels;
 internal class SyncArchiveDialogViewModel {
     ISyncArchiveService _syncArchiveService;
     IMainThreadService _mainThreadService;
+    IUserSettingsService _userSettingsService;
     ILogger _logger;
 
     public ReactivePropertySlim<bool> Running { get; } = new(false);
@@ -35,9 +36,10 @@ internal class SyncArchiveDialogViewModel {
     public ReactiveCommandSlim CancelCommand { get; } = new();
     public ReactiveCommandSlim CloseCommand { get; } = new();
 
-    public SyncArchiveDialogViewModel(ISyncArchiveService syncArchiveService, IMainThreadService mainThreadService, ILoggerFactory loggerFactory) { 
+    public SyncArchiveDialogViewModel(ISyncArchiveService syncArchiveService, IMainThreadService mainThreadService, IUserSettingsService userSettingsService, ILoggerFactory loggerFactory) { 
         _syncArchiveService = syncArchiveService;
         _mainThreadService = mainThreadService;
+        _userSettingsService = userSettingsService;
         _logger = loggerFactory.CreateLogger<SyncArchiveDialogViewModel>();
 
         CanStart = PeerAddress.Select(it => it.IsNotEmpty()).ToReadOnlyReactivePropertySlim();
@@ -45,6 +47,25 @@ internal class SyncArchiveDialogViewModel {
         SizeProgress = CurrentBytes.CombineLatest(TotalLength, (current, total) => total > 0 ? (double)current * 100.0 / (double)total : 0).ToReadOnlyReactivePropertySlim();
         HasError = ErrorMessage.Select(it => it.IsNotEmpty()).ToReadOnlyReactivePropertySlim();
         CancelCommand.Subscribe(CancelSync);
+        initPeerAddress();
+    }
+
+    private async void initPeerAddress() {
+        var s = await _userSettingsService.GetAsync();
+        var addr = s.PreviousPeerAddress;
+        if (!string.IsNullOrEmpty(addr)) {
+            PeerAddress.Value = addr;
+        }
+    }
+    private async void updatePeerAddress() {
+        var addr = PeerAddress.Value;
+        if (string.IsNullOrEmpty(addr)) return;
+        await _userSettingsService.EditAsync(edit => {
+            if (edit.PreviousPeerAddress != addr) {
+                edit.PreviousPeerAddress = addr;
+                return true;
+            } else { return false; }
+        });
     }
 
     private WeakReference<XamlRoot> Parent { get; set; } = null!;
@@ -54,6 +75,7 @@ internal class SyncArchiveDialogViewModel {
     }
 
     public async void StartSync(Page page) {
+        updatePeerAddress();
         if (CanStart.Value && !Running.Value) {
             ErrorMessage.Value = string.Empty;
             ProgressMessage.Value = string.Empty;
@@ -70,7 +92,9 @@ internal class SyncArchiveDialogViewModel {
         }
     }
     private void CancelSync() {
+        updatePeerAddress();
         _syncArchiveService.Cancel();
+        CloseCommand.Execute();
     }
 
     private void ErrorMessageProc(string message, bool fatal) {

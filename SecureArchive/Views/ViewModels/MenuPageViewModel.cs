@@ -13,7 +13,7 @@ namespace SecureArchive.Views.ViewModels {
         public ReactiveCommandSlim ListCommand { get; } = new ReactiveCommandSlim();
         public ReactiveCommandSlim SettingsCommand { get; } = new ReactiveCommandSlim();
         public ReactiveCommandSlim MirrorCommand { get; } = new ReactiveCommandSlim();
-        public ReactiveCommandSlim RepairCommand { get; } = new ReactiveCommandSlim();
+        //public ReactiveCommandSlim RepairCommand { get; } = new ReactiveCommandSlim();
         public ReactivePropertySlim<bool> IsServerRunning { get; } = new ReactivePropertySlim<bool>(false);
 
         public MenuPageViewModel(
