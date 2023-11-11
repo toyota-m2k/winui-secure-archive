@@ -15,6 +15,7 @@
 	<PlatformTarget>x64</PlatformTarget>
 	<Nullable>enable</Nullable>
 	<ImplicitUsings>enable</ImplicitUsings>
+	<Version>1.1.0.0</Version>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Views\BackupDialogPage.xaml" />
