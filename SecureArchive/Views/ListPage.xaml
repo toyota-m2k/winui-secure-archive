@@ -17,9 +17,11 @@
     <Grid>
         <Grid.Resources>
             <DataTemplate x:Key="FileEntryListItem" x:DataType="data:FileEntry">
-                <StackPanel Orientation="Vertical">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="{x:Bind OwnerInfo.Name}" Width="100"/>
+                    <TextBlock Text="{x:Bind Rating}" Width="20"/>
+                    <TextBlock Text="{x:Bind Mark}" Width="20"/>
                     <TextBlock Text="{x:Bind Name}"/>
-                    <TextBlock Text="{x:Bind OwnerInfo.Name}"/>
                 </StackPanel>
             </DataTemplate>
         </Grid.Resources>
