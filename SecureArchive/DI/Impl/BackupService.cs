@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using SecureArchive.Models.DB;
+using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using SecureArchive.Views;
 using System.Diagnostics;
@@ -25,6 +26,8 @@ internal class RemoteItem {
     public long Duration { get; set; }
     [JsonProperty("cloud")]
     public long Cloud { get; set; } = 0;
+    [JsonProperty("attrDate")]
+    public long ExtAttrDate { get; set; } = 0;
 
     [JsonIgnore]
     public string UrlType => (Type == "mp4" || Type == ".mp4") ? "video" : "photo";
@@ -93,6 +96,7 @@ internal class BackupService : IBackupService {
     //public IObservable<Status> Executing => _executing;
     public IList<RemoteItem> RemoteNewItems { get; private set; } = null!;
     public IList<FileEntry> RemoteRemovedItems { get; private set; } = null!;
+    public IList<FileEntry> RemoteModifiedItems { get; private set; } = null!;
 
 
     //public IObservable<RemoteItem?> CurrentItem => _currentItem;
@@ -157,6 +161,8 @@ internal class BackupService : IBackupService {
 
     private void Reset() {
         RemoteNewItems = null!;
+        RemoteRemovedItems = null!;
+        RemoteModifiedItems = null!;
     }
 
     enum CloudState {
@@ -214,10 +220,21 @@ internal class BackupService : IBackupService {
 
 
                 /**
+                 * リモートで変更されたファイルのリスト
+                 */
+                var modifiedList = _secureStorageService.GetList(OwnerId, (it) => {
+                    return !it.IsDeleted && remoteMap.ContainsKey(it.OriginalId) && it.ExtAttrDate != remoteMap[it.OriginalId].ExtAttrDate;
+                });
+
+                /**
                  * リモート側で追加または更新されたファイルのリスト
                  */
                 var newList = rawList.Where(it => it.Cloud!=(int)CloudState.Cloud && !_secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToList();
-                if(newList.Count==0 && removedList.Count==0) {
+
+                /**
+                 * 変更がなければメッセージを表示して終了
+                 */
+                if(newList.Count==0 && removedList.Count==0 && modifiedList.Count==0) {
                     await MessageBoxBuilder.Create(App.MainWindow)
                         .SetTitle("Backup")
                         .SetMessage("Everything is up to date.")
@@ -225,6 +242,7 @@ internal class BackupService : IBackupService {
                         .ShowAsync();
                     return false;
                 }
+
 
                 //foreach (var f in newList) {
                 //    _logger.Debug($"Appending: {f.Id} - {f.Name}");
@@ -235,6 +253,7 @@ internal class BackupService : IBackupService {
 
                 RemoteNewItems = newList;
                 RemoteRemovedItems = removedList;
+                RemoteModifiedItems = modifiedList;
                 await _mainThreadService.Run(async () => {
                     if (newList.Count > 0) {
                         await CustomDialogBuilder<BackupDialogPage, bool>
@@ -247,6 +266,12 @@ internal class BackupService : IBackupService {
                         await CustomDialogBuilder<DeleteBackupDialogPage, bool>
                             .Create(_pageService.CurrentPage!.XamlRoot, new DeleteBackupDialogPage())
                             .SetTitle("Delete Files Removed on the Device")
+                            .ShowAsync();
+                    }
+                    if (modifiedList.Count > 0 ) {
+                        await CustomDialogBuilder<UpdateBackupDialogPage, bool>
+                            .Create(_pageService.CurrentPage!.XamlRoot, new UpdateBackupDialogPage())
+                            .SetTitle("Update Files Modified on the Device")
                             .ShowAsync();
                     }
 
@@ -363,6 +388,9 @@ internal class BackupService : IBackupService {
         var url = $"http://{Address}/{item.UrlType}?id={item.Id}&auth={Token}";
         try {
             await Task.Delay(500);          // これを入れないと、Pixel3 でエラーになる。
+            var extAttr = await GetExtAttributes(item.Id, ct);
+            if (extAttr == null) return false;
+
             using (var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
                 if (!response.IsSuccessStatusCode) return false;
                 using (var content = response.Content)
@@ -378,7 +406,7 @@ internal class BackupService : IBackupService {
                         int len = await inStream.ReadAsync(buff, 0, BUFF_SIZE, ct);
                         if (len == 0) {
                             if (total == 0L || total == recv) {
-                                entryCreator.Complete(item.Name, total!=0L ? total : item.Size, item.Type, item.Date, item.CreationDate, null);
+                                entryCreator.Complete(item.Name, total!=0L ? total : item.Size, item.Type, item.Date, item.CreationDate, null, extAttr);
                                 ok = true;
                             } else {
                                 // 受信したデータファイルのサイズが不正（途中で切れた、とか？）
@@ -405,5 +433,41 @@ internal class BackupService : IBackupService {
 
     public Task<bool> DeleteBackupEntry(FileEntry entry) {
         return _secureStorageService.DeleteEntry(entry, deleteDbEntry:false);
+    }
+
+
+    private async Task<IItemExtAttributes?> GetExtAttributes(string originalId, CancellationToken ct) {
+        var url = $"http://{Address}/extension?id={originalId}&auth={Token}";
+        try {
+            using (var response = await httpClient.GetAsync(url, ct)) {
+                if (!response.IsSuccessStatusCode) return null;
+                var json = await response.Content.ReadAsStringAsync();
+                var dic = ItemExtAttributes.FromJson(json);
+                if (dic == null) {
+                    throw new InvalidDataException("bad json");
+                }
+                return dic;
+            }
+        }
+        catch (Exception ex) {
+            _logger.Error(ex);
+            return null;
+        }
+    }
+
+    public async Task<bool> UpdateBackupEntry(FileEntry entry, CancellationToken ct) {
+        var dic = await GetExtAttributes(entry.OriginalId, ct);
+        if(dic == null) return false;
+        return _databaseService.EditEntry(entries => {
+            var e = entries.GetById(entry.Id);
+            if(e==null) return false;
+            e.ExtAttrDate = dic.ExtAttrDate;
+            e.Rating = dic.Rating;
+            e.Mark = dic.Mark;
+            e.Label = dic.Label;
+            e.Category = dic.Category;
+            e.Chapters = dic.Chapters;
+            return true;    // modified
+        });
     }
 }

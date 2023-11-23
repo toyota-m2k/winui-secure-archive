@@ -1,4 +1,6 @@
-﻿using SecureArchive.Models.DB;
+﻿using Newtonsoft.Json;
+using SecureArchive.Models.DB;
+using SecureArchive.Models.DB.Accessor;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -6,9 +8,11 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace SecureArchive.DI;
+
+
 public interface IEntryCreator : IDisposable {
     Stream OutputStream { get; }
-    FileEntry Complete(string name, long size, string type, long lastModifiedDate, long creationDate, string? metaInfo);
+    FileEntry Complete(string name, long size, string type, long lastModifiedDate, long creationDate, string? metaInfo, IItemExtAttributes? extAttr);
 }
 
 internal interface ISecureStorageService {

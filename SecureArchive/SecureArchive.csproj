@@ -15,7 +15,8 @@
 	<PlatformTarget>x64</PlatformTarget>
 	<Nullable>enable</Nullable>
 	<ImplicitUsings>enable</ImplicitUsings>
-	<Version>1.1.0.0</Version>
+	<Version>1.2.0.0</Version>
+	<SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Views\BackupDialogPage.xaml" />
@@ -27,6 +28,7 @@
     <None Remove="Views\SettingsPage.xaml" />
     <None Remove="Views\SyncArchiveDialogPage.xaml" />
     <None Remove="Views\TitleBar.xaml" />
+    <None Remove="Views\UpdateBackupDialogPage.xaml" />
   </ItemGroup>
 
   <ItemGroup>
@@ -65,6 +67,11 @@
   -->
   <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <ProjectCapability Include="Msix" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Update="Views\UpdateBackupDialogPage.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <Page Update="Views\DeleteBackupDialogPage.xaml">

@@ -1,6 +1,8 @@
 ﻿using Microsoft.Extensions.Logging;
 using SecureArchive.Models.DB;
+using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
+using System.ComponentModel.DataAnnotations;
 using System.Security.Cryptography;
 using System.Xml.Linq;
 using Windows.Storage.Streams;
@@ -129,7 +131,7 @@ internal class SecureStorageService : ISecureStorageService {
             
         }
 
-        public FileEntry Complete(string name, long size, string type_, long lastModifiedDate, long creationDate, string? metaInfo) {
+        public FileEntry Complete(string name, long size, string type_, long lastModifiedDate, long creationDate, string? metaInfo, IItemExtAttributes? extAttr) {
             _completed = true;
             _cryptoStream.FlushFinalBlock();
             _cryptoStream.Flush();
@@ -152,11 +154,18 @@ internal class SecureStorageService : ISecureStorageService {
                     entry.Type = type;
                     entry.LastModifiedDate = lastModifiedDate;
                     entry.MetaInfo = metaInfo;
+                    if(extAttr!=null) {
+                        entry.ExtAttrDate = extAttr.ExtAttrDate;
+                        entry.Rating = extAttr.Rating;
+                        entry.Mark = extAttr.Mark;
+                        entry.Category = extAttr.Category;
+                        entry.Chapters = extAttr.Chapters;
+                    }
                     return true;
                 }
                 else {
                     // New entry.
-                    entry = entryList.Add(_ownerId, name, size, type, _cryptedFilePath, lastModifiedDate, creationDate, _originalId, metaInfo);
+                    entry = entryList.Add(_ownerId, name, size, type, _cryptedFilePath, lastModifiedDate, creationDate, _originalId, metaInfo, extAttr);
                     return true;
                 }
             });
@@ -314,6 +323,73 @@ internal class SecureStorageService : ISecureStorageService {
                 return false;
             }
         });
+    }
+
+    static public string GetString(IDictionary<string,object> dic, string key, string defValue) {
+        if (dic.TryGetValue(key, out var value)) {
+            return value?.ToString() ?? defValue;
+        }
+        return defValue;
+    }
+    static public string? GetNullableString(IDictionary<string, object> dic, string key, string? defValue) {
+        if (dic.TryGetValue(key, out var value)) {
+            return value?.ToString();
+        }
+        return defValue;
+    }
+    static public long GetLong(IDictionary<string, object> dic, string key, long defValue) {
+        if (dic.TryGetValue(key, out var value)) {
+              if(value is long l) {
+                return l;
+            }
+            if(value is int i) {
+                return i;
+            }
+            if(value is string s) {
+                if(long.TryParse(s, out var l2)) {
+                    return l2;
+                }
+            }
+        }
+        return defValue;
+    }
+    static public int GetInt(IDictionary<string, object> dic, string key, int defValue) {
+        return (int)GetLong(dic, key, defValue);
+    }
+
+    public bool UpdateEntry(
+        long id,
+        Dictionary<string, object> newValues
+        ) {
+        try {
+            _databaseService.EditEntry((entryList) => {
+                // Overwrite
+                var entry = entryList.GetById(id)!;
+                entry.OriginalId = GetString(newValues, "originalId", entry.OriginalId);
+                entry.OwnerId = GetString(newValues, "ownerId", entry.OwnerId);
+
+                entry.Name = GetString(newValues, "name", entry.Name);
+                entry.Size = GetLong(newValues, "size", entry.Size);
+                entry.Type = GetString(newValues, "type", entry.Type);
+                //entry.Path = entry.Path;
+                entry.RegisteredDate = entry.RegisteredDate;
+                entry.LastModifiedDate = GetLong(newValues, "lastModifiedDate", entry.LastModifiedDate);
+                entry.CreationDate = GetLong(newValues, "creationDate", entry.CreationDate);
+                entry.MetaInfo = GetNullableString(newValues, "metaInfo", entry.MetaInfo);
+                entry.Deleted = GetLong(newValues, "deleted", entry.Deleted);
+                entry.ExtAttrDate = GetLong(newValues, "extAttrDate", entry.ExtAttrDate);
+                entry.Rating = GetInt(newValues, "rating", entry.Rating);
+                entry.Mark = GetInt(newValues, "mark", entry.Mark);
+                entry.Category = GetNullableString(newValues, "category", entry.Category);
+                entry.Chapters = GetNullableString(newValues, "chapters", entry.Chapters);
+                return true;
+            });
+            return true;
+        }
+        catch (Exception ex) {
+            _logger.Error(ex);
+            return false;
+        }
     }
 
     private bool RenameFile(string src, string dst) {

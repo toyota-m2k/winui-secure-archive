@@ -80,6 +80,7 @@ namespace SecureArchive {
                     .AddTransient<ListPageViewModel>()
                     .AddTransient<BackupDialogViewModel>()
                     .AddTransient<DeleteBackupDialogViewModel>()
+                    .AddTransient<UpdateBackupDialogViewModel>()
                     .AddTransient<RemotePasswordDialogViewModel>()
                     .AddTransient<RemotePasswordDialogPage>()
                     .AddTransient<SyncArchiveDialogViewModel>()

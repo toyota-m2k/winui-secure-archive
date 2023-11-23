@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using SecureArchive.Models.DB;
+using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using SecureArchive.Utils.Crypto;
 using SecureArchive.Utils.Server.lib;
@@ -119,7 +120,13 @@ internal class HttpServerService : IHttpServreService {
             if (!Parameters.TryGetValue("MetaInfo", out var metaInfo)) {
                 metaInfo = null;
             }
-            _entryCreator?.Complete(name, multipartBody.ContentLength, Path.GetExtension(name), lastModifiedDate, creationDate, metaInfo);
+
+            IItemExtAttributes? extAttr = null;
+            if (Parameters.TryGetValue("ExtAttr", out var extAttrJson)) {
+                extAttr = ItemExtAttributes.FromJson(extAttrJson);
+            }
+
+            _entryCreator?.Complete(name, multipartBody.ContentLength, Path.GetExtension(name), lastModifiedDate, creationDate, metaInfo, extAttr);
             Dispose();
         }
 

@@ -222,7 +222,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                         ct.ThrowIfCancellationRequested();
                         int len = await inStream.ReadAsync(buff, 0, BUFF_SIZE, ct);
                         if (len == 0) {
-                            entryCreator.Complete(entry.Name, entry.Size, entry.Type, entry.LastModifiedDate, entry.CreationDate, entry.MetaInfo);
+                            entryCreator.Complete(entry.Name, entry.Size, entry.Type, entry.LastModifiedDate, entry.CreationDate, entry.MetaInfo, entry);
                             break;
                         }
                         recv += len;

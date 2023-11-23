@@ -33,6 +33,39 @@ public static class CsExtensions {
         return value;
     }
 
+    public static string GetString(this IDictionary<string, object> dic, string key, string defValue="") {
+        if (dic.TryGetValue(key, out var value)) {
+            return value?.ToString() ?? defValue;
+        }
+        return defValue;
+    }
+    public static string? GetNullableString(this IDictionary<string, object> dic, string key, string? defValue=null) {
+        if (dic.TryGetValue(key, out var value)) {
+            return value?.ToString();
+        }
+        return defValue;
+    }
+    public static long GetLong(this IDictionary<string, object> dic, string key, long defValue=0L) {
+        if (dic.TryGetValue(key, out var value)) {
+            if (value is long l) {
+                return l;
+            }
+            if (value is int i) {
+                return i;
+            }
+            if (value is string s) {
+                if (long.TryParse(s, out var l2)) {
+                    return l2;
+                }
+            }
+        }
+        return defValue;
+    }
+    public static int GetInt(this IDictionary<string, object> dic, string key, int defValue=0) {
+        return (int)GetLong(dic, key, defValue);
+    }
+
+
     public static bool IsNullOrEmpty<T>(IEnumerable<T> v) {
         return !(v?.Any() ?? false);
     }

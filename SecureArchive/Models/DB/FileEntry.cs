@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json.Linq;
+using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -6,7 +7,7 @@ using System.ComponentModel.DataAnnotations.Schema;
 namespace SecureArchive.Models.DB;
 
 [Table("t_entry")]
-public class FileEntry {
+public class FileEntry : IItemExtAttributes {
     public static string[] DDL = {
         @"CREATE TABLE IF NOT EXISTS t_entry (
             Id INTEGER NOT NULL PRIMARY KEY,
@@ -20,10 +21,34 @@ public class FileEntry {
             LastModifiedDate INTEGER DEFAULT 0,
             CreationDate INTEGER DEFAULT 0,
             MetaInfo TEXT,
-            Deleted INTEGER DEFAULT 0
+            Deleted INTEGER DEFAULT 0,
+            ExtAttrDate INTEGER DEFAULT 0,
+            Rating INTEGER DEFAULT 0,
+            Mark INTEGER DEFAULT 0,
+            Category TEXT,
+            Chapters TEXT
         )",
+
         // FOREIGN KEY(OwnerId) REFERENCES t_owner_info(OwnerId)
     };
+
+    private static string[] Migrate0_1 = {
+        @"ALTER TABLE t_entry ADD ExtAttrDate INTEGER DEFAULT 0",
+        @"ALTER TABLE t_entry ADD Rating INTEGER DEFAULT 0",
+        @"ALTER TABLE t_entry ADD Mark INTEGER DEFAULT 0",
+        @"ALTER TABLE t_entry ADD Label TEXT",
+        @"ALTER TABLE t_entry ADD Category TEXT",
+        @"ALTER TABLE t_entry ADD Chapters TEXT",
+    };
+
+    public static string[]? Migrate(long from, long to) {
+        if (from < 1) {
+            return Migrate0_1;
+        }
+        else {
+            return null;
+        }
+    }
 
     [Key, Required]
     public long Id { get; set; }
@@ -43,6 +68,13 @@ public class FileEntry {
     public long LastModifiedDate { get; set; }
     public long CreationDate { get; set; }
     public long Deleted { get; set; }
+    public long ExtAttrDate { get; set;}
+    // 以下、extended attributes
+    public int Rating { get; set; }
+    public int Mark { get; set; }
+    public string? Label { get; set; }
+    public string? Category { get; set; }
+    public string? Chapters { get; set; }
 
     //[ForeignKey("OwnerId")]
     //public OwnerInfo OwnerInfo { get; set; } = new OwnerInfo();
@@ -66,6 +98,13 @@ public class FileEntry {
             { "creationDate", CreationDate },
             { "metaInfo", MetaInfo ?? "" },
             { "deleted", Deleted },
+
+            { "extAttrDate", ExtAttrDate },
+            { "rating", Rating },
+            { "mark", Mark },
+            { "label", Label ?? "" },
+            { "category", Category ?? "" },
+            { "chapters", Chapters ?? "" },
         };
     }
 
@@ -82,7 +121,15 @@ public class FileEntry {
             LastModifiedDate = dict.GetLongValue("lastModifiedDate"),
             CreationDate = dict.GetLongValue("creationDate"),
             MetaInfo = dict.GetStringValue("metaInfo"),
-            Deleted = dict.GetIntValue("deleted")
+            Deleted = dict.GetIntValue("deleted"),
+
+            ExtAttrDate = dict.GetLongValue("extAttrDate"),
+            Rating = dict.GetIntValue("rating"),
+            Mark = dict.GetIntValue("mark"),
+            Label = dict.GetStringValue("label"),
+            Category = dict.GetStringValue("category"),
+            Chapters = dict.GetStringValue("chapters"),
         };
     }
+
 }
