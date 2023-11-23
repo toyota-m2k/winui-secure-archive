@@ -23,11 +23,7 @@ public class ItemExtAttributes : IItemExtAttributes {
     public string? Category { get; set; }
     public string? Chapters { get; set; }
 
-    public static ItemExtAttributes FromJson(string json) {
-        IDictionary<string,object>? dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
-        if(dic == null) {
-            return new ItemExtAttributes();
-        }
+    public static ItemExtAttributes FromDic(IDictionary<string, object> dic) {
         string? chapters = JsonConvert.SerializeObject(dic.GetValue("chapters"));
         if(chapters == "[]") {
             chapters = null;
@@ -40,6 +36,13 @@ public class ItemExtAttributes : IItemExtAttributes {
             Category = dic.GetNullableString("category", null),
             Chapters = chapters,
         };
+    }
+    public static ItemExtAttributes FromJson(string json) {
+        IDictionary<string,object>? dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
+        if(dic == null) {
+            return new ItemExtAttributes();
+        }
+        return FromDic(dic);
     }
 }
 

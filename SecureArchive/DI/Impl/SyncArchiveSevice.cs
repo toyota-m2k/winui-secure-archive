@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SecureArchive.Models.DB;
+using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using SecureArchive.Views;
 using System.Net;
@@ -189,6 +190,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     { new StringContent($"{entry.LastModifiedDate}"), "FileDate" },
                     { new StringContent($"{entry.CreationDate}"), "CreationDate" },
                     { new StringContent(entry.MetaInfo ?? ""), "MetaInfo" },
+                    { new StringContent(entry.AttrDataJson), "ExtAttr" },
                     { body, "File", entry.Name }
                 };
                 var url = $"http://{peerAddress}/upload";
@@ -237,6 +239,62 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         }
         catch (Exception e) {
             _logger.Error(e, "download error");
+            return false;
+        }
+    }
+
+    private async Task<bool> GetExtAttributes(FileEntry entry) {
+        string url = $"http://{peerAddress}/extension?id={entry.Id}&auth={authToken}";
+        try {
+            using (var response = await httpClient.GetAsync(url)) {
+                if (!response.IsSuccessStatusCode) return false;
+                using (var content = response.Content) {
+                    var jsonString = await content.ReadAsStringAsync();
+                    var dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonString);
+                    if(dic == null) {
+                        return false;
+                    }
+                    _databaseService.EditEntry(entries => {
+                        var e = entries.GetById(entry.Id);
+                        if (e == null) return false;
+                        e.ExtAttrDate = dic.GetLong("attrDate", 0);
+                        e.Rating = dic.GetInt("rating");
+                        e.Mark = dic.GetInt("mark");
+                        e.Label = dic.GetNullableString("label");
+                        e.Category = dic.GetNullableString("category");
+                        e.Chapters = dic.GetNullableString("chapters");
+                        return true;    // modified
+                    });
+                }
+            }
+            return false;
+        }
+        catch (Exception e) {
+            _logger.Error(e, "get attributes error");
+            return false;
+        }
+    }
+
+    private async Task<bool> PutExtAttributes(FileEntry entry) {
+        string url = $"http://{peerAddress}/extension?id={entry.Id}&auth={authToken}";
+        try {
+            var json = JsonConvert.SerializeObject(new Dictionary<string, object> {
+                { "cmd", "extension" },
+                { "id", entry.Id },
+                { "ownerId", entry.OwnerId}
+                { "extAttrDate", entry.ExtAttrDate },
+                { "rating", entry.Rating },
+                { "mark", entry.Mark },
+                { "label", entry.Label ?? "" },
+                { "category", entry.Category ?? "" },
+                { "chapters", entry.Chapters ?? "" },
+            });
+            using (var response = await httpClient.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"))) {
+                return response.IsSuccessStatusCode;
+            }
+        }
+        catch (Exception e) {
+            _logger.Error(e, "put attributes error");
             return false;
         }
     }
@@ -301,32 +359,37 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         this.rawPassword = peerPassword;
         return await Task.Run(async () => {
             try {
-                if(!await RemoteAuth()) {
+                if (!await RemoteAuth()) {
                     errorProc("Authentication Error.", false);
                     return false;
                 }
                 var myList = _databaseService.Entries.List(false);
                 var peerList = await GetPeerList();
-                if(peerList == null) {
+                if (peerList == null) {
                     errorProc("No peer items.", false);
                     return false;
                 }
                 var comparator = new FileEntryComparator();
-                var peerNewFile = peerList.Except(myList, comparator).Where(it=>!it.IsDeleted).ToList();
-                var myNewFile = myList.Except(peerList, comparator).Where(it=>!it.IsDeleted).ToList();
+                // ピア側にしか存在しないエントリのリスト
+                var peerNewFile = peerList.Except(myList, comparator).Where(it => !it.IsDeleted).ToList();
+                // ローカル側にしか存在しないエントリのリスト
+                var myNewFile = myList.Except(peerList, comparator).Where(it => !it.IsDeleted).ToList();
+                // ピア側とローカル側の両方に存在するエントリのマップ(name+ownerId -> my-FileEntry)
                 var myCommonFileDic = myList.Intersect(peerList, comparator).Aggregate(new Dictionary<string, FileEntry>(), (dic, entry) => {
                     try {
                         dic.Add(entry.Name + entry.OwnerId, entry); return dic;
-                    } catch(Exception) {
+                    }
+                    catch (Exception) {
                         // entry.Name に重複があると、このエラーになる。一時、SecureCameraの不具合で、Idがつけ変わってしまうケースがあって、これが発生した。
                         _logger.Error($"{entry.Name} {entry.OwnerId}");
-                        var x = myList.Where(it=>it.Name== entry.Name).ToList();
+                        var x = myList.Where(it => it.Name == entry.Name).ToList();
                         var y = peerList.Where(it => it.Name == entry.Name).ToList();
                         x.ForEach(it => _logger.Error($"{it.Id}"));
                         y.ForEach(it => _logger.Error($"{it.Id}"));
                         throw;
                     }
                 });
+                // ピア側で削除されていない、且つ、最終更新日時の異なる peer と my のペアのリスト
                 var commonPair = peerList.Intersect(myList, comparator).Select(it => new Pair { peer = it, my = myCommonFileDic[it.Name + it.OwnerId] }).Where(it => !it.IsDeleted && it.peer.LastModifiedDate != it.my.LastModifiedDate).ToList();
 
                 //var peerCommonFile = peerList.Intersect(myList, comparator).ToList();
@@ -343,7 +406,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     countProgress(counter, peerNewFile.Count);
                     await DownloadEntry(entry, byteProgress, ct);
                 }
-                
+
                 // リモート側の更新日時が新しいものをダウンロードして上書き
                 counter = 0;
                 var peerUpdates = commonPair.Where(it => it.peer.LastModifiedDate > it.my.LastModifiedDate).ToList();
@@ -364,6 +427,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     countProgress(counter, myNewFile.Count);
                     await UploadEntry(entry, byteProgress, ct);
                 }
+
                 // ローカル側の更新日時が新しいものをアップロード
                 counter = 0;
                 var myUpdates = commonPair.Where(it => it.peer.LastModifiedDate > it.my.LastModifiedDate).ToList();
@@ -378,13 +442,30 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 // リモート側で削除されたファイルをローカルからも削除
                 counter = 0;
                 var deletedFile = myList.Where(it => !it.IsDeleted).Intersect(peerList.Where(it => it.IsDeleted), comparator).ToList();
-                foreach(var entry in deletedFile) {
+                foreach (var entry in deletedFile) {
                     ct.ThrowIfCancellationRequested();
                     counter++;
                     _logger.Debug($"Delete:  [{counter}/{deletedFile.Count}] {entry.Name}");
                     countProgress(counter, deletedFile.Count);
                     await _secureStorageService.DeleteEntry(entry);
                 }
+
+                // 属性の同期
+                var attrUpdatedPairs = peerList.Intersect(myList, comparator).Select(it => new Pair { peer = it, my = myCommonFileDic[it.Name + it.OwnerId] }).Where(it => !it.IsDeleted && it.peer.ExtAttrDate != it.my.ExtAttrDate).ToList();
+                // ピア側の属性が新しいものをダウンロードして上書き
+                var attrToGet = attrUpdatedPairs.Where(it => it.peer.ExtAttrDate > it.my.ExtAttrDate).ToList();
+                foreach(var entry in attrToGet) {
+                    ct.ThrowIfCancellationRequested();
+                    _logger.Debug($"Download (ATTR): {entry.my.Name}: {new DateTime(entry.my.ExtAttrDate)} <-- {new DateTime(entry.peer.ExtAttrDate)}");
+                    await DownloadEntry(entry.peer, byteProgress, ct);
+                }
+                .ForEach(it => {
+                    ct.ThrowIfCancellationRequested();
+                    _logger.Debug($"Download (ATTR): {it.my.Name}: {new DateTime(it.my.ExtAttrDate)} <-- {new DateTime(it.peer.ExtAttrDate)}");
+                    _secureStorageService.UpdateEntry(it.my, it.peer);
+                });
+            }
+
 
                 return true;
             }

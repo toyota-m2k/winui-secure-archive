@@ -25,6 +25,9 @@ public class TextHttpResponse : AbstractHttpResponse {
     public static TextHttpResponse FromJson(HttpRequest req, IDictionary<string,object> jsonDic, HttpStatusCode statusCode=HttpStatusCode.Ok) {
         return new TextHttpResponse(req, statusCode, JsonConvert.SerializeObject(jsonDic), CT_JSON);
     }
+    public static TextHttpResponse FromJsonString(HttpRequest req, string json, HttpStatusCode statusCode = HttpStatusCode.Ok) {
+        return new TextHttpResponse(req, statusCode, json, CT_JSON);
+    }
 
     protected override void Prepare() {
         Buffer = Content != null ? Encoding.UTF8.GetBytes(Content) : new byte[] { };

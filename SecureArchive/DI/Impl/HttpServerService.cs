@@ -12,9 +12,11 @@ using System.Data.Common;
 using System.Data.SqlTypes;
 using System.Diagnostics;
 using System.Runtime.InteropServices.WindowsRuntime;
+using System.Runtime.Serialization;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Windows.Controls;
+using System.Windows.Media;
 using System.Windows.Navigation;
 using Windows.Security.Cryptography;
 using static SecureArchive.Utils.SeekableInputStream;
@@ -499,11 +501,20 @@ internal class HttpServerService : IHttpServreService {
                 regex: @"/chapter\?\w+",
                 process: (request) => {
                     var id = QueryParser.Parse(request.Url)["id"];
+                    var entry = _databaseService.Entries.GetById(Convert.ToInt64(id));
+                    if(entry==null) {
+                        return HttpErrorResponse.NotFound(request);
+                    }
                     var dic = new Dictionary<string, object>(){
                         { "cmd", "chapter"},
                         { "id", id },
-                        { "chapters", new List<object>() }
                     };
+                    if (entry.Chapters!=null) {
+                        var list = JsonConvert.DeserializeObject(entry.Chapters);
+                        if(list != null) {
+                           dic["chapters"] = list;
+                        }
+                    }
                     return TextHttpResponse.FromJson(request, dic);
                 }),
             Route.get(
@@ -514,6 +525,53 @@ internal class HttpServerService : IHttpServreService {
                         { "cmd", "category"},
                     };
                     return TextHttpResponse.FromJson(request, dic);
+                }),
+            Route.get(
+                name: "Extended Attributes",
+                regex: @"/extension\?\w+",
+                process: (request) => {
+                    var id = QueryParser.Parse(request.Url)["id"];
+                    var entry = _databaseService.Entries.GetById(Convert.ToInt64(id));
+                    if(entry==null) {
+                        return HttpErrorResponse.NotFound(request);
+                    }
+                    return TextHttpResponse.FromJson(request, new Dictionary<string,object>{
+                            { "cmd", "extension" },
+                            { "status", "ok"},
+                            { "attrDate", entry.ExtAttrDate },
+                            { "rating", entry.Rating },
+                            { "mark", entry.Mark },
+                            { "label", entry.Label ?? "" },
+                            { "category", entry.Category ?? "" },
+                            { "chapters", entry.Chapters ?? "" },
+                        });
+                }),
+            Route.put(
+                name: "Extended Attributes",
+                regex: @"/extension",
+                process: (request) => {
+                    var content = request.Content?.TextContent;
+                    if (content== null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(content);
+                    if (dic == null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var id = dic.GetLong("id");
+                    var attrData = ItemExtAttributes.FromDic(dic);
+                    _databaseService.EditEntry(entries => {
+                        var e = entries.GetById(id);
+                        if(e==null) return false;
+                        e.ExtAttrDate = attrData.ExtAttrDate;
+                        e.Rating = attrData.Rating;
+                        e.Mark = attrData.Mark;
+                        e.Label = attrData.Label;
+                        e.Category = attrData.Category;
+                        e.Chapters = attrData.Chapters;
+                        return true;    // modified
+                    });
+                    return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "extension" }, {"status", "ok"} });
                 }),
             Route.put(
                 name:"register owner",

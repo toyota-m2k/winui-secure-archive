@@ -1,4 +1,5 @@
-﻿using Newtonsoft.Json.Linq;
+﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using System.ComponentModel.DataAnnotations;
@@ -106,6 +107,25 @@ public class FileEntry : IItemExtAttributes {
             { "category", Category ?? "" },
             { "chapters", Chapters ?? "" },
         };
+    }
+
+    public Dictionary<string,object> AttrDataDic {
+        get {
+            return new Dictionary<string, object> {
+                { "extAttrDate", ExtAttrDate },
+                { "rating", Rating },
+                { "mark", Mark },
+                { "label", Label ?? "" },
+                { "category", Category ?? "" },
+                { "chapters", Chapters ?? "" },
+            };
+        }
+    }
+
+    public string AttrDataJson {
+        get {
+            return JsonConvert.SerializeObject(AttrDataDic);
+        }
     }
 
     public static FileEntry FromDictionary(JObject dict) {
