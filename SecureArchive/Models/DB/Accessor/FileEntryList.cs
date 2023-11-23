@@ -16,33 +16,84 @@ public interface IItemExtAttributes {
 }
 
 public class ItemExtAttributes : IItemExtAttributes {
-    public long ExtAttrDate { get; set; }
-    public int Rating { get; set; }
-    public int Mark { get; set; }
-    public string? Label { get; set; }
-    public string? Category { get; set; }
-    public string? Chapters { get; set; }
+    private IDictionary<string, object> _dic;
+    public ItemExtAttributes(IDictionary<string,object> dic) {
+        _dic = dic;
+    }
+
+    public long ExtAttrDate { 
+        get => _dic.GetLong("attrDate"); 
+        set => _dic["attrDate"] = value; 
+    }
+
+    public int Rating { 
+        get => _dic.GetInt("rating");
+        set => _dic["rating"] = value; 
+    }
+    public int Mark {
+        get => _dic.GetInt("mark");
+        set => _dic["mark"] = value;
+    }
+    public string? Label {
+        get => _dic.GetNullableString("label");
+        set {
+            if(value == null) {
+                _dic.Remove("label");
+            } else {
+                _dic["label"] = value;
+            }
+        }
+    }
+    public string? Category {
+        get => _dic.GetNullableString("category");
+        set {
+            if (value == null) {
+                _dic.Remove("category");
+            } else {
+                _dic["category"] = value;
+            }
+        }
+    }
+    public string? Chapters {
+        get => _dic.GetNullableString("chapters");
+        set {
+            if (value == null) {
+                _dic.Remove("chapters");
+            } else {
+                _dic["chapters"] = value;
+            }
+        }
+    }
 
     public static ItemExtAttributes FromDic(IDictionary<string, object> dic) {
-        string? chapters = JsonConvert.SerializeObject(dic.GetValue("chapters"));
-        if(chapters == "[]") {
-            chapters = null;
-        }
-        return new ItemExtAttributes {
-            ExtAttrDate = dic.GetLong("attrDate", 0L),
-            Rating = dic.GetInt("rating", 0),
-            Mark = dic.GetInt("mark", 0),
-            Label = dic.GetNullableString("label", null),
-            Category = dic.GetNullableString("category", null),
-            Chapters = chapters,
-        };
+        return new ItemExtAttributes(dic);
     }
+
     public static ItemExtAttributes FromJson(string json) {
-        IDictionary<string,object>? dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(json);
-        if(dic == null) {
-            return new ItemExtAttributes();
-        }
+        IDictionary<string,object> dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(json) ?? new Dictionary<string, object>()
         return FromDic(dic);
+    }
+
+    public static ItemExtAttributes Duplicate(IItemExtAttributes ext) {
+        return new ItemExtAttributes(new Dictionary<string, object>() {
+            { "attrDate", ext.ExtAttrDate },
+            { "rating", ext.Rating },
+            { "mark", ext.Mark },
+            { "label", ext.Label ?? "" },
+            { "category", ext.Category ?? "" },
+            { "chapters", ext.Chapters ?? "" },
+        });
+    }
+
+    public string ToJson() {
+        return JsonConvert.SerializeObject(_dic);
+    }
+    public string ToJson(IDictionary<string, object> ext) {
+        var dic = new Dictionary<string, object>(_dic);
+        foreach(var kv in ext) {
+            dic[kv.Key] = kv.Value;
+        }
+        return JsonConvert.SerializeObject(dic);
     }
 }
 

@@ -250,19 +250,16 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 if (!response.IsSuccessStatusCode) return false;
                 using (var content = response.Content) {
                     var jsonString = await content.ReadAsStringAsync();
-                    var dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonString);
-                    if(dic == null) {
-                        return false;
-                    }
+                    var dic = ItemExtAttributes.FromJson(jsonString);
                     _databaseService.EditEntry(entries => {
                         var e = entries.GetById(entry.Id);
                         if (e == null) return false;
-                        e.ExtAttrDate = dic.GetLong("attrDate", 0);
-                        e.Rating = dic.GetInt("rating");
-                        e.Mark = dic.GetInt("mark");
-                        e.Label = dic.GetNullableString("label");
-                        e.Category = dic.GetNullableString("category");
-                        e.Chapters = dic.GetNullableString("chapters");
+                        e.ExtAttrDate = dic.ExtAttrDate;
+                        e.Rating = dic.Rating;
+                        e.Mark = dic.Mark;
+                        e.Label = dic.Label;
+                        e.Category = dic.Category;
+                        e.Chapters = dic.Chapters;
                         return true;    // modified
                     });
                 }
