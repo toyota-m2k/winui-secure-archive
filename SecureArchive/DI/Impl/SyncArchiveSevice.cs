@@ -243,8 +243,8 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         }
     }
 
-    private async Task<bool> GetExtAttributes(FileEntry entry) {
-        string url = $"http://{peerAddress}/extension?id={entry.Id}&auth={authToken}";
+    private async Task<bool> GetExtAttributes(FileEntry fromPeerEntry, FileEntry toMyEntry) {
+        string url = $"http://{peerAddress}/extension?id={fromPeerEntry.Id}&auth={authToken}";
         try {
             using (var response = await httpClient.GetAsync(url)) {
                 if (!response.IsSuccessStatusCode) return false;
@@ -252,7 +252,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     var jsonString = await content.ReadAsStringAsync();
                     var dic = ItemExtAttributes.FromJson(jsonString);
                     _databaseService.EditEntry(entries => {
-                        var e = entries.GetById(entry.Id);
+                        var e = entries.GetById(toMyEntry.Id);
                         if (e == null) return false;
                         e.ExtAttrDate = dic.ExtAttrDate;
                         e.Rating = dic.Rating;
@@ -272,19 +272,19 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         }
     }
 
-    private async Task<bool> PutExtAttributes(FileEntry entry) {
-        string url = $"http://{peerAddress}/extension?id={entry.Id}&auth={authToken}";
+    private async Task<bool> PutExtAttributes(FileEntry fromMyEntry, FileEntry toPeerEntry) {
+        string url = $"http://{peerAddress}/extension?id={toPeerEntry.Id}&auth={authToken}";
         try {
             var json = JsonConvert.SerializeObject(new Dictionary<string, object> {
                 { "cmd", "extension" },
-                { "id", entry.Id },
-                { "ownerId", entry.OwnerId}
-                { "extAttrDate", entry.ExtAttrDate },
-                { "rating", entry.Rating },
-                { "mark", entry.Mark },
-                { "label", entry.Label ?? "" },
-                { "category", entry.Category ?? "" },
-                { "chapters", entry.Chapters ?? "" },
+                { "id", toPeerEntry.Id },
+                { "ownerId", toPeerEntry.OwnerId},
+                { "extAttrDate", fromMyEntry.ExtAttrDate },
+                { "rating", fromMyEntry.Rating },
+                { "mark", fromMyEntry.Mark },
+                { "label", fromMyEntry.Label ?? "" },
+                { "category", fromMyEntry.Category ?? "" },
+                { "chapters", fromMyEntry.Chapters ?? "" },
             });
             using (var response = await httpClient.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"))) {
                 return response.IsSuccessStatusCode;
@@ -451,19 +451,16 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 var attrUpdatedPairs = peerList.Intersect(myList, comparator).Select(it => new Pair { peer = it, my = myCommonFileDic[it.Name + it.OwnerId] }).Where(it => !it.IsDeleted && it.peer.ExtAttrDate != it.my.ExtAttrDate).ToList();
                 // ピア側の属性が新しいものをダウンロードして上書き
                 var attrToGet = attrUpdatedPairs.Where(it => it.peer.ExtAttrDate > it.my.ExtAttrDate).ToList();
-                foreach(var entry in attrToGet) {
+                foreach(var entry in attrUpdatedPairs) {
                     ct.ThrowIfCancellationRequested();
-                    _logger.Debug($"Download (ATTR): {entry.my.Name}: {new DateTime(entry.my.ExtAttrDate)} <-- {new DateTime(entry.peer.ExtAttrDate)}");
-                    await DownloadEntry(entry.peer, byteProgress, ct);
+                    if(entry.peer.ExtAttrDate > entry.my.ExtAttrDate) {
+                        _logger.Debug($"Download (ATTR): {entry.my.Name}: {new DateTime(entry.my.ExtAttrDate)} <-- {new DateTime(entry.peer.ExtAttrDate)}");
+                        await GetExtAttributes(entry.peer, entry.my);
+                    } else if(entry.peer.ExtAttrDate < entry.my.ExtAttrDate) {
+                        _logger.Debug($"Upload (ATTR): {entry.my.Name}: {new DateTime(entry.my.ExtAttrDate)} --> {new DateTime(entry.peer.ExtAttrDate)}");
+                        await PutExtAttributes(entry.my, entry.peer);
+                    }
                 }
-                .ForEach(it => {
-                    ct.ThrowIfCancellationRequested();
-                    _logger.Debug($"Download (ATTR): {it.my.Name}: {new DateTime(it.my.ExtAttrDate)} <-- {new DateTime(it.peer.ExtAttrDate)}");
-                    _secureStorageService.UpdateEntry(it.my, it.peer);
-                });
-            }
-
-
                 return true;
             }
             catch (Exception ex) {
