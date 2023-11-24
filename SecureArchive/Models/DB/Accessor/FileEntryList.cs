@@ -70,7 +70,7 @@ public class ItemExtAttributes : IItemExtAttributes {
     }
 
     public static ItemExtAttributes FromJson(string json) {
-        IDictionary<string,object> dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(json) ?? new Dictionary<string, object>()
+        IDictionary<string, object> dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(json) ?? new Dictionary<string, object>();
         return FromDic(dic);
     }
 
