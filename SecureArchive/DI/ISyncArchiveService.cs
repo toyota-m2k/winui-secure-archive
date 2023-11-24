@@ -13,6 +13,8 @@ public enum SyncTask {
     UploadingUpdate,
     DownloadNew,
     DownloadUpdate,
+    Deleting,
+    SyncAttributes,
 }
 
 public delegate void SyncStateProc(SyncTask syncTask);

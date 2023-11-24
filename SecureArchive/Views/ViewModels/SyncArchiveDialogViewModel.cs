@@ -116,8 +116,12 @@ internal class SyncArchiveDialogViewModel {
                 case SyncTask.DownloadUpdate:
                     ProgressMessage.Value = "Updating My Files.";
                     break;
+                case SyncTask.SyncAttributes:
+                    ProgressMessage.Value = "Synchronizing Attributes.";
+                    break;
+                default:
+                    break;
             }
-            
         });
     }
 

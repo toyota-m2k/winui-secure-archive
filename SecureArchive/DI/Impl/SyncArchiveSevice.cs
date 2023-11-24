@@ -395,70 +395,91 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 //var myUpdateFile = peerCommonFile.Where(it=> it.LastModifiedDate < myCommonFileDic[it.Name+it.OwnerId].LastModifiedDate).Select(it=>myCommonFileDic[it.Name+it.OwnerId]);
 
                 // リモート側に新しく追加されたファイルをダウンロード
-                int counter = 0;
-                foreach (var entry in peerNewFile) {
-                    ct.ThrowIfCancellationRequested();
-                    counter++;
-                    _logger.Debug($"Download (NEW): [{counter}/{peerNewFile.Count}] {entry.Name}");
-                    countProgress(counter, peerNewFile.Count);
-                    await DownloadEntry(entry, byteProgress, ct);
+                if (peerNewFile.Count > 0) {
+                    syncTaskProc(SyncTask.DownloadNew);
+                    int counter = 0;
+                    foreach (var entry in peerNewFile) {
+                        ct.ThrowIfCancellationRequested();
+                        counter++;
+                        _logger.Debug($"Download (NEW): [{counter}/{peerNewFile.Count}] {entry.Name}");
+                        countProgress(counter, peerNewFile.Count);
+                        await DownloadEntry(entry, byteProgress, ct);
+                    }
                 }
 
                 // リモート側の更新日時が新しいものをダウンロードして上書き
-                counter = 0;
                 var peerUpdates = commonPair.Where(it => it.peer.LastModifiedDate > it.my.LastModifiedDate).ToList();
-                foreach (var pair in peerUpdates) {
-                    ct.ThrowIfCancellationRequested();
-                    counter++;
-                    _logger.Debug($"Download (UPD):  [{counter}/{peerUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.LastModifiedDate)} <-- {new DateTime(pair.peer.LastModifiedDate)}");
-                    countProgress(counter, peerUpdates.Count);
-                    await DownloadEntry(pair.peer, byteProgress, ct);
+                if (peerUpdates.Count > 0) {
+                    syncTaskProc(SyncTask.DownloadUpdate);
+                    int counter = 0;
+                    foreach (var pair in peerUpdates) {
+                        ct.ThrowIfCancellationRequested();
+                        counter++;
+                        _logger.Debug($"Download (UPD):  [{counter}/{peerUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.LastModifiedDate)} <-- {new DateTime(pair.peer.LastModifiedDate)}");
+                        countProgress(counter, peerUpdates.Count);
+                        await DownloadEntry(pair.peer, byteProgress, ct);
+                    }
                 }
 
                 // ローカル側に新しく追加されたファイルをアップロード
-                counter = 0;
-                foreach (var entry in myNewFile) {
-                    ct.ThrowIfCancellationRequested();
-                    counter++;
-                    _logger.Debug($"Upload (NEW): [{counter}/{myNewFile.Count}] {entry.Name}");
-                    countProgress(counter, myNewFile.Count);
-                    await UploadEntry(entry, byteProgress, ct);
+                if (myNewFile.Count > 0) {
+                    syncTaskProc(SyncTask.UploadingNew);
+                    int counter = 0;
+                    foreach (var entry in myNewFile) {
+                        ct.ThrowIfCancellationRequested();
+                        counter++;
+                        _logger.Debug($"Upload (NEW): [{counter}/{myNewFile.Count}] {entry.Name}");
+                        countProgress(counter, myNewFile.Count);
+                        await UploadEntry(entry, byteProgress, ct);
+                    }
                 }
 
                 // ローカル側の更新日時が新しいものをアップロード
-                counter = 0;
                 var myUpdates = commonPair.Where(it => it.peer.LastModifiedDate > it.my.LastModifiedDate).ToList();
-                foreach (var pair in myUpdates) {
-                    ct.ThrowIfCancellationRequested();
-                    counter++;
-                    _logger.Debug($"Upload (UPD):  [{counter}/{myUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.LastModifiedDate)} --> {new DateTime(pair.peer.LastModifiedDate)}");
-                    countProgress(counter, myUpdates.Count);
-                    await UploadEntry(pair.my, byteProgress, ct);
+                if (myUpdates.Count > 0) {
+                    syncTaskProc(SyncTask.UploadingUpdate);
+                    int counter = 0;
+                    foreach (var pair in myUpdates) {
+                        ct.ThrowIfCancellationRequested();
+                        counter++;
+                        _logger.Debug($"Upload (UPD):  [{counter}/{myUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.LastModifiedDate)} --> {new DateTime(pair.peer.LastModifiedDate)}");
+                        countProgress(counter, myUpdates.Count);
+                        await UploadEntry(pair.my, byteProgress, ct);
+                    }
                 }
 
                 // リモート側で削除されたファイルをローカルからも削除
-                counter = 0;
                 var deletedFile = myList.Where(it => !it.IsDeleted).Intersect(peerList.Where(it => it.IsDeleted), comparator).ToList();
-                foreach (var entry in deletedFile) {
-                    ct.ThrowIfCancellationRequested();
-                    counter++;
-                    _logger.Debug($"Delete:  [{counter}/{deletedFile.Count}] {entry.Name}");
-                    countProgress(counter, deletedFile.Count);
-                    await _secureStorageService.DeleteEntry(entry);
+                if (deletedFile.Count > 0) {
+                    syncTaskProc(SyncTask.Deleting);
+                    int counter = 0;
+                    foreach (var entry in deletedFile) {
+                        ct.ThrowIfCancellationRequested();
+                        counter++;
+                        _logger.Debug($"Delete:  [{counter}/{deletedFile.Count}] {entry.Name}");
+                        countProgress(counter, deletedFile.Count);
+                        await _secureStorageService.DeleteEntry(entry);
+                    }
                 }
 
                 // 属性の同期
                 var attrUpdatedPairs = peerList.Intersect(myList, comparator).Select(it => new Pair { peer = it, my = myCommonFileDic[it.Name + it.OwnerId] }).Where(it => !it.IsDeleted && it.peer.ExtAttrDate != it.my.ExtAttrDate).ToList();
-                // ピア側の属性が新しいものをダウンロードして上書き
-                var attrToGet = attrUpdatedPairs.Where(it => it.peer.ExtAttrDate > it.my.ExtAttrDate).ToList();
-                foreach(var entry in attrUpdatedPairs) {
-                    ct.ThrowIfCancellationRequested();
-                    if(entry.peer.ExtAttrDate > entry.my.ExtAttrDate) {
-                        _logger.Debug($"Download (ATTR): {entry.my.Name}: {new DateTime(entry.my.ExtAttrDate)} <-- {new DateTime(entry.peer.ExtAttrDate)}");
-                        await GetExtAttributes(entry.peer, entry.my);
-                    } else if(entry.peer.ExtAttrDate < entry.my.ExtAttrDate) {
-                        _logger.Debug($"Upload (ATTR): {entry.my.Name}: {new DateTime(entry.my.ExtAttrDate)} --> {new DateTime(entry.peer.ExtAttrDate)}");
-                        await PutExtAttributes(entry.my, entry.peer);
+                if (attrUpdatedPairs.Count > 0) {
+                    syncTaskProc(SyncTask.SyncAttributes);
+                    int counter = 0;
+                    foreach (var entry in attrUpdatedPairs) {
+                        ct.ThrowIfCancellationRequested();
+                        if (entry.peer.ExtAttrDate > entry.my.ExtAttrDate) {
+                            // Peer側の方が新しい場合、Peer側の属性をローカルにコピー
+                            _logger.Debug($"Download (ATTR): {entry.my.Name}: {new DateTime(entry.my.ExtAttrDate)} <-- {new DateTime(entry.peer.ExtAttrDate)}");
+                            await GetExtAttributes(entry.peer, entry.my);
+                        }
+                        else if (entry.peer.ExtAttrDate < entry.my.ExtAttrDate) {
+                            // ローカル側の方が新しい場合、ローカル側の属性をPeerにコピー
+                            _logger.Debug($"Upload (ATTR): {entry.my.Name}: {new DateTime(entry.my.ExtAttrDate)} --> {new DateTime(entry.peer.ExtAttrDate)}");
+                            await PutExtAttributes(entry.my, entry.peer);
+                        }
+                        countProgress(counter, attrUpdatedPairs.Count);
                     }
                 }
                 return true;
