@@ -279,7 +279,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 { "cmd", "extension" },
                 { "id", toPeerEntry.Id },
                 { "ownerId", toPeerEntry.OwnerId},
-                { "extAttrDate", fromMyEntry.ExtAttrDate },
+                { "attrDate", fromMyEntry.ExtAttrDate },
                 { "rating", fromMyEntry.Rating },
                 { "mark", fromMyEntry.Mark },
                 { "label", fromMyEntry.Label ?? "" },
