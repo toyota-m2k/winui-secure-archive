@@ -366,7 +366,7 @@ internal class HttpServerService : IHttpServreService {
                         {"category", false},
                         {"rating", false},
                         {"mark", false},
-                        {"chapter", false},
+                        {"chapter", true},
                         {"reputation", 0 },             // reputation (category/mark/rating) コマンド対応 1:RO /2:RW
                         {"diff", false},                // date以降の更新チェック(check)、差分リスト取得に対応
                         {"sync", false },               // 端末間同期
