@@ -8,6 +8,8 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:animations="using:CommunityToolkit.WinUI.UI.Animations"
+    xmlns:toolkit="using:CommunityToolkit.WinUI.UI.Controls"
+    xmlns:tkp="using:CommunityToolkit.WinUI.UI.Controls.Primitives"
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
     <Page.Resources>
@@ -16,14 +18,14 @@
 
     <Grid>
         <Grid.Resources>
-            <DataTemplate x:Key="FileEntryListItem" x:DataType="data:FileEntry">
+            <!--<DataTemplate x:Key="FileEntryListItem" x:DataType="data:FileEntry">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="{x:Bind OwnerInfo.Name}" Width="100"/>
                     <TextBlock Text="{x:Bind Rating}" Width="20"/>
                     <TextBlock Text="{x:Bind Mark}" Width="20"/>
                     <TextBlock Text="{x:Bind Name}"/>
                 </StackPanel>
-            </DataTemplate>
+            </DataTemplate>-->
         </Grid.Resources>
         <SplitView IsPaneOpen="True" PaneBackground="{ThemeResource SystemBaseMediumLowColor}" 
                    OpenPaneLength="120" CompactPaneLength="48" DisplayMode="Inline">
@@ -59,13 +61,33 @@
             </SplitView.Pane>
 
             <Grid>
-                <ListView 
+                <!--<ListView 
                     x:Name="FileListView"
                     ItemsSource="{x:Bind ViewModel.FileList.Value, Mode=OneWay}"
                     SelectionMode="Extended"
                     ItemTemplate="{StaticResource FileEntryListItem}"
                     >
-                </ListView>
+                </ListView>-->
+                <toolkit:DataGrid
+                    x:Name="FileListGrid"
+                    ItemsSource="{x:Bind ViewModel.FileList.Value, Mode=OneWay}"
+                    IsReadOnly="True"
+                    AutoGenerateColumns="False"
+                    >
+                    <toolkit:DataGrid.ColumnHeaderStyle>
+                        <Style TargetType="tkp:DataGridColumnHeader">
+                            <EventSetter Event="Click" Handler="OnColumnHeaderClicked"/>
+                        </Style>
+                    </toolkit:DataGrid.ColumnHeaderStyle>
+                    <toolkit:DataGrid.Columns>
+                        <toolkit:DataGridTextColumn Header="Name" Binding="{Binding Name}"/>
+                        <toolkit:DataGridTextColumn Header="Owner" Binding="{Binding OwnerInfo.Name}"/>
+                        <toolkit:DataGridTextColumn Header="Size" Binding="{Binding Size}"/>
+                        <toolkit:DataGridTextColumn Header="Type" Binding="{Binding Type}"/>
+                        <toolkit:DataGridTextColumn Header="Rating" Binding="{Binding Rating}"/>
+                        <toolkit:DataGridTextColumn Header="Mark" Binding="{Binding Mark}"/>
+                    </toolkit:DataGrid.Columns>
+                </toolkit:DataGrid>
                 <Border  Margin="10,0,10,10" HorizontalAlignment="Stretch" VerticalAlignment="Bottom"
                          Padding="10" Background="White"
                          BorderThickness="1" BorderBrush="Black" CornerRadius="3"

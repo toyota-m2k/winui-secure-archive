@@ -24,7 +24,7 @@ namespace SecureArchive.Views.ViewModels {
         private ITaskQueueService _taskQueueService;
         private IStatusNotificationService _statusNotificationService;
         private IMainThreadService _mainThreadService;
-        private ILogger _logger;
+        public ILogger _logger;
 
         public ReactiveCommandSlim AddCommand { get; } = new ReactiveCommandSlim();
         public ReactiveCommandSlim ExportCommand { get; } = new ReactiveCommandSlim();
