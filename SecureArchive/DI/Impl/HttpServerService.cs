@@ -1,5 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
@@ -8,18 +7,11 @@ using SecureArchive.Utils.Crypto;
 using SecureArchive.Utils.Server.lib;
 using SecureArchive.Utils.Server.lib.model;
 using SecureArchive.Utils.Server.lib.response;
-using System.Data.Common;
-using System.Data.SqlTypes;
-using System.Diagnostics;
+using System.Collections.ObjectModel;
 using System.Runtime.InteropServices.WindowsRuntime;
-using System.Runtime.Serialization;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Navigation;
 using Windows.Security.Cryptography;
-using static SecureArchive.Utils.SeekableInputStream;
 using static SecureArchive.Utils.Server.lib.model.HttpContent;
 using HttpContent = SecureArchive.Utils.Server.lib.model.HttpContent;
 
@@ -50,6 +42,7 @@ internal class HttpServerService : IHttpServreService {
         _server = new HttpServer(Routes(), _logger);
 
         _cryptoStreamHandler = new CryptoStreamHandler(_secureStorageService, _logger);
+        ListSource = _databaseService.Entries.List(false);
     }
 
     #region Uploading
@@ -403,28 +396,48 @@ internal class HttpServerService : IHttpServreService {
                     }
                     var sync = p.GetValue("sync")?.ToLower() == "true";
                     var type = p.GetValue("type")?.ToLower() ?? "";
-                    var list = _databaseService.Entries.List(
-                        predicate: (it) => {
-                            if(!sync && it.IsDeleted) return false;
-                            switch(type) {
-                                case "all": return true;
-                                case "photo": return it.Type == "jpg" || it.Type == "png";
-                                default: return it.Type == "mp4";
-                            }
-                        }, 
-                        select: (entry) => {
-                            if(sync) {
-                                return entry.ToDictionary();
-                            } else {
-                                return new Dictionary<string, object>() {
-                                    { "id", entry.Id },
-                                    { "name", entry.Name },
-                                    { "type", entry.Type },
-                                    { "size", entry.Size },
-                                };
-                            }
+                    var list = ListSource.Where((it) => {
+                        if(!sync && it.IsDeleted) return false;
+                        switch(type) {
+                            case "all": return true;
+                            case "photo": return it.Type == "jpg" || it.Type == "png";
+                            default: return it.Type == "mp4";
                         }
-                    );
+                    }).Select((it) => {
+                        if(sync) {
+                            return it.ToDictionary();
+                        } else {
+                            return new Dictionary<string, object>() {
+                                { "id", it.Id },
+                                { "name", it.Name },
+                                { "type", it.Type },
+                                { "size", it.Size },
+                            };
+                        }
+                    }).ToList();
+
+                    //var list = _databaseService.Entries.List(
+                    //    predicate: (it) => {
+                    //        if(!sync && it.IsDeleted) return false;
+                    //        switch(type) {
+                    //            case "all": return true;
+                    //            case "photo": return it.Type == "jpg" || it.Type == "png";
+                    //            default: return it.Type == "mp4";
+                    //        }
+                    //    }, 
+                    //    select: (entry) => {
+                    //        if(sync) {
+                    //            return entry.ToDictionary();
+                    //        } else {
+                    //            return new Dictionary<string, object>() {
+                    //                { "id", entry.Id },
+                    //                { "name", entry.Name },
+                    //                { "type", entry.Type },
+                    //                { "size", entry.Size },
+                    //            };
+                    //        }
+                    //    }
+                    //);
                     var dic = new Dictionary<string,object> {
                         {"cmd", "list" },
                         {"date", DateTime.UtcNow.ToFileTimeUtc() },
@@ -645,5 +658,7 @@ internal class HttpServerService : IHttpServreService {
     public void Stop() {
         _server.Stop();
     }
+
+    public IList<FileEntry> ListSource { get; set; }
     #endregion
 }
