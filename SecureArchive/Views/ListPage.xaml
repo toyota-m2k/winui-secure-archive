@@ -73,19 +73,16 @@
                     ItemsSource="{x:Bind ViewModel.FileList.Value, Mode=OneWay}"
                     IsReadOnly="True"
                     AutoGenerateColumns="False"
+                    CanUserSortColumns="True"
+                    Sorting="FileListGrid_Sorting"
                     >
-                    <toolkit:DataGrid.ColumnHeaderStyle>
-                        <Style TargetType="tkp:DataGridColumnHeader">
-                            <EventSetter Event="Click" Handler="OnColumnHeaderClicked"/>
-                        </Style>
-                    </toolkit:DataGrid.ColumnHeaderStyle>
                     <toolkit:DataGrid.Columns>
-                        <toolkit:DataGridTextColumn Header="Name" Binding="{Binding Name}"/>
-                        <toolkit:DataGridTextColumn Header="Owner" Binding="{Binding OwnerInfo.Name}"/>
-                        <toolkit:DataGridTextColumn Header="Size" Binding="{Binding Size}"/>
-                        <toolkit:DataGridTextColumn Header="Type" Binding="{Binding Type}"/>
-                        <toolkit:DataGridTextColumn Header="Rating" Binding="{Binding Rating}"/>
-                        <toolkit:DataGridTextColumn Header="Mark" Binding="{Binding Mark}"/>
+                        <toolkit:DataGridTextColumn Header="Name" Tag="Name" Binding="{Binding Name}"/>
+                        <toolkit:DataGridTextColumn Header="Owner" Tag="OwnerId" Binding="{Binding OwnerInfo.Name}"/>
+                        <toolkit:DataGridTextColumn Header="Size" Tag="Size" Binding="{Binding Size}"/>
+                        <toolkit:DataGridTextColumn Header="Type" Tag="Type" Binding="{Binding Type}"/>
+                        <toolkit:DataGridTextColumn Header="Rating" Tag="Rating" Binding="{Binding Rating}"/>
+                        <toolkit:DataGridTextColumn Header="Mark" Tag="Mark" Binding="{Binding Mark}"/>
                     </toolkit:DataGrid.Columns>
                 </toolkit:DataGrid>
                 <Border  Margin="10,0,10,10" HorizontalAlignment="Stretch" VerticalAlignment="Bottom"

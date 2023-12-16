@@ -1,3 +1,4 @@
+using CommunityToolkit.WinUI.UI.Controls;
 using CommunityToolkit.WinUI.UI.Controls.Primitives;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
@@ -52,6 +53,18 @@ namespace SecureArchive.Views {
             //else {
             //    ViewModel.Sort = (tag, true);
             //}
+        }
+
+        private void FileListGrid_Sorting(object sender, CommunityToolkit.WinUI.UI.Controls.DataGridColumnEventArgs e) {
+            var tag = e.Column.Tag as string;
+            if (tag == null) return;
+
+            e.Column.SortDirection = ViewModel.SortBy(tag) ? DataGridSortDirection.Ascending : DataGridSortDirection.Descending;
+            foreach(var col in FileListGrid.Columns) {
+                if(col != e.Column) {
+                    col.SortDirection = null;
+                }
+            }
         }
     }
 }
