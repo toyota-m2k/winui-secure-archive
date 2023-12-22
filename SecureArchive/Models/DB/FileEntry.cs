@@ -85,6 +85,9 @@ public class FileEntry : IItemExtAttributes {
     [NotMapped]
     public bool IsDeleted => Deleted != 0;
 
+    [NotMapped]
+    public int CorrectiveRating => Rating == 3 ? 0 : Rating;
+
     public Dictionary<string,object> ToDictionary() {
         return new Dictionary<string, object>() {
             { "id", Id },
