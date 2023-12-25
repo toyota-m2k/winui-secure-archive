@@ -1,3 +1,6 @@
+using CommunityToolkit.WinUI.UI.Controls;
+using CommunityToolkit.WinUI.UI.Controls.Primitives;
+using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -6,12 +9,14 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using SecureArchive.Models.DB;
+using SecureArchive.Utils;
 using SecureArchive.Views.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
+//using System.Windows.Controls;
 using Windows.Foundation;
 using Windows.Foundation.Collections;
 
@@ -28,9 +33,38 @@ namespace SecureArchive.Views {
             ViewModel = App.GetService<ListPageViewModel>();
             this.InitializeComponent();
 
-            ViewModel.ExportCommand.Subscribe(() => {
-                _ = ViewModel.ExportFiles(FileListView.SelectedItems.Select((it)=>(FileEntry)it).ToList());
-            });
+            //ViewModel.ExportCommand.Subscribe(() => {
+            //    _ = ViewModel.ExportFiles(FileListView.SelectedItems.Select((it)=>(FileEntry)it).ToList());
+            //});
+        }
+
+        private void OnColumnHeaderClicked(object sender, RoutedEventArgs e) {
+
+            var header = sender as DataGridColumnHeader;
+            if (header == null) return;
+            var tag = header.Tag as string ?? header.Content.ToString();
+            if (tag == null) return;
+            ViewModel._logger.Debug($"Sort by {tag}");
+            //var sort = ViewModel.Sort;
+            //if (sort == null) return;
+            //if (sort.Key == tag) {
+            //    ViewModel.Sort = (tag, !sort.Ascending);
+            //}
+            //else {
+            //    ViewModel.Sort = (tag, true);
+            //}
+        }
+
+        private void FileListGrid_Sorting(object sender, CommunityToolkit.WinUI.UI.Controls.DataGridColumnEventArgs e) {
+            var tag = e.Column.Tag as string;
+            if (tag == null) return;
+
+            e.Column.SortDirection = ViewModel.SortBy(tag) ? DataGridSortDirection.Ascending : DataGridSortDirection.Descending;
+            foreach(var col in FileListGrid.Columns) {
+                if(col != e.Column) {
+                    col.SortDirection = null;
+                }
+            }
         }
     }
 }

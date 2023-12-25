@@ -1,6 +1,6 @@
-﻿using Microsoft.EntityFrameworkCore.Query.SqlExpressions;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using SecureArchive.Models.CryptoStream;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
@@ -8,18 +8,10 @@ using SecureArchive.Utils.Crypto;
 using SecureArchive.Utils.Server.lib;
 using SecureArchive.Utils.Server.lib.model;
 using SecureArchive.Utils.Server.lib.response;
-using System.Data.Common;
-using System.Data.SqlTypes;
-using System.Diagnostics;
 using System.Runtime.InteropServices.WindowsRuntime;
-using System.Runtime.Serialization;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
-using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Navigation;
 using Windows.Security.Cryptography;
-using static SecureArchive.Utils.SeekableInputStream;
 using static SecureArchive.Utils.Server.lib.model.HttpContent;
 using HttpContent = SecureArchive.Utils.Server.lib.model.HttpContent;
 
@@ -49,7 +41,8 @@ internal class HttpServerService : IHttpServreService {
 
         _server = new HttpServer(Routes(), _logger);
 
-        _cryptoStreamHandler = new CryptoStreamHandler(_secureStorageService, _logger);
+        _cryptoStreamHandler = new CryptoStreamHandler();
+        ListSource = _databaseService.Entries.List(false);
     }
 
     #region Uploading
@@ -145,61 +138,51 @@ internal class HttpServerService : IHttpServreService {
         }
     }
 
-    class CryptoStreamHandler {
-        private FileEntry? _currentEntry = null;
-        private SeekableInputStream? _seekableInputStream = null;
-        private Mutex _mutex = new Mutex();
-        private ISecureStorageService _secureStorageService;
-        private ILogger _logger;
+    //class CryptoStreamHandler {
+    //    private FileEntry? _currentEntry = null;
+    //    private SeekableInputStream? _seekableInputStream = null;
+    //    private Mutex _mutex = new Mutex();
+    //    private ISecureStorageService _secureStorageService;
+    //    private ILogger _logger;
         
-        public CryptoStreamHandler(ISecureStorageService secureStorageService, ILogger logger) {
-            _secureStorageService = secureStorageService;
-            _logger = logger;
-        }
+    //    public CryptoStreamHandler(ISecureStorageService secureStorageService, ILogger logger) {
+    //        _secureStorageService = secureStorageService;
+    //        _logger = logger;
+    //    }
 
-        private bool _locked = false;
-        private long _tick = 0L;
-        public Stream LockStream(FileEntry entry) {
-            if(_locked) {
-                _seekableInputStream?.Dispose();
-                _seekableInputStream = null;
-            }
-            _mutex.WaitOne();
-            _locked = true;
-            _tick = System.Environment.TickCount64;
-            _logger.Debug($"Locked: [Entry={entry.Id}]");
-            if (_seekableInputStream != null) {
-                if (_currentEntry?.Id == entry.Id) {
-                    return _seekableInputStream;
-                } else {
-                    _seekableInputStream.Dispose();
-                }
-            }
-            _currentEntry = entry;
-            _seekableInputStream = new SeekableInputStream(_secureStorageService.OpenEntry(entry), reopenStreamProc: (oldStream) => {
-                oldStream.Dispose();
-                return _secureStorageService.OpenEntry(entry);
-            });
-            return _seekableInputStream;
-        }
+    //    private bool _locked = false;
+    //    private long _tick = 0L;
+    //    public Stream LockStream(FileEntry entry) {
+    //        if(_locked) {
+    //            _seekableInputStream?.Dispose();
+    //            _seekableInputStream = null;
+    //        }
+    //        _mutex.WaitOne();
+    //        _locked = true;
+    //        _tick = System.Environment.TickCount64;
+    //        _logger.Debug($"Locked: [Entry={entry.Id}]");
+    //        if (_seekableInputStream != null) {
+    //            if (_currentEntry?.Id == entry.Id) {
+    //                return _seekableInputStream;
+    //            } else {
+    //                _seekableInputStream.Dispose();
+    //            }
+    //        }
+    //        _currentEntry = entry;
+    //        _seekableInputStream = new SeekableInputStream(_secureStorageService.OpenEntry(entry), reopenStreamProc: (oldStream) => {
+    //            oldStream.Dispose();
+    //            return _secureStorageService.OpenEntry(entry);
+    //        });
+    //        return _seekableInputStream;
+    //    }
 
-        public void UnlockStream(FileEntry entry) {
-            if (_currentEntry?.Id == entry.Id) {
-                _logger.Debug($"Unlocked: [Entry={entry.Id}] ({(System.Environment.TickCount64-_tick)/1000} sec)");
-                _locked = false;
-                _mutex.ReleaseMutex();
-            } else {
-                _logger.Debug($"Cannot Unlock: Entry Mismatch: {_currentEntry?.Id} - {entry.Id}");
-            }
-        }
-    }
-
-    //class CryptoStreamHandlerMap {
-    //    private Dictionary<string, CryptoStreamHandler> _map = new ();
-
-    //    public CryptoStreamHandler(string clientId) {
-    //        if(_map.ContainsKey(clientId)) {
-    //            return _map[clientId];
+    //    public void UnlockStream(FileEntry entry) {
+    //        if (_currentEntry?.Id == entry.Id) {
+    //            _logger.Debug($"Unlocked: [Entry={entry.Id}] ({(System.Environment.TickCount64-_tick)/1000} sec)");
+    //            _locked = false;
+    //            _mutex.ReleaseMutex();
+    //        } else {
+    //            _logger.Debug($"Cannot Unlock: Entry Mismatch: {_currentEntry?.Id} - {entry.Id}");
     //        }
     //    }
     //}
@@ -403,28 +386,48 @@ internal class HttpServerService : IHttpServreService {
                     }
                     var sync = p.GetValue("sync")?.ToLower() == "true";
                     var type = p.GetValue("type")?.ToLower() ?? "";
-                    var list = _databaseService.Entries.List(
-                        predicate: (it) => {
-                            if(!sync && it.IsDeleted) return false;
-                            switch(type) {
-                                case "all": return true;
-                                case "photo": return it.Type == "jpg" || it.Type == "png";
-                                default: return it.Type == "mp4";
-                            }
-                        }, 
-                        select: (entry) => {
-                            if(sync) {
-                                return entry.ToDictionary();
-                            } else {
-                                return new Dictionary<string, object>() {
-                                    { "id", entry.Id },
-                                    { "name", entry.Name },
-                                    { "type", entry.Type },
-                                    { "size", entry.Size },
-                                };
-                            }
+                    var list = ListSource.Where((it) => {
+                        if(!sync && it.IsDeleted) return false;
+                        switch(type) {
+                            case "all": return true;
+                            case "photo": return it.Type == "jpg" || it.Type == "png";
+                            default: return it.Type == "mp4";
                         }
-                    );
+                    }).Select((it) => {
+                        if(sync) {
+                            return it.ToDictionary();
+                        } else {
+                            return new Dictionary<string, object>() {
+                                { "id", it.Id },
+                                { "name", it.Name },
+                                { "type", it.Type },
+                                { "size", it.Size },
+                            };
+                        }
+                    }).ToList();
+
+                    //var list = _databaseService.Entries.List(
+                    //    predicate: (it) => {
+                    //        if(!sync && it.IsDeleted) return false;
+                    //        switch(type) {
+                    //            case "all": return true;
+                    //            case "photo": return it.Type == "jpg" || it.Type == "png";
+                    //            default: return it.Type == "mp4";
+                    //        }
+                    //    }, 
+                    //    select: (entry) => {
+                    //        if(sync) {
+                    //            return entry.ToDictionary();
+                    //        } else {
+                    //            return new Dictionary<string, object>() {
+                    //                { "id", entry.Id },
+                    //                { "name", entry.Name },
+                    //                { "type", entry.Type },
+                    //                { "size", entry.Size },
+                    //            };
+                    //        }
+                    //    }
+                    //);
                     var dic = new Dictionary<string,object> {
                         {"cmd", "list" },
                         {"date", DateTime.UtcNow.ToFileTimeUtc() },
@@ -457,21 +460,21 @@ internal class HttpServerService : IHttpServreService {
                     if(!request.Headers.TryGetValue("range", out var range)) {
                         //Source?.StandardOutput($"BooServer: cmd=video({id})");
                         _logger.Debug("No-Ranged Request.");
-                        return StreamingHttpResponse.CreateForRangedInitial(request, "video/mp4", _cryptoStreamHandler.LockStream(entry), entry.Size, ()=>_cryptoStreamHandler.UnlockStream(entry));
+                        var streamContainer = _cryptoStreamHandler.LockStream(entry);
+                        return StreamingHttpResponse.CreateForRangedInitial(request, "video/mp4", streamContainer.Stream, entry.Size, ()=>_cryptoStreamHandler.UnlockStream(streamContainer));
+                    } else {
+                        var match = RegRange.Match(range);
+                        var ms = match.Groups["start"];
+                        var me = match.Groups["end"];
+                        var start = ms.Success ? Convert.ToInt64(ms.Value) : 0L;
+                        var end = me.Success ? Convert.ToInt64(me.Value) : 0L;
+                        if(start<0 || end<0 || (end>0 && start>end)) {
+                            _logger.Error($"Hah? Start={start} End={end}");
+                        }
+                        _logger.Debug($"Ranged Request. {start} - {end}");
+                        var streamContainer = _cryptoStreamHandler.LockStream(entry);
+                        return StreamingHttpResponse.CreateForRanged(request, "video/mp4", streamContainer.Stream, start, end, entry.Size, ()=>_cryptoStreamHandler.UnlockStream(streamContainer));
                     }
-
-                    var match = RegRange.Match(range);
-                    var ms = match.Groups["start"];
-                    var me = match.Groups["end"];
-                    var start = ms.Success ? Convert.ToInt64(ms.Value) : 0L;
-                    var end = me.Success ? Convert.ToInt64(me.Value) : 0L;
-                    if(start<0 || end<0 || (end>0 && start>end)) {
-                        _logger.Error($"Hah? Start={start} End={end}");
-                    }
-
-
-                    _logger.Debug($"Ranged Request. {start} - {end}");
-                    return StreamingHttpResponse.CreateForRanged(request, "video/mp4", _cryptoStreamHandler.LockStream(entry), start, end, entry.Size, ()=>_cryptoStreamHandler.UnlockStream(entry));
                 }),
             Route.get(
                 name: "photo",
@@ -494,7 +497,8 @@ internal class HttpServerService : IHttpServreService {
                     if(entry==null) {
                         return HttpErrorResponse.NotFound(request);
                     }
-                    return StreamingHttpResponse.CreateForNoRanged(request, "image/jpeg", _cryptoStreamHandler.LockStream(entry), entry.Size, ()=>_cryptoStreamHandler.UnlockStream(entry));
+                    var streamContainer = _cryptoStreamHandler.LockStream(entry);
+                    return StreamingHttpResponse.CreateForNoRanged(request, "image/jpeg", streamContainer.Stream, entry.Size, ()=>_cryptoStreamHandler.UnlockStream(streamContainer));
                 }),
             Route.get(
                 name: "chapters",
@@ -645,5 +649,7 @@ internal class HttpServerService : IHttpServreService {
     public void Stop() {
         _server.Stop();
     }
+
+    public IList<FileEntry> ListSource { get; set; }
     #endregion
 }

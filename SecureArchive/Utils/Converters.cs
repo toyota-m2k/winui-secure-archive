@@ -221,3 +221,19 @@ public class EmptyStringToVisibilityConverter : IValueConverter {
         throw new NotSupportedException();
     }
 }
+
+
+public class IntVisibilityConverter : IValueConverter {
+    public object Convert(object value, Type targetType, object parameter, string language) {
+        if((int)value == System.Convert.ToInt32(parameter)) { 
+            return Visibility.Visible;
+        }
+        else {
+            return Visibility.Collapsed;
+        }
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language) {
+        return DependencyProperty.UnsetValue;
+    }
+}

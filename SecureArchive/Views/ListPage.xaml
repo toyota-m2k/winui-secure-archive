@@ -8,6 +8,8 @@
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:animations="using:CommunityToolkit.WinUI.UI.Animations"
+    xmlns:toolkit="using:CommunityToolkit.WinUI.UI.Controls"
+    xmlns:tkp="using:CommunityToolkit.WinUI.UI.Controls.Primitives"
     mc:Ignorable="d"
     Background="{ThemeResource ApplicationPageBackgroundThemeBrush}">
     <Page.Resources>
@@ -16,14 +18,14 @@
 
     <Grid>
         <Grid.Resources>
-            <DataTemplate x:Key="FileEntryListItem" x:DataType="data:FileEntry">
+            <!--<DataTemplate x:Key="FileEntryListItem" x:DataType="data:FileEntry">
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="{x:Bind OwnerInfo.Name}" Width="100"/>
                     <TextBlock Text="{x:Bind Rating}" Width="20"/>
                     <TextBlock Text="{x:Bind Mark}" Width="20"/>
                     <TextBlock Text="{x:Bind Name}"/>
                 </StackPanel>
-            </DataTemplate>
+            </DataTemplate>-->
         </Grid.Resources>
         <SplitView IsPaneOpen="True" PaneBackground="{ThemeResource SystemBaseMediumLowColor}" 
                    OpenPaneLength="120" CompactPaneLength="48" DisplayMode="Inline">
@@ -59,13 +61,57 @@
             </SplitView.Pane>
 
             <Grid>
-                <ListView 
+                <!--<ListView 
                     x:Name="FileListView"
                     ItemsSource="{x:Bind ViewModel.FileList.Value, Mode=OneWay}"
                     SelectionMode="Extended"
                     ItemTemplate="{StaticResource FileEntryListItem}"
                     >
-                </ListView>
+                </ListView>-->
+                <toolkit:DataGrid
+                    x:Name="FileListGrid"
+                    ItemsSource="{x:Bind ViewModel.FileList.Value, Mode=OneWay}"
+                    IsReadOnly="True"
+                    AutoGenerateColumns="False"
+                    CanUserSortColumns="True"
+                    Sorting="FileListGrid_Sorting"
+                    >
+                    <toolkit:DataGrid.Columns>
+                        <toolkit:DataGridTextColumn Header="Name" Tag="Name" Binding="{Binding Name}"/>
+                        <toolkit:DataGridTextColumn Header="Owner" Tag="OwnerId" Binding="{Binding OwnerInfo.Name}"/>
+                        <toolkit:DataGridTextColumn Header="Size" Tag="Size" Binding="{Binding Size, Converter={StaticResource DecimalStringConverter}}">
+                            <toolkit:DataGridTextColumn.ElementStyle>
+                                <Style TargetType="TextBlock">
+                                    <Setter Property="HorizontalAlignment" Value="Right"/>
+                                </Style>
+                            </toolkit:DataGridTextColumn.ElementStyle>
+                        </toolkit:DataGridTextColumn>
+                        <toolkit:DataGridTextColumn Header="Type" Tag="Type" Binding="{Binding Type}"/>
+                        <toolkit:DataGridTemplateColumn Header="Rating" Tag="CorrectiveRating">
+                            <toolkit:DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Grid HorizontalAlignment="Center">
+                                        <PathIcon Data="M10,7H14V17H12V9H10V7M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4Z" Visibility="{Binding Rating, Converter={StaticResource IntVisibilityConverter}, ConverterParameter=1}"/>
+                                        <PathIcon Data="M9,7H13A2,2 0 0,1 15,9V11A2,2 0 0,1 13,13H11V15H15V17H11L9,17V13A2,2 0 0,1 11,11H13V9H9V7M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4Z" Visibility="{Binding Rating, Converter={StaticResource IntVisibilityConverter}, ConverterParameter=2}"/>
+                                        <PathIcon Data="M15,15A2,2 0 0,1 13,17H9V15H13V13H11V11H13V9H9V7H13A2,2 0 0,1 15,9V10.5A1.5,1.5 0 0,1 13.5,12A1.5,1.5 0 0,1 15,13.5V15M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4Z" Visibility="{Binding Rating, Converter={StaticResource IntVisibilityConverter}, ConverterParameter=4}"/>
+                                        <PathIcon Data="M9,7H11V11H13V7H15V17H13V13H9V7M12,2A10,10 0 0,1 22,12A10,10 0 0,1 12,22A10,10 0 0,1 2,12A10,10 0 0,1 12,2M12,4A8,8 0 0,0 4,12A8,8 0 0,0 12,20A8,8 0 0,0 20,12A8,8 0 0,0 12,4Z" Visibility="{Binding Rating, Converter={StaticResource IntVisibilityConverter}, ConverterParameter=5}"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </toolkit:DataGridTemplateColumn.CellTemplate>
+                        </toolkit:DataGridTemplateColumn>
+                        <toolkit:DataGridTemplateColumn Header="Mark2" Tag="Mark">
+                            <toolkit:DataGridTemplateColumn.CellTemplate>
+                                <DataTemplate>
+                                    <Grid HorizontalAlignment="Center">
+                                        <PathIcon Data="M12,17.27L18.18,21L16.54,13.97L22,9.24L14.81,8.62L12,2L9.19,8.62L2,9.24L7.45,13.97L5.82,21L12,17.27Z" Visibility="{Binding Mark, Converter={StaticResource IntVisibilityConverter}, ConverterParameter=1}" Foreground="Red"/>
+                                        <PathIcon Data="M6,3A1,1 0 0,1 7,4V4.88C8.06,4.44 9.5,4 11,4C14,4 14,6 16,6C19,6 20,4 20,4V12C20,12 19,14 16,14C13,14 13,12 11,12C8,12 7,14 7,14V21H5V4A1,1 0 0,1 6,3Z" Visibility="{Binding Mark, Converter={StaticResource IntVisibilityConverter}, ConverterParameter=2}" Foreground="Blue"/>
+                                        <PathIcon Data="M9,20.42L2.79,14.21L5.62,11.38L9,14.77L18.88,4.88L21.71,7.71L9,20.42Z" Visibility="{Binding Mark, Converter={StaticResource IntVisibilityConverter}, ConverterParameter=3}" Foreground="Green"/>
+                                    </Grid>
+                                </DataTemplate>
+                            </toolkit:DataGridTemplateColumn.CellTemplate>
+                        </toolkit:DataGridTemplateColumn>
+                    </toolkit:DataGrid.Columns>
+                </toolkit:DataGrid>
                 <Border  Margin="10,0,10,10" HorizontalAlignment="Stretch" VerticalAlignment="Bottom"
                          Padding="10" Background="White"
                          BorderThickness="1" BorderBrush="Black" CornerRadius="3"

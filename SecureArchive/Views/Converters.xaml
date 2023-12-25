@@ -15,6 +15,7 @@
     <common:SizeStringConverter x:Key="SizeStringConverter"/>
     <common:DecimalStringConverter x:Key="DecimalStringConverter"/>
     <common:EmptyStringToVisibilityConverter x:Key="EmptyStringToVisibilityConverter"/>
+    <common:IntVisibilityConverter x:Key="IntVisibilityConverter"/>
 
-    
+
 </ResourceDictionary>
