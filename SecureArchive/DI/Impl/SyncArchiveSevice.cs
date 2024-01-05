@@ -23,7 +23,16 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     private IMainThreadService _mainThreadService;
     private IHttpClientFactory _httpClientFactory;
 
-    private HttpClient httpClient => _httpClientFactory.CreateClient();
+    /**
+     * デフォルトのタイムアウト（100秒）が設定された HttpClient
+     * このタイムアウトは、要求全体に対するタイムアウトであり、接続の確立と要求本体の送受信の間を区別しないので要注意。
+     * ファイルのアップロードやダウンロードのように、要求本体の送受信に時間がかかる場合は、Timeout.InfiniteTimeSpan を設定した infiniteHttpClient を使うこと。
+     */
+    private HttpClient defaultHttpClient => _httpClientFactory.CreateClient();
+    /**
+     * タイムアウト無しの HttpClient
+     */
+    private HttpClient infiniteHttpClient => _httpClientFactory.CreateClient().Also(it => it.Timeout = Timeout.InfiniteTimeSpan);
     private string peerAddress = "";
     private string challenge = "";
     private string authToken = "";
@@ -63,7 +72,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
     private async Task<bool> AuthWithToken(string token) {
         var url = $"http://{peerAddress}/auth/{token}";
-        using (var response = await httpClient.GetAsync(url)) {
+        using (var response = await defaultHttpClient.GetAsync(url)) {
             if (response.StatusCode == HttpStatusCode.OK) {
                 return true;
             }
@@ -78,7 +87,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     private async Task<string> AuthWithPassPhrase(string passPhrase) {
         var content = new StringContent(passPhrase, Encoding.UTF8, "text/plain");
         var url = $"http://{peerAddress}/auth";
-        using (var response = await httpClient.PutAsync(url, content)) {
+        using (var response = await defaultHttpClient.PutAsync(url, content)) {
             if(response.StatusCode == HttpStatusCode.OK) {
                 var jsonString = await response.Content.ReadAsStringAsync();
                 var json = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonString);
@@ -149,7 +158,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     private async Task<List<FileEntry>?> GetPeerList(bool retry=false) {
         var url = $"http://{peerAddress}/list?auth={authToken}&type=all&sync";
         bool needRetry = false;
-        using (var response = await httpClient.GetAsync(url)) {
+        using (var response = await defaultHttpClient.GetAsync(url)) {
             if (response.IsSuccessStatusCode) {
                 var jsonString = await response.Content.ReadAsStringAsync();
                 var json = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonString);
@@ -194,7 +203,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     { body, "File", entry.Name }
                 };
                 var url = $"http://{peerAddress}/upload";
-                using (var response = await httpClient.PostAsync(url, content, ct)) {
+                using (var response = await infiniteHttpClient.PostAsync(url, content, ct)) {
                     return response.IsSuccessStatusCode;
                 }
             }
@@ -211,7 +220,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         string url = $"http://{peerAddress}/{type}?id={entry.Id}&auth={authToken}";
         progress(0, entry.Size);
         try {
-            using (var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
+            using (var response = await infiniteHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
                 if (!response.IsSuccessStatusCode) return false;
                 using (var content = response.Content)
                 using (var inStream = await content.ReadAsStreamAsync())
@@ -246,7 +255,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     private async Task<bool> GetExtAttributes(FileEntry fromPeerEntry, FileEntry toMyEntry) {
         string url = $"http://{peerAddress}/extension?id={fromPeerEntry.Id}&auth={authToken}";
         try {
-            using (var response = await httpClient.GetAsync(url)) {
+            using (var response = await defaultHttpClient.GetAsync(url)) {
                 if (!response.IsSuccessStatusCode) return false;
                 using (var content = response.Content) {
                     var jsonString = await content.ReadAsStringAsync();
@@ -286,7 +295,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 { "category", fromMyEntry.Category ?? "" },
                 { "chapters", fromMyEntry.Chapters ?? "" },
             });
-            using (var response = await httpClient.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"))) {
+            using (var response = await defaultHttpClient.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"))) {
                 return response.IsSuccessStatusCode;
             }
         }
@@ -494,5 +503,9 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
     public void Cancel() {
         _cancellationTokenSource?.Cancel();
+    }
+
+    public void x() {
+        var client = HttpWebRequest.Create("http://localhost:8080/list?auth=1234&type=all&sync");
     }
 }
