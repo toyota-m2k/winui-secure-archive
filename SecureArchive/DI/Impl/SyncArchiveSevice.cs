@@ -504,8 +504,4 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     public void Cancel() {
         _cancellationTokenSource?.Cancel();
     }
-
-    public void x() {
-        var client = HttpWebRequest.Create("http://localhost:8080/list?auth=1234&type=all&sync");
-    }
 }
