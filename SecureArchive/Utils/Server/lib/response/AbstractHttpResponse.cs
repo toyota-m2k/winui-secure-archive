@@ -77,7 +77,7 @@ namespace SecureArchive.Utils.Server.lib.response {
         }
         protected abstract void WriteBody(Stream output);
 
-        public void WriteResponse(Stream output)
+        public virtual void WriteResponse(Stream output)
         {
             try {
                 Prepare();
