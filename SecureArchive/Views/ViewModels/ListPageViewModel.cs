@@ -8,6 +8,7 @@ using SecureArchive.Utils;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Linq;
 using System.Reactive.Linq;
@@ -98,6 +99,7 @@ internal class ListPageViewModel {
 
         FileList.Subscribe((list) => {
             _httpServreService.ListSource = list;
+            //Validate(true);
         });
     }
 
@@ -251,5 +253,76 @@ internal class ListPageViewModel {
             : list.OrderByDescending((it) => it.GetType().GetProperty(key)?.GetValue(it)).ThenBy((it) => it.GetType().GetProperty(prevKey)?.GetValue(it));
         FileList.Value = new ObservableCollection<FileEntry>(sorted);
         return ascending;
+    }
+
+    private bool Validate(bool repair) {
+        long getLengthByRead(Stream stream) {
+            var buffer = new byte[1024];
+            long length = 0;
+            while (true) {
+                int read = stream.Read(buffer, 0, buffer.Length);
+                if (read == 0) {
+                    return length;
+                }
+                length += read;
+            }
+        }
+
+        Stream? openEntryStream(FileEntry entry) {
+            try {
+                return _secureStorageService.OpenEntry(entry);
+            } catch(FileNotFoundException e) {
+                _logger.LogError($"Cannot open entry: {entry.Name}[ID={entry.Id}]");
+                if(repair) {
+                    _dataBaseService.EditEntry((entries) => {
+                        entries.Remove(entry);
+                        return true;
+                    });
+                }
+            }
+            catch (Exception e) {
+                _logger.LogError(e, $"Error: {entry.Name}[ID={entry.Id}] {e.Message} ");
+            }
+            return null;
+        }
+
+
+        var list = FileList.Value.ToArray();
+        var result = true;
+        foreach (var entry in list) {
+            if (entry.IsDeleted) continue;
+            var stream = openEntryStream(entry);
+            if (stream != null) {
+                using (stream) {
+                    if (stream == null) {
+                        _logger.LogError($"Cannot open entry: {entry.Name}[ID={entry.Id}]");
+                    }
+                    else {
+                        long length = getLengthByRead(stream);
+                        if (length != entry.Size) {
+                            _logger.LogError($"Size mismatch: {entry.Name}[ID={entry.Id}] DB={entry.Size}, Stream={length}");
+                            if (repair) {
+                                _dataBaseService.EditEntry((entries) => {
+                                    entries.Update(
+                                        entry.OwnerId,
+                                        entry.Name,
+                                        length,
+                                        entry.Type,
+                                        entry.Path,
+                                        entry.LastModifiedDate,
+                                        entry.OriginalId,
+                                        entry.MetaInfo,
+                                        new ItemExtAttributes(entry.AttrDataDic));
+                                    return true;
+                                });
+                            }
+                            result = false;
+                        }
+                    }
+                }
+            }
+        }
+        _logger.LogInformation($"Validation Completed: {result}");
+        return result;
     }
 }

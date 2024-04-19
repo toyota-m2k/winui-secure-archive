@@ -88,6 +88,12 @@ public class FileEntry : IItemExtAttributes {
     [NotMapped]
     public int CorrectiveRating => Rating == 3 ? 0 : Rating;
 
+    [NotMapped]
+    public string MediaType => Type == "mp4" ? "v" : "p";
+    [NotMapped]
+    public string ContentType => Type == "mp4" ? "video/mp4" : Type=="png" ? "image/png" : "image/jpeg";
+
+
     public Dictionary<string,object> ToDictionary() {
         return new Dictionary<string, object>() {
             { "id", Id },

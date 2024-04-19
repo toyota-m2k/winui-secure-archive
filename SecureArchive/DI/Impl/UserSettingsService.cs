@@ -19,7 +19,7 @@ internal class UserSettingsService : IUserSettingsService {
             set => _userSettings.Put(callerName(), value);
         }
         public int PortNo { 
-            get => _userSettings.GetInt(callerName(), 6001);
+            get => _userSettings.GetInt(callerName(), 3800);
             set => _userSettings.Put(callerName(), value);
         }
         public bool ServerAutoStart {

@@ -189,6 +189,8 @@ public class HttpProcessor {
             Logger.Error(ex, "Route.Process");
             if (ex is HttpException httpException) {
                 return httpException.ErrorResponse;
+            } else if (ex is HttpCorsException corsException) {
+                return corsException.Response;
             }
             else {
                 return HttpErrorResponse.InternalServerError(HttpRequest.InvalidRequest(id));
@@ -244,6 +246,11 @@ public class HttpProcessor {
         Route? route = routes.FirstOrDefault(x => x.Method == request.Method);
 
         if (route == null) {
+            if(request.Method == "OPTIONS") {
+                // CORS のための OPTIONS メソッドの場合は、例外を投げて上位で処理する
+                throw new HttpCorsException(request);
+            }
+
             Logger.Error($"Not Found: {request.Method} {request.Url}");
             throw HttpErrorResponse.MethodNotAllowed(request).Exception;
         }

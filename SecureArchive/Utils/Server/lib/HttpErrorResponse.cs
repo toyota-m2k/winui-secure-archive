@@ -65,6 +65,4 @@ class HttpErrorResponse : TextHttpResponse
                     HttpStatusCode.ServiceUnavailable,
                     "Service Unavailable");
     }
-
-
 }

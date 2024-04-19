@@ -25,6 +25,8 @@ internal class HttpServerService : IHttpServreService {
     private IPasswordService _passwordService;
     private IBackupService _backupService;
     private CryptoStreamHandler _cryptoStreamHandler;
+    private OneTimePasscode oneTimePasscode;
+
 
     //private IUserSettingsService _userSettingsService;
     public HttpServerService(
@@ -43,6 +45,7 @@ internal class HttpServerService : IHttpServreService {
 
         _cryptoStreamHandler = new CryptoStreamHandler();
         ListSource = _databaseService.Entries.List(false);
+        oneTimePasscode = new OneTimePasscode(_passwordService);
     }
 
     #region Uploading
@@ -256,13 +259,67 @@ internal class HttpServerService : IHttpServreService {
         }
     }
     #endregion
+
+    // Shared Routed Handler
+    private IHttpResponse RequestItem(HttpRequest request, string? type) {
+        var p = QueryParser.Parse(request.Url);
+        if (!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+            return oneTimePasscode.UnauthorizedResponse(request);
+        }
+        var id = Convert.ToInt64(p.GetValue("id", "0"));
+        var oid = p.GetValue("o");
+        var cid = p.GetValue("c");
+
+        FileEntry? entry = null;
+        if (oid.IsNotEmpty() && cid.IsNotEmpty()) {
+            entry = _databaseService.Entries.GetByOriginalId(oid, cid);
+        }
+        else {
+            entry = _databaseService.Entries.GetById(id);
+        }
+        if (entry == null) {
+            return HttpErrorResponse.NotFound(request);
+        }
+        if (type!=null && type != entry.MediaType) {
+            // type指定があるが、実際のメディアタイプと異なる場合は、Not Found
+            return HttpErrorResponse.NotFound(request);
+        }
+
+        if (entry.MediaType=="p") {
+            // 画像ならNoRanged なレスポンスを返す
+            var streamContainer = _cryptoStreamHandler.LockStream(entry);
+            return StreamingHttpResponse.CreateForNoRanged(request, entry.ContentType, streamContainer.Stream, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer));
+        }
+
+        // 動画の場合は、Range指定に対応する。
+        if (!request.Headers.TryGetValue("range", out var range)) {
+            //Source?.StandardOutput($"BooServer: cmd=video({id})");
+            _logger.Debug("No-Ranged Request.");
+            var streamContainer = _cryptoStreamHandler.LockStream(entry);
+            return StreamingHttpResponse.CreateForRangedInitial(request, "video/mp4", streamContainer.Stream, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer));
+        }
+        else {
+            var match = RegRange.Match(range);
+            var ms = match.Groups["start"];
+            var me = match.Groups["end"];
+            var start = ms.Success ? Convert.ToInt64(ms.Value) : 0L;
+            var end = me.Success ? Convert.ToInt64(me.Value) : 0L;
+            if (start < 0 || end < 0 || (end > 0 && start > end)) {
+                _logger.Error($"Hah? Start={start} End={end}");
+            }
+            _logger.Debug($"Ranged Request. {start} - {end}");
+            var streamContainer = _cryptoStreamHandler.LockStream(entry);
+            return StreamingHttpResponse.CreateForRanged(request, "video/mp4", streamContainer.Stream, start, end, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer));
+        }
+    }
+
+
     #region Router
 
     public Regex RegRange = new Regex(@"bytes=(?<start>\d+)(?:-(?<end>\d+))?");
     public Regex RegUploading = new Regex(@"/uploading/(?<hid>[^?/]+)(?:[?].*)*");
 
     private List<Route> Routes() {
-        var oneTimePasscode = new OneTimePasscode(_passwordService);
 
         return new List<Route> {
             Route.get(
@@ -344,7 +401,7 @@ internal class HttpServerService : IHttpServreService {
                     var cap = new Dictionary<string,object> {
                         {"cmd", "capability"},
                         {"serverName", "SecureArchive"},
-                        {"version", 1},
+                        {"version", 2},
                         {"root", "/" },
                         {"category", false},
                         {"rating", false},
@@ -357,6 +414,7 @@ internal class HttpServerService : IHttpServreService {
                         {"hasView", false },              // current get/set をサポートする
                         {"authentication", true },
                         {"challenge",  oneTimePasscode.Challenge },
+                        {"types", "vp" }                // v: video, a: audio, p: photo
                     };
                     return TextHttpResponse.FromJson(request, cap);
                 }),
@@ -385,9 +443,17 @@ internal class HttpServerService : IHttpServreService {
                         return oneTimePasscode.UnauthorizedResponse(request);
                     }
                     var sync = p.GetValue("sync")?.ToLower() == "true";
-                    var type = p.GetValue("type")?.ToLower() ?? "";
+                    var type = p.GetValue("type")?.ToLower();
+                    var types = p.GetValue("f")?.ToLower();
+
                     var list = ListSource.Where((it) => {
                         if(!sync && it.IsDeleted) return false;
+                        if(types!=null) {
+                            var v = types.Contains("v");
+                            var p = types.Contains("p");
+                            type = v && p ? "all" : v ? "video" : "photo";
+                        }
+
                         switch(type) {
                             case "all": return true;
                             case "photo": return it.Type == "jpg" || it.Type == "png";
@@ -402,6 +468,7 @@ internal class HttpServerService : IHttpServreService {
                                 { "name", it.Name },
                                 { "type", it.Type },
                                 { "size", it.Size },
+                                { "media", it.MediaType },
                             };
                         }
                     }).ToList();
@@ -439,66 +506,19 @@ internal class HttpServerService : IHttpServreService {
                 name: "video",
                 regex: @"/video\?\w+",
                 process: (HttpRequest request) => {
-                    var p = QueryParser.Parse(request.Url);
-                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
-                        return oneTimePasscode.UnauthorizedResponse(request);
-                    }
-                    var id = Convert.ToInt64(p.GetValue("id", "0"));
-                    var oid = p.GetValue("o");
-                    var cid = p.GetValue("c");
-
-                    FileEntry? entry = null;
-                    if(oid.IsNotEmpty() && cid.IsNotEmpty()) {
-                        entry = _databaseService.Entries.GetByOriginalId(oid, cid);
-                    } else {
-                        entry = _databaseService.Entries.GetById(id);
-                    }
-                    if(entry==null) {
-                        return HttpErrorResponse.NotFound(request);
-                    }
-
-                    if(!request.Headers.TryGetValue("range", out var range)) {
-                        //Source?.StandardOutput($"BooServer: cmd=video({id})");
-                        _logger.Debug("No-Ranged Request.");
-                        var streamContainer = _cryptoStreamHandler.LockStream(entry);
-                        return StreamingHttpResponse.CreateForRangedInitial(request, "video/mp4", streamContainer.Stream, entry.Size, ()=>_cryptoStreamHandler.UnlockStream(streamContainer));
-                    } else {
-                        var match = RegRange.Match(range);
-                        var ms = match.Groups["start"];
-                        var me = match.Groups["end"];
-                        var start = ms.Success ? Convert.ToInt64(ms.Value) : 0L;
-                        var end = me.Success ? Convert.ToInt64(me.Value) : 0L;
-                        if(start<0 || end<0 || (end>0 && start>end)) {
-                            _logger.Error($"Hah? Start={start} End={end}");
-                        }
-                        _logger.Debug($"Ranged Request. {start} - {end}");
-                        var streamContainer = _cryptoStreamHandler.LockStream(entry);
-                        return StreamingHttpResponse.CreateForRanged(request, "video/mp4", streamContainer.Stream, start, end, entry.Size, ()=>_cryptoStreamHandler.UnlockStream(streamContainer));
-                    }
+                    return RequestItem(request, "v");
+                }),
+            Route.get(
+                name: "item",
+                regex: @"/item\?\w+",
+                process: (HttpRequest request) => {
+                    return RequestItem(request, null);
                 }),
             Route.get(
                 name: "photo",
                 regex: @"/photo\?\w+",
                 process: (HttpRequest request) => {
-                    var p = QueryParser.Parse(request.Url);
-                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
-                        return oneTimePasscode.UnauthorizedResponse(request);
-                    }
-                    var id = Convert.ToInt64(p.GetValue("id", "0"));
-                    var oid = p.GetValue("o");
-                    var cid = p.GetValue("c");
-
-                    FileEntry? entry = null;
-                    if(oid.IsNotEmpty() && cid.IsNotEmpty()) {
-                        entry = _databaseService.Entries.GetByOriginalId(oid, cid);
-                    } else {
-                        entry = _databaseService.Entries.GetById(id);
-                    }
-                    if(entry==null) {
-                        return HttpErrorResponse.NotFound(request);
-                    }
-                    var streamContainer = _cryptoStreamHandler.LockStream(entry);
-                    return StreamingHttpResponse.CreateForNoRanged(request, "image/jpeg", streamContainer.Stream, entry.Size, ()=>_cryptoStreamHandler.UnlockStream(streamContainer));
+                    return RequestItem(request, "p");
                 }),
             Route.get(
                 name: "chapters",
