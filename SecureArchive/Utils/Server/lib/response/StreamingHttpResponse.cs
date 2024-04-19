@@ -36,9 +36,9 @@ public class StreamingHttpResponse : AbstractHttpResponse {
         Start = start;
         End = end;
         SupportRange = supportRange;
-        if (TotalLength > 0) {
-            ContentLength = TotalLength;
-        } 
+        //if (TotalLength > 0) {                    // Prepare でやる
+        //    ContentLength = TotalLength;
+        //} 
         if(onComplete!=null) {
             OnComplete += onComplete;
         }
@@ -100,12 +100,12 @@ public class StreamingHttpResponse : AbstractHttpResponse {
         }
         else {
             Logger.Debug($"[{Request.Id}] Requested Range: {F(Start)} - {F(End)} ({F(End - Start + 1)} bytes in {F(TotalLength)})");
-            StatusCode = HttpStatusCode.PartialContent;
+                StatusCode = HttpStatusCode.PartialContent;
             Buffer = null;
             var total = "*";
             if (TotalLength>0) {
                 total = $"{TotalLength}";
-                ContentLength = TotalLength;
+                // ContentLength = TotalLength;  Range指定の場合も Content-Length には全体のサイズを入れるのかと思っていたが、返すデータサイズを指定するらしい。
                 if (End <= 0 || End>=TotalLength) {
                     End = TotalLength - 1;
                 }
@@ -125,12 +125,14 @@ public class StreamingHttpResponse : AbstractHttpResponse {
             PartialLength = ReadStream(InputStream, Buffer, out var eos);
             End = Start + PartialLength - 1;
             if(TotalLength<=0) { 
-                ContentLength = PartialLength;
+                //ContentLength = PartialLength;
                 total = eos ? $"{End+1}" :"*";
             }
             Logger.Debug($"[{Request.Id}] Actual Range: {Start}-{End}/{total} ({string.Format("{0:#,0}", PartialLength)} Bytes)");
             Headers["Content-Range"] = $"bytes {Start}-{End}/{total}";
             Headers["Accept-Ranges"] = "bytes";
+            // Headers["Content-Length"] = $"{End-Start+1}";
+            ContentLength = End-Start+1;    // Range指定の場合の Content-Length は実際に返すデータの長さ(End-Start+1)にする
         }
     }
 

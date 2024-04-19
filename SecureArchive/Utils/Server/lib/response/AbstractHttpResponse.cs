@@ -19,10 +19,11 @@ namespace SecureArchive.Utils.Server.lib.response {
 
         private string? getReferer() {
             if (Request.Headers.TryGetValue("origin", out var origin)) {
-                var m = refererForCors.Match(origin);
-                if (m.Success) {
-                    return m.Groups["target"]?.Value;
-                }
+                return origin;
+                //var m = refererForCors.Match(origin);
+                //if (m.Success) {
+                //    return m.Groups["target"]?.Value;
+                //}
             }
             if (Request.Headers.TryGetValue("referer", out var referer)) {
                 var m = refererForCors.Match(referer);
