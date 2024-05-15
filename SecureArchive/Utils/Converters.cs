@@ -1,5 +1,6 @@
 ﻿using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml;
+using System.Text.RegularExpressions;
 
 namespace SecureArchive.Utils;
 
@@ -157,6 +158,9 @@ public class NegEnumVisibilityConverter : IValueConverter {
 
 public class DateStringConverter : IValueConverter {
     public object Convert(object value, Type targetType, object parameter, string language) {
+        if (value is long) {
+            value = TimeUtils.javaTime2dateTime((long)value);
+        }
         if (value is DateTime dateTime) {
             if (!DateTime.MinValue.Equals(value)) {
                 return dateTime.ToLocalTime().ToString("yyyy/MM/dd HH:mm:ss");
@@ -235,5 +239,27 @@ public class IntVisibilityConverter : IValueConverter {
 
     public object ConvertBack(object value, Type targetType, object parameter, string language) {
         return DependencyProperty.UnsetValue;
+    }
+}
+
+// PrivateCamera 固有のコンバータ
+// ファイル名から日付文字列を取得して整形する。
+// CreationDate属性を持っているが、時差が補正できないので、ファイル名から取得する。
+// ファイル名は (img|mov)-yyyy.MM.dd-HH:mm:ss.(jpg|mp4) の形式であることを前提とする。
+
+public class FileNameToDateStringConverter : IValueConverter {
+    private static Regex regex = new Regex(@"(img|mov)-(\d{4}.\d{2}.\d{2}-\d{2}:\d{2}:\d{2}).(jpg|mp4)");
+    public object Convert(object value, Type targetType, object parameter, string language) {
+        if (value is string fileName) {
+            var match = regex.Match(fileName);
+            if (match.Success) {
+                return match.Groups[2].Value.Replace(".", "/").Replace("-", " ");
+            }
+        }
+        return "";
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language) {
+        throw new NotSupportedException();
     }
 }

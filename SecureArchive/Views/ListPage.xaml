@@ -86,6 +86,8 @@
                                 </Style>
                             </toolkit:DataGridTextColumn.ElementStyle>
                         </toolkit:DataGridTextColumn>
+                        <toolkit:DataGridTextColumn Header="Creation" Tag="CreationDate" Binding="{Binding Name, Converter={StaticResource FileNameToDateStringConverter}}"/>
+                        <toolkit:DataGridTextColumn Header="Updated" Tag="LastModifiedDate" Binding="{Binding LastModifiedDate, Converter={StaticResource DateStringConverter}}"/>
                         <toolkit:DataGridTextColumn Header="Type" Tag="Type" Binding="{Binding Type}"/>
                         <toolkit:DataGridTemplateColumn Header="Rating" Tag="CorrectiveRating">
                             <toolkit:DataGridTemplateColumn.CellTemplate>

@@ -271,7 +271,7 @@ internal class ListPageViewModel {
         Stream? openEntryStream(FileEntry entry) {
             try {
                 return _secureStorageService.OpenEntry(entry);
-            } catch(FileNotFoundException e) {
+            } catch (FileNotFoundException) {
                 _logger.LogError($"Cannot open entry: {entry.Name}[ID={entry.Id}]");
                 if(repair) {
                     _dataBaseService.EditEntry((entries) => {

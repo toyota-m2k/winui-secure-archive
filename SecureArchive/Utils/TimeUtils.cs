@@ -9,4 +9,11 @@ public static class TimeUtils {
         TimeSpan span = time - Epoch;
         return (long)Math.Round(span.TotalMilliseconds);
     }
+
+    /**
+     *     * Java の Date#time の値を DateTime に変換する。
+     */
+    public static DateTime javaTime2dateTime(long time) {
+        return Epoch.AddMilliseconds(time);
+    }
 }

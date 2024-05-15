@@ -16,6 +16,7 @@
     <common:DecimalStringConverter x:Key="DecimalStringConverter"/>
     <common:EmptyStringToVisibilityConverter x:Key="EmptyStringToVisibilityConverter"/>
     <common:IntVisibilityConverter x:Key="IntVisibilityConverter"/>
+    <common:FileNameToDateStringConverter x:Key="FileNameToDateStringConverter"/>
 
 
 </ResourceDictionary>
