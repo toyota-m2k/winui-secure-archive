@@ -77,7 +77,7 @@ namespace SecureArchive {
                     .AddSingleton<MainWindowViewModel>()
                     .AddTransient<MenuPageViewModel>()
                     .AddTransient<SettingsPageViewModel>()
-                    .AddTransient<ListPageViewModel>()
+                    .AddSingleton<ListPageViewModel>()
                     .AddTransient<BackupDialogViewModel>()
                     .AddTransient<DeleteBackupDialogViewModel>()
                     .AddTransient<UpdateBackupDialogViewModel>()

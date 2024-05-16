@@ -158,7 +158,7 @@ public class FileEntryList : IMutableFileEntryList {
         _entries = connector.Entries;
     }
 
-    private IEnumerable<FileEntry> rawList => _entries.OrderBy(it => it.Name);
+    private IEnumerable<FileEntry> rawList => _entries.OrderBy(it => it.CreationDate);
 
     public IList<FileEntry> List(bool resolveOwnerInfo) {
         lock (_connector) {
