@@ -264,6 +264,7 @@ internal class HttpServerService : IHttpServreService {
     private IHttpResponse RequestItem(HttpRequest request, string? type) {
         var p = QueryParser.Parse(request.Url);
         if (!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+            _logger.Info("Unauthorized: maybe timeout of auth token.");
             return oneTimePasscode.UnauthorizedResponse(request);
         }
         var id = Convert.ToInt64(p.GetValue("id", "0"));
