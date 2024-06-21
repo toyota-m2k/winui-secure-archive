@@ -238,10 +238,10 @@ internal class SecureStorageService : ISecureStorageService {
             _logger.Error($"\"{newPath}\" is not exists.");
             return false;
         }
-        if (!FileUtils.IsFolderEmpty(newPath)) {
-            _logger.Error($"\"{newPath}\" is not empty.");
-            return false;
-        }
+        //if (!FileUtils.IsFolderEmpty(newPath)) {
+        //    _logger.Error($"\"{newPath}\" is not empty.");
+        //    return false;
+        //}
         // 新しいフォルダに読み書きできることを確認
         try {
             var checkFile = Path.Combine(newPath, "a.txt");
@@ -285,11 +285,25 @@ internal class SecureStorageService : ISecureStorageService {
                         }
                         if (string.Compare(from, dir, StringComparison.OrdinalIgnoreCase) == 0) {
                             // needs to move.
+                            result = true;
                             var dstPath = Path.Combine(to, name);
+                            if (File.Exists(dstPath)) {
+                                // コピー先ファイルが存在する場合は、リトライ中とみなして、コピーはスキップ
+                                _logger.Info($"File already exists: {dstPath}");
+                                // DBのパスは更新
+                                e.Path = dstPath;
+                                continue;
+                            }
+                            if (!File.Exists(e.Path)) {
+                                // コピー元ファイルが存在しない場合は、エントリを削除する。
+                                _logger.Info($"Source file not found: {e.Path}");
+                                entries.Remove(e, true);
+                                continue;
+                            }
+                            // エントリをコピー
                             File.Copy(e.Path, dstPath);
                             _logger.Debug($"Moved: {e.Path} --> {dstPath}");
                             e.Path = dstPath;
-                            result = true;
                         }
                     }
                     return result;

@@ -52,29 +52,29 @@ namespace SecureArchive.DI.Impl {
 
     }
 
-    internal class FileStoreServiceWithRegisteredFileFolder {
-        const string TOKEN_DATA_FOLDER = "SA.DataFolder";
-        private RegisteredFileFolder _fileFolder = new(TOKEN_DATA_FOLDER);
+    //internal class FileStoreServiceWithRegisteredFileFolder {
+    //    const string TOKEN_DATA_FOLDER = "SA.DataFolder";
+    //    private RegisteredFileFolder _fileFolder = new(TOKEN_DATA_FOLDER);
 
-        public bool IsRegistered => _fileFolder.Registered;
+    //    public bool IsRegistered => _fileFolder.Registered;
 
-        public async Task<bool> Register(StorageFolder newFolder) {
-            if(IsRegistered) {
-                var oldFolder = await GetFolder();
-                if(oldFolder != null && await FileUtils.IsEmpty(oldFolder)) {
-                    await FileUtils.MoveItemsInFolder(oldFolder, newFolder);
-                }
-            }
-            return _fileFolder.Register(newFolder, replaceIfExist:true);
-        }
+    //    public async Task<bool> Register(StorageFolder newFolder) {
+    //        if(IsRegistered) {
+    //            var oldFolder = await GetFolder();
+    //            if(oldFolder != null && await FileUtils.IsEmpty(oldFolder)) {
+    //                await FileUtils.MoveItemsInFolder(oldFolder, newFolder);
+    //            }
+    //        }
+    //        return _fileFolder.Register(newFolder, replaceIfExist:true);
+    //    }
 
-        public async Task<StorageFolder?> GetFolder() {
-            if (IsRegistered) {
-                return await _fileFolder.Folder;
-            } else {
-                return null;
-            }
-        }
+    //    public async Task<StorageFolder?> GetFolder() {
+    //        if (IsRegistered) {
+    //            return await _fileFolder.Folder;
+    //        } else {
+    //            return null;
+    //        }
+    //    }
         
-    }
+    //}
 }

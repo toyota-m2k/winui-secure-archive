@@ -163,11 +163,14 @@ namespace SecureArchive.Views.ViewModels {
                 .PickAsync();
             if(folder!=null) {
                 if(!await folder.IsEmpty()) {
-                    await MessageBoxBuilder.Create(App.MainWindow)
-                        .SetMessage("This folder contains one or more files. Please select empty folder.")
-                        .AddButton("OK")
+                    var decision = await MessageBoxBuilder.Create(App.MainWindow)
+                        .SetMessage("The specified folder is not empty. \r\nAre you sure you want to set it as the data folder?")
+                        .AddButton("OK", true)
+                        .AddButton("Cancel", false)
                         .ShowAsync();
-                    return;
+                    if(decision as bool? != true) {
+                        return;
+                    }
                 }
 
                 var oldPath = await _fileStoreService.GetFolder();
