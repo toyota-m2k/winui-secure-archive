@@ -10,6 +10,6 @@ internal interface ICryptoStreamContainer
 
 internal interface ICryptoStreamHandler : IDisposable
 {
-    ICryptoStreamContainer LockStream(FileEntry fileEntry);
-    void UnlockStream(ICryptoStreamContainer container);
+    ICryptoStreamContainer LockStream(FileEntry fileEntry, long id);
+    void UnlockStream(ICryptoStreamContainer container, long id);
 }

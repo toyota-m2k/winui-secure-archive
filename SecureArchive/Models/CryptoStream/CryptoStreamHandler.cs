@@ -7,17 +7,17 @@ namespace SecureArchive.Models.CryptoStream {
         private static UtLog _logger = new(typeof(CryptoStreamHandler));
         private Dictionary<FileEntry, CryptoStreamPool> _pools = new();
 
-        public ICryptoStreamContainer LockStream(FileEntry fileEntry)
+        public ICryptoStreamContainer LockStream(FileEntry fileEntry, long id)
         {
             lock (_pools)
             {
                 try
                 {
-                    _logger.Debug($"Lock: {fileEntry.Name}");
+                    _logger.Debug($"Lock({id}): {fileEntry.Name}");
                     if (!_pools.TryGetValue(fileEntry, out var pool))
                     {
-                        _logger.Debug($"Create Pool for {fileEntry.Name}");
-                        pool = new CryptoStreamPool(fileEntry);
+                        _logger.Debug($"Create Pool for {fileEntry.Name} ({id})");
+                        pool = new CryptoStreamPool(fileEntry, id);
                         _pools.Add(fileEntry, pool);
                     }
                     return pool.LockStream();
@@ -29,13 +29,13 @@ namespace SecureArchive.Models.CryptoStream {
             }
         }
 
-        public void UnlockStream(ICryptoStreamContainer container)
+        public void UnlockStream(ICryptoStreamContainer container, long id)
         {
             lock (_pools)
             {
                 try
                 {
-                    _logger.Debug($"Unlock: {container.FileEntry.Name}");
+                    _logger.Debug($"Unlock({id}): {container.FileEntry.Name}");
                     if (!_pools.TryGetValue(container.FileEntry, out var pool))
                     {
                         throw new Exception("UnlockStream: no entry");

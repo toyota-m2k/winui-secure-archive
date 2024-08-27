@@ -8,9 +8,10 @@ internal class CryptoStreamPool : IDisposable {
 
     public FileEntry FileEntry { get; }
     public long LastAccess { get; private set; } = DateTime.Now.Ticks;
-
-    public CryptoStreamPool(FileEntry fileEntry) {
+    private long Id { get; } // for debug
+    public CryptoStreamPool(FileEntry fileEntry, long id) {
         FileEntry = fileEntry;
+        Id = id;
     }
 
     private List<CryptoStreamEntry> _streamList = new();
@@ -18,7 +19,7 @@ internal class CryptoStreamPool : IDisposable {
     public ICryptoStreamContainer LockStream() {
         var entry = _streamList.FirstOrDefault((it) => !it.InUse);
         if (entry == null) {
-            _logger.Debug($"Create new stream for {FileEntry.Name}");
+            _logger.Debug($"Create new stream for {FileEntry.Name} ({_streamList.Count+1})");
             entry = new CryptoStreamEntry(FileEntry);
             _streamList.Add(entry);
         }

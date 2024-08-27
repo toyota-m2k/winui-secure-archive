@@ -29,7 +29,7 @@ public class StreamingHttpResponse : AbstractHttpResponse {
      */
     public StreamingHttpResponse(HttpRequest req, string contentType, Stream inStream, bool supportRange, long start, long end, long totalLength/*=-1*/, Action? onComplete)
         : base(req, HttpStatusCode.Ok) {
-        Logger.Debug($"Start={start} End={end} TotalLength={totalLength} Stream.Length={inStream.Length}");
+        Logger.Debug($"Start={F(start)} End={F(end)} TotalLength={F(totalLength)} Stream.Length={F(inStream.Length)}");
         InputStream = inStream;
         TotalLength = (totalLength>0) ? totalLength : inStream.Length;
         ContentType = contentType;
@@ -104,7 +104,7 @@ public class StreamingHttpResponse : AbstractHttpResponse {
             Buffer = null;
             var total = "*";
             if (TotalLength>0) {
-                total = $"{TotalLength}";
+                total = F(TotalLength);
                 // ContentLength = TotalLength;  Range指定の場合も Content-Length には全体のサイズを入れるのかと思っていたが、返すデータサイズを指定するらしい。
                 if (End <= 0 || End>=TotalLength) {
                     End = TotalLength - 1;
@@ -128,7 +128,7 @@ public class StreamingHttpResponse : AbstractHttpResponse {
                 //ContentLength = PartialLength;
                 total = eos ? $"{End+1}" :"*";
             }
-            Logger.Debug($"[{Request.Id}] Actual Range: {Start}-{End}/{total} ({string.Format("{0:#,0}", PartialLength)} Bytes)");
+            Logger.Debug($"[{Request.Id}] Actual Range: {F(Start)}-{F(End)}/{total} ({F(PartialLength)} Bytes)");
             Headers["Content-Range"] = $"bytes {Start}-{End}/{total}";
             Headers["Accept-Ranges"] = "bytes";
             // Headers["Content-Length"] = $"{End-Start+1}";
@@ -167,7 +167,7 @@ public class StreamingHttpResponse : AbstractHttpResponse {
             }
             output.Write(buffer, 0, read);
             length += read;
-            Logger.Debug($"[{Request.Id}] CopyStream: {read} bytes (total={length})");
+            Logger.Debug($"[{Request.Id}] CopyStream: {F(read)} bytes (total={F(length)})");
         }
     }
 
@@ -183,7 +183,7 @@ public class StreamingHttpResponse : AbstractHttpResponse {
             if(Buffer==null) {
                 throw new Exception("Internal error: Buffer is null");
             }
-            ExecuteWithLog($"Range({Start}-{End})", () => {
+            ExecuteWithLog($"Range({F(Start)}-{F(End)})", () => {
                 output.Write(Buffer, 0, PartialLength);
             });
         }

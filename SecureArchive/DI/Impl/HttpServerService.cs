@@ -288,16 +288,16 @@ internal class HttpServerService : IHttpServreService {
 
         if (entry.MediaType=="p") {
             // 画像ならNoRanged なレスポンスを返す
-            var streamContainer = _cryptoStreamHandler.LockStream(entry);
-            return StreamingHttpResponse.CreateForNoRanged(request, entry.ContentType, streamContainer.Stream, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer));
+            var streamContainer = _cryptoStreamHandler.LockStream(entry, request.Id);
+            return StreamingHttpResponse.CreateForNoRanged(request, entry.ContentType, streamContainer.Stream, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer, request.Id));
         }
 
         // 動画の場合は、Range指定に対応する。
         if (!request.Headers.TryGetValue("range", out var range)) {
             //Source?.StandardOutput($"BooServer: cmd=video({id})");
             _logger.Debug("No-Ranged Request.");
-            var streamContainer = _cryptoStreamHandler.LockStream(entry);
-            return StreamingHttpResponse.CreateForRangedInitial(request, "video/mp4", streamContainer.Stream, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer));
+            var streamContainer = _cryptoStreamHandler.LockStream(entry, request.Id);
+            return StreamingHttpResponse.CreateForRangedInitial(request, "video/mp4", streamContainer.Stream, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer, request.Id));
         }
         else {
             var match = RegRange.Match(range);
@@ -309,8 +309,8 @@ internal class HttpServerService : IHttpServreService {
                 _logger.Error($"Hah? Start={start} End={end}");
             }
             _logger.Debug($"Ranged Request. {start} - {end}");
-            var streamContainer = _cryptoStreamHandler.LockStream(entry);
-            return StreamingHttpResponse.CreateForRanged(request, "video/mp4", streamContainer.Stream, start, end, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer));
+            var streamContainer = _cryptoStreamHandler.LockStream(entry, request.Id);
+            return StreamingHttpResponse.CreateForRanged(request, "video/mp4", streamContainer.Stream, start, end, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer, request.Id));
         }
     }
 

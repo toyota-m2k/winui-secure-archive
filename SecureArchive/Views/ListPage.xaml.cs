@@ -33,9 +33,9 @@ namespace SecureArchive.Views {
             ViewModel = App.GetService<ListPageViewModel>();
             this.InitializeComponent();
 
-            //ViewModel.ExportCommand.Subscribe(() => {
-            //    _ = ViewModel.ExportFiles(FileListView.SelectedItems.Select((it)=>(FileEntry)it).ToList());
-            //});
+            ViewModel.ExportCommand.Subscribe(() => {
+                _ = ViewModel.ExportFiles(FileListGrid.SelectedItems.Cast<FileEntry>().ToList());
+            });
         }
 
         private void OnColumnHeaderClicked(object sender, RoutedEventArgs e) {
