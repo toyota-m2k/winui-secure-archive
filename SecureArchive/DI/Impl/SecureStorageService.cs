@@ -456,6 +456,10 @@ internal class SecureStorageService : ISecureStorageService {
             }
         }
     }
+
+    /**
+     * すべてのmp4ファイルをFastStartに変換する。
+     */
     public async Task ConvertFastStart(IStatusNotificationService? notificationService) {
         var entries = _databaseService.Entries.List((entry) => {
             return entry.Type == "mp4";
@@ -472,5 +476,9 @@ internal class SecureStorageService : ISecureStorageService {
         foreach (var entry in entries) {
             await ConvertFastStart(entry, notificationService);
         }
+    }
+
+    public async Task CheckItemLength() {
+
     }
 }

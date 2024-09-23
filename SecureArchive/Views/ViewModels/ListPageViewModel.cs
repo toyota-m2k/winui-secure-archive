@@ -289,8 +289,12 @@ internal class ListPageViewModel {
 
         var list = FileList.Value.ToArray();
         var result = true;
+        var count = list.Length;
+        int i = 0;
         foreach (var entry in list) {
+            i++;
             if (entry.IsDeleted) continue;
+            _logger.LogDebug($"Validating ({i}/{count}): {entry.Name}[ID={entry.Id}]");
             var stream = openEntryStream(entry);
             if (stream != null) {
                 using (stream) {
