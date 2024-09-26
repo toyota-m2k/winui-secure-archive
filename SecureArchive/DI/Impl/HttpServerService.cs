@@ -446,13 +446,16 @@ internal class HttpServerService : IHttpServreService {
                     var sync = p.GetValue("sync")?.ToLower() == "true";
                     var type = p.GetValue("type")?.ToLower();
                     var types = p.GetValue("f")?.ToLower();
+                    var oid = p.GetValue("o");
+                    var hasOid = !string.IsNullOrEmpty(oid);
 
                     var list = ListSource.Where((it) => {
                         if(!sync && it.IsDeleted) return false;
+                        if(hasOid && it.OwnerId!=oid) return false;
                         if(types!=null) {
-                            var v = types.Contains("v");
-                            var p = types.Contains("p");
-                            type = v && p ? "all" : v ? "video" : "photo";
+                            var video = types.Contains("v");
+                            var photo = types.Contains("p");
+                            type = video && photo ? "all" : video ? "video" : "photo";
                         }
 
                         switch(type) {
@@ -461,7 +464,7 @@ internal class HttpServerService : IHttpServreService {
                             default: return it.Type == "mp4";
                         }
                     }).Select((it) => {
-                        if(sync) {
+                        if(sync||hasOid) {
                             return it.ToDictionary();
                         } else {
                             return new Dictionary<string, object>() {
