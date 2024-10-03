@@ -9,8 +9,8 @@ public class StreamingHttpResponse : AbstractHttpResponse {
     private Stream InputStream { get; }         // Seek可能なストリーム ... 無理なら SeekableInputStream でラップしよう。
     private long TotalLength { get; }
     
-    private byte[]? Buffer = null;
-    private int PartialLength = 0;
+    //private byte[]? Buffer = null;
+    //private int PartialLength = 0;
     private UtLog Logger = new UtLog(typeof(StreamingHttpResponse));
 
     /**
@@ -29,20 +29,17 @@ public class StreamingHttpResponse : AbstractHttpResponse {
      */
     public StreamingHttpResponse(HttpRequest req, string contentType, Stream inStream, bool supportRange, long start, long end, long totalLength/*=-1*/, Action? onComplete)
         : base(req, HttpStatusCode.Ok) {
-        Logger.Debug($"Start={F(start)} End={F(end)} TotalLength={F(totalLength)} Stream.Length={F(inStream.Length)}");
+        //Logger.Debug($"Start={F(start)} End={F(end)} TotalLength={F(totalLength)} Stream.Length={F(inStream.Length)}");
         InputStream = inStream;
         TotalLength = (totalLength>0) ? totalLength : inStream.Length;
         ContentType = contentType;
         Start = start;
         End = end;
         SupportRange = supportRange;
-        //if (TotalLength > 0) {                    // Prepare でやる
-        //    ContentLength = TotalLength;
-        //} 
         if(onComplete!=null) {
             OnComplete += onComplete;
         }
-        Logger.Debug($"[{F(req.Id)}] Start={F(start)} End={F(end)} Total={F(totalLength)}");
+        //Logger.Debug($"[{F(req.Id)}] Start={F(start)} End={F(end)} Total={F(totalLength)}");
     }
 
     /**
@@ -71,20 +68,6 @@ public class StreamingHttpResponse : AbstractHttpResponse {
     // デフォルトのバッファサイズは 4MBとしておく。
     const int AUTO_BUFFER_SIZE = 4 * 1024 * 1024;    
 
-    int ReadStream(Stream inStream, byte[] buffer, out bool eos) {
-        eos = false;
-        var remain = buffer.Length;
-        while(remain> 0) {
-            int read = inStream.Read(buffer, buffer.Length-remain, remain);
-            if(read==0) {
-                eos = true;
-                break;
-            }
-            remain -= read;
-        }
-        return buffer.Length - remain;
-    }
-
     protected override void Prepare() {
         Headers["Content-Transfer-Encoding"] = "binary";
         if (Start == -1) {
@@ -95,41 +78,30 @@ public class StreamingHttpResponse : AbstractHttpResponse {
             if (SupportRange) {
                 Headers["Accept-Ranges"] = "bytes";
             }
-            InputStream.Seek(0, SeekOrigin.Begin);
-            Logger.Debug($"[{Request.Id}] No Range Requested");
+            //Logger.Debug($"[{Request.Id}] No Range Requested");
         }
         else {
-            Logger.Debug($"[{Request.Id}] Requested Range: {F(Start)} - {F(End)} ({F(End - Start + 1)} bytes in {F(TotalLength)})");
-                StatusCode = HttpStatusCode.PartialContent;
-            Buffer = null;
+            //Logger.Debug($"[{Request.Id}] Requested Range: {F(Start)} - {F(End)} ({F(End - Start + 1)} bytes in {F(TotalLength)})");
+            StatusCode = HttpStatusCode.PartialContent;
+
             var total = "*";
             if (TotalLength>0) {
                 total = $"{TotalLength}";
                 // ContentLength = TotalLength;  Range指定の場合も Content-Length には全体のサイズを入れるのかと思っていたが、返すデータサイズを指定するらしい。
-                if (End <= 0 || End>=TotalLength) {
+                if (End >= TotalLength) {
                     End = TotalLength - 1;
                 }
-                if(Start>End) {
-                    Start = End;
+                else if (End <= 0) {
+                    End = Math.Min(Start+AUTO_BUFFER_SIZE, TotalLength) - 1;
                 }
-                
+                if(Start>End) {
+                    End = Start;
+                }
                 Debug.Assert(Start < TotalLength);
             }
-            int buffSize = AUTO_BUFFER_SIZE;
-            if (End > 0) {
-                buffSize = (int)Math.Min((long)AUTO_BUFFER_SIZE, End - Start + 1);
-                Debug.Assert(AUTO_BUFFER_SIZE > 0);
-            }
-            Buffer = new byte[buffSize];
-            InputStream.Seek(Start, SeekOrigin.Begin);
-            PartialLength = ReadStream(InputStream, Buffer, out var eos);
-            End = Start + PartialLength - 1;
-            if(TotalLength<=0) { 
-                //ContentLength = PartialLength;
-                total = eos ? $"{End+1}" :"*";
-            }
-            Logger.Debug($"[{Request.Id}] Actual Range: {F(Start)}-{F(End)}/{F(TotalLength)} ({F(PartialLength)} Bytes)");
-            Headers["Content-Range"] = $"bytes {Start}-{End}/{total}";
+
+            //Logger.Debug($"[{Request.Id}] Actual Range: {F(Start)}-{F(End)}/{F(TotalLength)} ({F(PartialLength)} Bytes)");
+            Headers["Content-Range"] = End>0 ? $"bytes {Start}-{End}/{total}" : $"bytes {Start}-/{total}";
             Headers["Accept-Ranges"] = "bytes";
             // Headers["Content-Length"] = $"{End-Start+1}";
             ContentLength = End-Start+1;    // Range指定の場合の Content-Length は実際に返すデータの長さ(End-Start+1)にする
@@ -171,20 +143,35 @@ public class StreamingHttpResponse : AbstractHttpResponse {
         }
     }
 
+    private void CopyStream(Stream input, Stream output, long length) {
+        var buffer = new byte[AUTO_BUFFER_SIZE];
+        var remain = length;
+        while (remain > 0) {
+            int read = input.Read(buffer, 0, (int)Math.Min(remain, (long)AUTO_BUFFER_SIZE));
+            if (read == 0) {
+                break;
+            }
+            output.Write(buffer, 0, read);
+            remain -= read;
+            Logger.Debug($"[{Request.Id}] CopyStream: {F(length-remain)} bytes (total={F(length)})");
+        }
+        output.Flush();
+        return;
+    }
+
     protected override void WriteBody(Stream output) {
         if (Start == -1) {
             ExecuteWithLog("No-Range (Stream Copy)", () => {
                 //InputStream.CopyTo(output, AUTO_BUFFER_SIZE);
+                InputStream.Seek(0, SeekOrigin.Begin);
                 CopyStream(InputStream, output);
                 output.Flush();
             });
         }
         else {
-            if(Buffer==null) {
-                throw new Exception("Internal error: Buffer is null");
-            }
-            ExecuteWithLog($"Range({F(Start)}-{F(End)})", () => {
-                output.Write(Buffer, 0, PartialLength);
+            ExecuteWithLog($"Range ({F(Start)}-{F(End)})", () => {
+                InputStream.Seek(Start, SeekOrigin.Begin);
+                CopyStream(InputStream, output, ContentLength);
             });
         }
     }

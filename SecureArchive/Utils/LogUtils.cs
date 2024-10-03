@@ -68,4 +68,65 @@ public class UtLog {
     public void Fatal(string message = "", [CallerMemberName] string memberName = "", [CallerLineNumber] int sourceLineNumber = 0) {
         _logger.LogCritical(composeMessage(message, memberName, sourceLineNumber));
     }
+
+    public enum Level {
+        Debug, Info, Warn, Error, Fatal
+    }
+    public void Log(Level level, string message, [CallerMemberName] string memberName = "", [CallerLineNumber] int sourceLineNumber = 0) {
+        switch (level) {
+            case Level.Debug:
+                Debug(message, memberName, sourceLineNumber);
+                break;
+            case Level.Info:
+                Info(message, memberName, sourceLineNumber);
+                break;
+            case Level.Warn:
+                Warn(message, memberName, sourceLineNumber);
+                break;
+            case Level.Error:
+                Error(message, memberName, sourceLineNumber);
+                break;
+            case Level.Fatal:
+                Fatal(message, memberName, sourceLineNumber);
+                break;
+        }
+    }
+
+    void Chronos(UtLog.Level level, string message, Action action) {
+        var time = DateTime.Now;
+        try {
+            action();
+        }
+        finally {
+            var elapsed = DateTime.Now - time;
+            Log(level, $"{message} {elapsed}");
+        }
+    }
+    T Chronos<T>(UtLog.Level level, string message, Func<T> func) {
+        var time = DateTime.Now;
+        try {
+            return func();
+        }
+        finally {
+            var elapsed = DateTime.Now - time;
+            Log(level, $"{message} {elapsed}");
+        }
+    }
+
+    void Chronos(string message, Action action) => Chronos(UtLog.Level.Debug, message, action);
+    T Chronos<T>(string message, Func<T> func) => Chronos(UtLog.Level.Debug, message, func);
+}
+
+public class Chronos(UtLog logger, UtLog.Level level=UtLog.Level.Debug) { 
+    DateTime Time = DateTime.Now;
+    UtLog.Level Level = level;
+    public void Start(string? message=null) {
+        if (message != null) logger.Log(Level, message);
+        Time = DateTime.Now;
+    }
+
+    public void Lap(string message) {
+        var elapsed = DateTime.Now - Time;
+        logger.Log(Level, $"{message} {elapsed.Seconds}.{elapsed.Milliseconds}");
+    }
 }

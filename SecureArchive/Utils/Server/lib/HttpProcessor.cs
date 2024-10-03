@@ -41,8 +41,10 @@ public class HttpProcessor {
                 if(address_port!= null && address_port.Contains(':')) {
                     peerAddress = address_port.Substring(0,address_port.IndexOf(":"));
                 }
+
+                var chronos = new Chronos(Logger);
                 string url = "?";
-                using (IHttpResponse response = ProcessRequest(id, peerAddress, inputStream, outputStream)) {
+                using (IHttpResponse response = ProcessRequest(id, peerAddress, inputStream, outputStream, chronos)) {
                     try {
                         url = response.Request?.Url ?? "?";
                         Logger.Info($"[{id}] Responding: {url}");
@@ -52,6 +54,9 @@ public class HttpProcessor {
                     }
                     catch (Exception e) {
                         Logger.Error(e, $"[{id}] Failed: {url}");
+                    }
+                    finally {
+                        chronos.Lap($"completed ({id}): {url}");
                     }
                 }
                 //Logger.Debug($"[{id}] Shutdown Send-Socket: {url}");
@@ -178,9 +183,10 @@ public class HttpProcessor {
         else return false;
     }
 
-    private IHttpResponse ProcessRequest(int id, string peerAddress, Stream inputStream, Stream outputStream) {
+    private IHttpResponse ProcessRequest(int id, string peerAddress, Stream inputStream, Stream outputStream, Chronos chronos) {
         try {
             var request = ParseHeader(id, peerAddress, inputStream, outputStream);
+            chronos.Start($"request({id}): {request.Url}");
             Route route = GetRoute(request);
             ParseContent(inputStream, request, route);
             return route.Process(request);

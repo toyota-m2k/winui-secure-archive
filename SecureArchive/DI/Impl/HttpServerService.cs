@@ -300,6 +300,7 @@ internal class HttpServerService : IHttpServreService {
             return StreamingHttpResponse.CreateForRangedInitial(request, "video/mp4", streamContainer.Stream, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer, request.Id));
         }
         else {
+            _logger.Debug($"Ranged Request: {range}");
             var match = RegRange.Match(range);
             var ms = match.Groups["start"];
             var me = match.Groups["end"];
@@ -308,7 +309,7 @@ internal class HttpServerService : IHttpServreService {
             if (start < 0 || end < 0 || (end > 0 && start > end)) {
                 _logger.Error($"Hah? Start={start} End={end}");
             }
-            _logger.Debug($"Ranged Request. {start} - {end}");
+            //_logger.Debug($"Ranged Request. {start} - {end}");
             var streamContainer = _cryptoStreamHandler.LockStream(entry, request.Id);
             return StreamingHttpResponse.CreateForRanged(request, "video/mp4", streamContainer.Stream, start, end, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer, request.Id));
         }
