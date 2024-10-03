@@ -104,7 +104,7 @@ public class StreamingHttpResponse : AbstractHttpResponse {
             Buffer = null;
             var total = "*";
             if (TotalLength>0) {
-                total = F(TotalLength);
+                total = $"{TotalLength}";
                 // ContentLength = TotalLength;  Range指定の場合も Content-Length には全体のサイズを入れるのかと思っていたが、返すデータサイズを指定するらしい。
                 if (End <= 0 || End>=TotalLength) {
                     End = TotalLength - 1;
@@ -128,7 +128,7 @@ public class StreamingHttpResponse : AbstractHttpResponse {
                 //ContentLength = PartialLength;
                 total = eos ? $"{End+1}" :"*";
             }
-            Logger.Debug($"[{Request.Id}] Actual Range: {F(Start)}-{F(End)}/{total} ({F(PartialLength)} Bytes)");
+            Logger.Debug($"[{Request.Id}] Actual Range: {F(Start)}-{F(End)}/{F(TotalLength)} ({F(PartialLength)} Bytes)");
             Headers["Content-Range"] = $"bytes {Start}-{End}/{total}";
             Headers["Accept-Ranges"] = "bytes";
             // Headers["Content-Length"] = $"{End-Start+1}";
