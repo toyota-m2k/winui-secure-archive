@@ -31,9 +31,21 @@ public static class LogUtils {
 
 public class UtLog {
     static private ILogger _globalLogger = null!;
+
+    /**
+     * Loggerサービスを参照しないモジュールからもログ出力できるよう、Appの初期化時に、globalLoggerをセットしておく。
+     */
     public static void SetGlobalLogger(ILogger logger) {
         _globalLogger = logger;
     }
+    /**
+     * new UtLog("prefix").Debug("message"); と書くのがなんか気持ち悪い（個人の感想です）ので、
+     * UtLog.Instance("prefix").Debug("message"); と書けるようにした。
+     */
+    public static UtLog Instance(string prefix) {
+        return new UtLog(prefix);
+    }
+
     ILogger _logger;
     string _prefix;
     public UtLog(string prefix, ILogger? logger=null) {
