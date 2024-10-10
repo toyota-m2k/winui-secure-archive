@@ -15,6 +15,7 @@ public class DBConnector : DbContext
     public DbSet<FileEntry> Entries { get; set; }
     public DbSet<OwnerInfo> OwnerInfos { get; set; }
     public DbSet<KV> KVs { get; set; }
+    public DbSet<DeviceMigrationInfo> DeviceMigrationInfos { get; set; }
 
     public int MajorVersion { get; } = 1;
     public int MinorVersion { get; } = 1;
@@ -45,6 +46,7 @@ public class DBConnector : DbContext
         ExecuteRawSql(DB.KV.DDL);
         ExecuteRawSql(DB.OwnerInfo.DDL);
         ExecuteRawSql(DB.FileEntry.DDL);
+        ExecuteRawSql(DB.DeviceMigrationInfo.DDL);
 
         if(version < DB_VERSION) {
             // バージョンアップ

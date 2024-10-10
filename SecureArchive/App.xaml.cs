@@ -67,6 +67,7 @@ namespace SecureArchive {
                     .AddSingleton<IHttpServreService,  HttpServerService>()
                     .AddSingleton<IMainThreadService, MainThradService>()
                     .AddSingleton<IBackupService, BackupService>()
+                    .AddSingleton<IDeviceMigrationService, DeviceMigrationService>()
                     .AddTransient<ITaskQueueService, TaskQueueService>()
                     .AddSingleton<ISyncArchiveService, SyncArchiveSevice>()
                     .AddTransient<IStatusNotificationService, StatusNotificationService>()

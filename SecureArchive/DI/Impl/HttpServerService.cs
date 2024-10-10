@@ -24,6 +24,7 @@ internal class HttpServerService : IHttpServreService {
     private IDatabaseService _databaseService;
     private IPasswordService _passwordService;
     private IBackupService _backupService;
+    private IDeviceMigrationService _deviceMigrationService;
     private CryptoStreamHandler _cryptoStreamHandler;
     private OneTimePasscode oneTimePasscode;
 
@@ -34,12 +35,14 @@ internal class HttpServerService : IHttpServreService {
         ISecureStorageService secureStorageService,
         IDatabaseService databaseService,
         IPasswordService passwordService,
-        IBackupService backupService) {
+        IBackupService backupService,
+        IDeviceMigrationService deviceMigrationService) {
         _logger = factory.CreateLogger<HttpServerService>();
         _secureStorageService = secureStorageService;
         _databaseService = databaseService;
         _passwordService = passwordService;
         _backupService = backupService;
+        _deviceMigrationService = deviceMigrationService;
 
         _server = new HttpServer(Routes(), _logger);
 
@@ -72,10 +75,12 @@ internal class HttpServerService : IHttpServreService {
         public long ContentLength { get; private set; } = 0;
 
         private ISecureStorageService _secureStorageService;
+        private IDeviceMigrationService _deviceMigrationService;
         public string ID { get; }
-        public UploadHandler(ISecureStorageService secureStorageService) {
+        public UploadHandler(ISecureStorageService secureStorageService, IDeviceMigrationService deviceMigrationService) {
             ID = newId();
             _secureStorageService = secureStorageService;
+            _deviceMigrationService = deviceMigrationService;
         }
         public IDictionary<string, string> Parameters { get; } = new Dictionary<string, string>();
 
@@ -88,11 +93,15 @@ internal class HttpServerService : IHttpServreService {
             ReceivedLength = 0;
 
             if (!Parameters.TryGetValue("OwnerId", out var ownerId)) {
-                ownerId = "*";
+                throw new InvalidOperationException("no owner id.");
             }
             if (!Parameters.TryGetValue("OriginalId", out var originalId)) {
-                originalId = "";
+                throw new InvalidOperationException("no original id.");
             }
+            if (_deviceMigrationService.IsMigrated(ownerId, originalId)) {
+                throw new InvalidOperationException("already migrated.");
+            }
+
             var entryCreator = _secureStorageService.CreateEntry(ownerId, originalId, true).Result;
             if(entryCreator==null) {
                 throw new InvalidOperationException("cannot create entry.");
@@ -339,7 +348,7 @@ internal class HttpServerService : IHttpServreService {
                         return HttpErrorResponse.BadRequest(request);
                     }
                     //var p = QueryParser.Parse(request.Url);
-                    using(var handler = new UploadHandler(_secureStorageService)) {
+                    using(var handler = new UploadHandler(_secureStorageService, _deviceMigrationService)) {
                         //RegisterUploadTask(handler);
                         //// Uploadされたファイルの登録に時間がかかるので、一旦、202応答を返しておく。
                         //// 登録処理の経過が知りたければ、GET /uploading/<taskId> で取得する。
@@ -639,8 +648,111 @@ internal class HttpServerService : IHttpServreService {
                     }
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "backup" }, {"status", "accepted"} });
                 }),
-                
-            
+            Route.get(
+                // migration/targets/auth=<auth-token>&n=<new-clientId>
+                name: "migration target",
+                regex: @"/migration/targets",
+                process: (request) => {
+                    var p = QueryParser.Parse(request.Url);
+                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+                        return oneTimePasscode.UnauthorizedResponse(request);
+                    }
+                    var newOwnerId = p.GetValue("n");
+                    if(string.IsNullOrEmpty(newOwnerId)) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var list = _deviceMigrationService.GetDiviceList(newOwnerId);
+                    var dic = new Dictionary<string, object> {
+                        { "cmd", "migration/targets" },
+                        { "targets", list.Select(it => new Dictionary<string, object>() {
+                            { "id", it.OwnerId },
+                            { "name", it.Name },
+                            }).ToList() 
+                        }
+                    };
+                    return TextHttpResponse.FromJson(request, dic);
+                }),
+            Route.get(
+                // migration/start/auth=<auth-token>&n=<new-clientId>&o=<old-clientId>
+                name: "start migration",
+                regex: @"/migration/start",
+                process: (request) => {
+                    var p = QueryParser.Parse(request.Url);
+                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+                        return oneTimePasscode.UnauthorizedResponse(request);
+                    }
+                    var newOwnerId = p.GetValue("n");
+                    var oldOwnerId = p.GetValue("o");
+                    if(string.IsNullOrEmpty(newOwnerId) || string.IsNullOrEmpty(oldOwnerId)) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var result = _deviceMigrationService.BeginMigration(oldOwnerId, newOwnerId);
+                    if(result==null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var (handle, list) = result.Value;
+                    var dic = new Dictionary<string, object> {
+                        { "cmd", "migration/start" },
+                        { "handle", handle },
+                        { "targets", list.Select(it => it.ToDictionary()).ToList() }
+                    };
+                    return TextHttpResponse.FromJson(request, dic);
+                }),
+            Route.get(
+                // migration/end/h=<migration-handle>
+                name: "end migration",
+                regex: @"/migration/start",
+                process: (request) => {
+                    var p = QueryParser.Parse(request.Url);
+                    var handle = p.GetValue("h");
+                    if(handle==null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    bool result = _deviceMigrationService.EndMigration(handle);
+                    return TextHttpResponse.FromJson(request, new Dictionary<string, object> {
+                        { "cmd", "migration/end" },
+                        { "status", result ? "ok" : "ng" }
+                    });
+                }),
+            Route.put(
+                // migration/proc/auth=<auth-token>
+                name: "process single entry",
+                regex: @"/migration/exec",
+                process: (request) => {
+                    var p = QueryParser.Parse(request.Url);
+                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+                        return oneTimePasscode.UnauthorizedResponse(request);
+                    }
+                    var content = request.Content?.TextContent;
+                    if (content== null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(content);
+                    if (dic == null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var migrationHandle = dic.GetValue("handle");
+                    var strSrcId = dic.GetValue("srcId");
+                    var newOwnerId = dic.GetValue("newOwnerId")?.ToString();
+                    var newOriginalId = dic.GetValue("newOriginalId")?.ToString();
+                    if(string.IsNullOrEmpty(migrationHandle) || string.IsNullOrEmpty(strSrcId) || string.IsNullOrEmpty(newOwnerId) || string.IsNullOrEmpty(newOriginalId)) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    if (!long.TryParse(strSrcId, out long srcId)) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+
+                    RegisterOwner(dic);
+                    var entry = _deviceMigrationService.Migrate(migrationHandle, srcId, newOwnerId, newOriginalId);
+                    if(entry==null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+
+                    return TextHttpResponse.FromJson(request, new Dictionary<string, object> {
+                        { "cmd", "migration/exec" },
+                        { "status", "ok" }
+                    });
+                }),
         };
     }
 

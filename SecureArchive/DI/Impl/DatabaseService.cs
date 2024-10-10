@@ -13,14 +13,17 @@ public class DatabaseService : IDatabaseService, IMutableTables {
     private FileEntryList _entries { get; }
     private OwnerInfoList _ownerList { get; }
     private KVList _kvs { get; }
+    private IMutableDeviceMigration _deviceMigration { get; }
 
     public IFileEntryList Entries => _entries;
     public IOwnerInfoList OwnerList => _ownerList;
     public IKVList KVs => _kvs;
+    public IDeviceMigration DeviceMigration => _deviceMigration;
 
     IMutableFileEntryList IMutableTables.Entries => _entries;
     IMutableOwnerInfoList IMutableTables.OwnerList => _ownerList;
     IMutableKVList IMutableTables.KVs => _kvs;
+    IMutableDeviceMigration IMutableTables.DeviceMigration => _deviceMigration;
 
     public DatabaseService(IAppConfigService appConfigService, ILoggerFactory loggerFactory)
     {
@@ -34,6 +37,7 @@ public class DatabaseService : IDatabaseService, IMutableTables {
             _entries = new FileEntryList(_connector);
             _ownerList = new OwnerInfoList(_connector);
             _kvs = new KVList(_connector);
+            _deviceMigration = new DeviceMigration(_connector);
         }
 
         //EditEntry((entries) => {
@@ -98,13 +102,31 @@ public class DatabaseService : IDatabaseService, IMutableTables {
         }
     }
 
+    public bool EditDeviceMigration(Func<IMutableDeviceMigration, bool> fn) {
+        bool result = false;
+        lock (_connector) {
+            try {
+                result = fn(mutableTables.DeviceMigration);
+                return result;
+            }
+            finally {
+                if (result) {
+                    _connector.SaveChanges();
+                }
+            }
+        }
+    }
+
     public bool Transaction(Func<IMutableTables, bool> fn) {
         bool result = false;
         lock (_connector) {
             using (var txn = _connector.Database.BeginTransaction()) {
                 try {
                     result = fn(mutableTables);
-                    return result;
+                }
+                catch(Exception e) {
+                    _logger.Error(e);
+                    result = false;
                 }
                 finally {
                     if (result) {
@@ -115,6 +137,7 @@ public class DatabaseService : IDatabaseService, IMutableTables {
                         txn.Rollback();
                     }
                 }
+                return result;
             }
         }
     }
