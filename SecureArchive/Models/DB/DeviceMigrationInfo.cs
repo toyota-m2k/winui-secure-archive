@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Newtonsoft.Json.Linq;
+using SecureArchive.Utils;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
@@ -32,4 +34,25 @@ public class DeviceMigrationInfo {
     [Required]
     public string NewOwnerId { get; set; } = string.Empty;
     public long MigratedOn { get; set; }
+
+    public Dictionary<string, object> ToDictionary() {
+        return new Dictionary<string, object>() {
+            { "Key", Key },
+            { "OldOriginalId", OldOriginalId },
+            { "OldOwnerId", OldOwnerId },
+            { "NewOriginalId", NewOriginalId },
+            { "NewOwnerId", NewOwnerId },
+            { "MigratedOn", MigratedOn }
+        };
+    }
+    public static DeviceMigrationInfo FromDictionary(JObject dict) {
+        return new DeviceMigrationInfo() {
+            Key = dict.GetLongValue("Key"),
+            OldOriginalId = dict.GetStringValue("OldOriginalId", ""),
+            OldOwnerId = dict.GetStringValue("OldOwnerId", ""),
+            NewOriginalId = dict.GetStringValue("NewOriginalId", ""),
+            NewOwnerId = dict.GetStringValue("NewOwnerId", ""),
+            MigratedOn = dict.GetLongValue("MigratedOn")
+        };
+    }
 }

@@ -17,6 +17,7 @@ internal class DeviceMigrationService : IDeviceMigrationService {
             this.dstDevice = dstDevice;
         }
     }
+    private bool _migratingWithSync = false;
     private MigratingInfo? _migratingInfo = null;
     public MigratingInfo? CurrentMigratingInfo => _migratingInfo;
     private bool checkMigrationHandle(string handle) {
@@ -54,6 +55,10 @@ internal class DeviceMigrationService : IDeviceMigrationService {
      */
     public (string MigrationHandle, IList<FileEntry> Targets)? BeginMigration(string srcDeviceId, string dstDeviceId) {
         lock (this) {
+            if (_migratingWithSync) {
+                _logger.LogError("sync is in progress.");
+                return null;
+            }
             if (string.IsNullOrEmpty(srcDeviceId) || string.IsNullOrEmpty(dstDeviceId)) {
                 _logger.LogError("srcDeviceId or dstDeviceId is empty.");
                 return null;
@@ -95,29 +100,31 @@ internal class DeviceMigrationService : IDeviceMigrationService {
      * 
      * 端末間同期時は、Migration Table の同期を最優先で実行すること。
      */
-    public FileEntry? Migrate(string migrationHandle, long srcId, string newOwnerId, string newOriginalId) {
+    public FileEntry? Migrate(string migrationHandle, string oldOwnerId, string oldOriginalId, string newOwnerId, string newOriginalId) {
         lock (this) {
-            if(!checkMigrationHandle(migrationHandle)) {
-                _logger.LogError("Invalid migration handle.");
-                return null;
-            }
-            if(newOwnerId!= _migratingInfo!.dstDevice.OwnerId) {
-                _logger.LogError("newOwnerId is not dstDeviceId.");
-                return null;
-            }
-            if (string.IsNullOrEmpty(newOriginalId)) {
-                _logger.LogError("newOriginalId or newOwnerId is empty.");
-                return null;
+            if (!_migratingWithSync) {
+                if (!checkMigrationHandle(migrationHandle)) {
+                    _logger.LogError("Invalid migration handle.");
+                    return null;
+                }
+                if (newOwnerId != _migratingInfo!.dstDevice.OwnerId) {
+                    _logger.LogError("newOwnerId is not dstDeviceId.");
+                    return null;
+                }
+                if (string.IsNullOrEmpty(newOriginalId)) {
+                    _logger.LogError("newOriginalId or newOwnerId is empty.");
+                    return null;
+                }
             }
             FileEntry? newEntry = null;
             _databaseService.Transaction((tables) => {
-                var del = tables.Entries.GetById(srcId);
+                var del = tables.Entries.GetByOriginalId(oldOwnerId, oldOriginalId);
                 if (del == null) {
-                    _logger.LogError($"FileEntry(Id={srcId}) is not found.");
+                    _logger.LogError($"FileEntry({oldOwnerId}/{oldOriginalId}) is not found.");
                     return false;
                 }
-                if (del.OwnerId != _migratingInfo!.srcDevice.OwnerId) {
-                    _logger.LogError($"FileEntry(Id={srcId}) is not owned by srcDevice.");
+                if (!_migratingWithSync && del.OwnerId != _migratingInfo!.srcDevice.OwnerId) {
+                    _logger.LogError($"FileEntry({oldOwnerId}/{oldOriginalId}) is not owned by srcDevice.");
                     return false;
                 }
                 tables.DeviceMigration.Add(del.OwnerId, del.OriginalId, newOwnerId, newOriginalId);
@@ -132,6 +139,27 @@ internal class DeviceMigrationService : IDeviceMigrationService {
     public bool IsMigrated(string ownerId, string originalId) {
         lock(this) {
             return null != _databaseService.DeviceMigration.Get(ownerId, originalId);
+        }
+    }
+
+    public IList<DeviceMigrationInfo> ApplyHistoryFromPeerServer(IList<DeviceMigrationInfo> history) {
+        lock (this) {
+            _migratingWithSync = true;
+            try {
+                var common = new HashSet<string>();
+                foreach (var peer in history) {
+                    var mine = _databaseService.DeviceMigration.Get(peer.OldOwnerId, peer.OldOriginalId);
+                    if ( mine == null) {
+                        // peerにのみ存在する
+                        Migrate("sync", peer.OldOwnerId, peer.OldOriginalId, peer.NewOwnerId, peer.NewOriginalId);
+                    } else {
+                        common.Add(mine.OldOwnerId + "/" + mine.OldOriginalId);
+                    }
+                }
+                return _databaseService.DeviceMigration.List().Where(x => !common.Contains(x.OldOwnerId + "/" + x.OldOriginalId)).ToList();
+            } finally {
+                _migratingWithSync = false;
+            }
         }
     }
 }

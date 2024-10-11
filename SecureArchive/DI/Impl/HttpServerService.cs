@@ -1,5 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using SecureArchive.Models.CryptoStream;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
@@ -425,7 +426,7 @@ internal class HttpServerService : IHttpServreService {
                         {"hasView", false },              // current get/set をサポートする
                         {"authentication", true },
                         {"challenge",  oneTimePasscode.Challenge },
-                        {"types", "vp" }                // v: video, a: audio, p: photo
+                        {"types", "vp" },                // v: video, a: audio, p: photo
                     };
                     return TextHttpResponse.FromJson(request, cap);
                 }),
@@ -732,24 +733,59 @@ internal class HttpServerService : IHttpServreService {
                         return HttpErrorResponse.BadRequest(request);
                     }
                     var migrationHandle = dic.GetValue("handle");
-                    var strSrcId = dic.GetValue("srcId");
+                    var oldOwnerId = dic.GetValue("oldOwnerId");
+                    var oldOriginalId = dic.GetValue("oldOriginalId");
                     var newOwnerId = dic.GetValue("newOwnerId")?.ToString();
                     var newOriginalId = dic.GetValue("newOriginalId")?.ToString();
-                    if(string.IsNullOrEmpty(migrationHandle) || string.IsNullOrEmpty(strSrcId) || string.IsNullOrEmpty(newOwnerId) || string.IsNullOrEmpty(newOriginalId)) {
-                        return HttpErrorResponse.BadRequest(request);
-                    }
-                    if (!long.TryParse(strSrcId, out long srcId)) {
+                    if(string.IsNullOrEmpty(migrationHandle) || string.IsNullOrEmpty(oldOwnerId)  || string.IsNullOrEmpty(oldOriginalId) || string.IsNullOrEmpty(newOwnerId) || string.IsNullOrEmpty(newOriginalId)) {
                         return HttpErrorResponse.BadRequest(request);
                     }
 
                     RegisterOwner(dic);
-                    var entry = _deviceMigrationService.Migrate(migrationHandle, srcId, newOwnerId, newOriginalId);
+                    var entry = _deviceMigrationService.Migrate(migrationHandle, oldOwnerId, oldOriginalId, newOwnerId, newOriginalId);
                     if(entry==null) {
                         return HttpErrorResponse.BadRequest(request);
                     }
 
                     return TextHttpResponse.FromJson(request, new Dictionary<string, object> {
                         { "cmd", "migration/exec" },
+                        { "status", "ok" }
+                    });
+                }),
+            Route.get(
+                // migration/history
+                name: "end migration",
+                regex: @"/migration/history",
+                process: (request) => {
+                    return TextHttpResponse.FromJson(request, new Dictionary<string, object> {
+                        { "cmd", "migration/history(get)" },
+                        { "list", _databaseService.DeviceMigration.List().Select(it => it.ToDictionary()).ToList() }
+                    });
+                }),
+            Route.put(
+                // migration/history
+                name: "end migration",
+                regex: @"/migration/history",
+                process: (request) => {
+                    var content = request.Content?.TextContent;
+                    if (content== null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var dic = JsonConvert.DeserializeObject<Dictionary<string, object>>(content);
+                    if(dic==null || !dic.ContainsKey("list")) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var list = dic["list"] as JArray;
+                    if (list == null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var history = list.Select(it => {
+                            return DeviceMigrationInfo.FromDictionary((JObject)it);
+                        }).ToList();
+                    _deviceMigrationService.ApplyHistoryFromPeerServer(history);
+
+                    return TextHttpResponse.FromJson(request, new Dictionary<string, object> {
+                        { "cmd", "migration/history(put)" },
                         { "status", "ok" }
                     });
                 }),

@@ -5,10 +5,8 @@ using Newtonsoft.Json.Linq;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
-using SecureArchive.Views;
 using System.Net;
 using System.Net.Http.Headers;
-using System.Net.PeerToPeer.Collaboration;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -22,6 +20,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     private IPageService _pageService;
     private IMainThreadService _mainThreadService;
     private IHttpClientFactory _httpClientFactory;
+    private IDeviceMigrationService _deviceMigrationService;
 
     /**
      * デフォルトのタイムアウト（100秒）が設定された HttpClient
@@ -49,6 +48,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         IPageService pageService,
         IMainThreadService mainThreadSercice,
         IHttpClientFactory httpClientFactory,
+        IDeviceMigrationService deviceMigrationService,
         ILoggerFactory loggerFactory) {
         _secureStorageService = secureStorageService;
         _databaseService = databaseService;
@@ -57,6 +57,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         _pageService = pageService;
         _mainThreadService = mainThreadSercice;
         _httpClientFactory = httpClientFactory;
+        _deviceMigrationService = deviceMigrationService;
         _logger = loggerFactory.CreateLogger<SyncArchiveSevice>();
     }
 
@@ -305,6 +306,56 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         }
     }
 
+    private async Task<IList<DeviceMigrationInfo>?> GetMigrationHistoryFromPeer() {
+        string url = $"http://{peerAddress}/migration/history";
+        try {
+            using (var response = await defaultHttpClient.GetAsync(url)) {
+                if (!response.IsSuccessStatusCode) return null;
+                using (var content = response.Content) {
+                    var jsonString = await content.ReadAsStringAsync();
+                    var json = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonString);
+                    if (json != null && json.ContainsKey("list")) {
+                        var list = json["list"] as JArray;
+                        if (list != null) {
+                            return list.Select(it => {
+                                return DeviceMigrationInfo.FromDictionary((JObject)it);
+                            }).ToList();
+                        }
+                    }
+                }
+            }
+            return new List<DeviceMigrationInfo>();
+        }
+        catch (Exception e) {
+            _logger.Error(e, "get migration history error");
+            return null;
+        }
+    }
+    private async Task<bool> PutMigrationHistoryToPeer(IList<DeviceMigrationInfo> list) {
+        if(list.Count == 0) {
+            return true;
+        }
+
+        string url = $"http://{peerAddress}/migration/history";
+        try {
+            var json = JsonConvert.SerializeObject(new Dictionary<string, object> {
+                { "cmd", "put/migration/history" },
+                { "list", list.Select(it=>it.ToDictionary()) }
+            });
+            using (var response = await defaultHttpClient.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"))) {
+                return response.IsSuccessStatusCode;
+            }
+        }
+        catch (Exception e) {
+            _logger.Error(e, "put migration history error");
+            return false;
+        }
+    }
+
+
+
+
+
     private struct Pair {
         public FileEntry peer;
         public FileEntry my;
@@ -369,6 +420,24 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     errorProc("Authentication Error.", false);
                     return false;
                 }
+                // まず最初にマイグレーション情報の同期
+                syncTaskProc(SyncTask.SyncMigration);
+                // Peer側のマイグレーション情報を取得
+                var history = await GetMigrationHistoryFromPeer();
+                if(history == null) {
+                    errorProc("migration data error.", false);
+                    return false;
+                }
+                // ローカルのマイグレーション情報を更新（ローカルにしか存在しないエントリを返してくる）
+                var historyToUpdate = _deviceMigrationService.ApplyHistoryFromPeerServer(history);
+                if (historyToUpdate.Count > 0) {
+                    // ローカルにしかないエントリーをPeerに送信して、Peer側のマイグレーション情報を更新
+                    if (!await PutMigrationHistoryToPeer(historyToUpdate)) {
+                        errorProc("migration data update error.", false);
+                        return false;
+                    }
+                }
+
                 var myList = _databaseService.Entries.List(false);
                 var peerList = await GetPeerList();
                 if (peerList == null) {
