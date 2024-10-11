@@ -61,6 +61,7 @@ internal class BackupService : IBackupService {
     private IMainThreadService _mainThreadService;
     private IHttpClientFactory _httpClientFactory;
     private IDatabaseService _databaseService;
+    private IDeviceMigrationService _deviceMigrationService;
 
     //private BehaviorSubject<Status> _executing = new (Status.NONE);
     //private BehaviorSubject<RemoteItem?> _currentItem = new(null);
@@ -119,13 +120,16 @@ internal class BackupService : IBackupService {
         IMainThreadService mainThreadSercice, 
         IHttpClientFactory httpClientFactory,
         IDatabaseService databaseService,
-        ILoggerFactory loggerFactory) {
+        ILoggerFactory loggerFactory,
+        IDeviceMigrationService deviceMigrationService
+        ) {
         _logger = loggerFactory.CreateLogger<BackupService>();
         _secureStorageService = secureStorageService;
         _pageService = pageService;
         _mainThreadService = mainThreadSercice;
         _httpClientFactory = httpClientFactory;
         _databaseService = databaseService;
+        _deviceMigrationService = deviceMigrationService;
     }
 
     private string OwnerId = null!;
@@ -175,24 +179,21 @@ internal class BackupService : IBackupService {
         Reset();
         return await Task.Run(async () => {
             try {
-                var rawList = await GetList($"http://{Address}/list?auth={Token}&type=all&backup");
-                //if(rawList.Count==0) {
-                //    return false;
-                //}
-
-                //foreach (var e in rawList) {
-                //    _logger.Debug($"Remote: {e.Id} - {e.Name}");
-                //}
+                // リモート（モバイル端末）側のファイルリストを取得
+                // 移行済みのアイテムは除外する（リモート上に存在しないものとして扱う）
+                // SecureArchive 側では、移行済みアイテムのOwnerIdは、すでに別のデバイスのものになっているので、辻褄は合うはず。
+                var rawList = (await GetList($"http://{Address}/list?auth={Token}&type=all&backup"))
+                    .Where(it => !_deviceMigrationService.IsMigrated(OwnerId, it.Id));      
 
                 /**
-                 * リモート側で「ローカルにだけ存在する」と思っているが、実は、SecureArchive にアップロード済み、というものがあれば、ここでバックアップ完了通知を送っておく。
+                 * リモート（モバイル端末）側で「ローカル（モバイル端末）にだけ存在する」と思っているが、
+                 * 実は、SecureArchive にアップロード済み、というものがあれば、ここでバックアップ完了通知を送っておく。
                  */
                 var registeredList = rawList.Where(it => it.Cloud==(int)CloudState.Local && _secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToArray();
                 if(registeredList.Length>0) {
                     await NotifyCompletion(registeredList);
                 }
                 var remoteMap = rawList.Aggregate(new Dictionary<string, RemoteItem>(), (map, item) => {
-                    map[item.Id] = item;
                     return map;
                 });
 
