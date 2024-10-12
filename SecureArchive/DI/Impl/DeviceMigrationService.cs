@@ -44,7 +44,7 @@ internal class DeviceMigrationService : IDeviceMigrationService {
             _logger.LogError("dstDevice is not found.");
             return new List<OwnerInfo>();
         }
-        return _databaseService.OwnerList.List(o => o.OwnerId != dstDeviceId);
+        return _databaseService.OwnerList.List(o => o.OwnerId != dstDeviceId && !string.IsNullOrEmpty(o.OwnerId) && o.OwnerId!="LOCAL");
     }
 
 
@@ -129,7 +129,7 @@ internal class DeviceMigrationService : IDeviceMigrationService {
                 }
                 tables.DeviceMigration.Add(del.OwnerId, del.OriginalId, newOwnerId, newOriginalId);
                 tables.Entries.Remove(del, deleteDbEntry: true);
-                newEntry = tables.Entries.Add(newOwnerId, del.Name, del.Size, del.Type, del.Path, del.LastModifiedDate, del.CreationDate, newOriginalId, del.MetaInfo, del);
+                newEntry = tables.Entries.Add(newOwnerId, del.Name, del.Size, del.Type, del.Path, del.LastModifiedDate, del.CreationDate, newOriginalId, del.Duration, del.MetaInfo, del);
                 return true;
             });
             return newEntry;

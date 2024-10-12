@@ -124,6 +124,10 @@ internal class HttpServerService : IHttpServreService {
             if (Parameters.TryGetValue("CreationDate", out var creationDateText)) {
                 creationDate = Convert.ToInt64(creationDateText);
             }
+            long duration = 0;
+            if (Parameters.TryGetValue("Duration", out var durationText)) {
+                duration = Convert.ToInt64(durationText);
+            }
 
             if (!Parameters.TryGetValue("MetaInfo", out var metaInfo)) {
                 metaInfo = null;
@@ -134,7 +138,7 @@ internal class HttpServerService : IHttpServreService {
                 extAttr = ItemExtAttributes.FromJson(extAttrJson);
             }
 
-            _entryCreator?.Complete(name, multipartBody.ContentLength, Path.GetExtension(name), lastModifiedDate, creationDate, metaInfo, extAttr);
+            _entryCreator?.Complete(name, multipartBody.ContentLength, Path.GetExtension(name), lastModifiedDate, creationDate, duration, metaInfo, extAttr);
             Dispose();
         }
 
@@ -650,22 +654,22 @@ internal class HttpServerService : IHttpServreService {
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "backup" }, {"status", "accepted"} });
                 }),
             Route.get(
-                // migration/targets/auth=<auth-token>&n=<new-clientId>
-                name: "migration target",
-                regex: @"/migration/targets",
+                // migration/devices/auth=<auth-token>&n=<new-clientId>
+                name: "retrieve migration target devices",
+                regex: @"/migration/devices",
                 process: (request) => {
                     var p = QueryParser.Parse(request.Url);
                     if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
                         return oneTimePasscode.UnauthorizedResponse(request);
                     }
-                    var newOwnerId = p.GetValue("n");
+                    var newOwnerId = p.GetValue("o");
                     if(string.IsNullOrEmpty(newOwnerId)) {
                         return HttpErrorResponse.BadRequest(request);
                     }
                     var list = _deviceMigrationService.GetDiviceList(newOwnerId);
                     var dic = new Dictionary<string, object> {
-                        { "cmd", "migration/targets" },
-                        { "targets", list.Select(it => new Dictionary<string, object>() {
+                        { "cmd", "migration/devices" },
+                        { "list", list.Select(it => new Dictionary<string, object>() {
                             { "id", it.OwnerId },
                             { "name", it.Name },
                             }).ToList() 
@@ -702,7 +706,7 @@ internal class HttpServerService : IHttpServreService {
             Route.get(
                 // migration/end/h=<migration-handle>
                 name: "end migration",
-                regex: @"/migration/start",
+                regex: @"/migration/end",
                 process: (request) => {
                     var p = QueryParser.Parse(request.Url);
                     var handle = p.GetValue("h");

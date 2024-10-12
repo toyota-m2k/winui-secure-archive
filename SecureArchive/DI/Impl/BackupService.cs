@@ -183,7 +183,25 @@ internal class BackupService : IBackupService {
                 // 移行済みのアイテムは除外する（リモート上に存在しないものとして扱う）
                 // SecureArchive 側では、移行済みアイテムのOwnerIdは、すでに別のデバイスのものになっているので、辻褄は合うはず。
                 var rawList = (await GetList($"http://{Address}/list?auth={Token}&type=all&backup"))
-                    .Where(it => !_deviceMigrationService.IsMigrated(OwnerId, it.Id));      
+                    .Where(it => !_deviceMigrationService.IsMigrated(OwnerId, it.Id));
+
+                // Id (OriginalId) --> RemoteItem のマップを作成
+                var remoteMap = rawList.ToDictionary(it => it.Id);
+
+                // durationフィールドを補完する
+                _databaseService.EditEntry(entries => {
+                    var noDurations = entries.List(it => it.Duration == 0 && it.Type == "mp4" && it.OwnerId == OwnerId, false);
+                    var result = false;
+                    if (noDurations.Count > 0) {
+                        foreach (var e in noDurations) {
+                            if (remoteMap.TryGetValue(e.OriginalId, out var item)) {
+                                e.Duration = item.Duration;
+                                result = true;
+                            }
+                        }
+                    }
+                    return result;
+                });
 
                 /**
                  * リモート（モバイル端末）側で「ローカル（モバイル端末）にだけ存在する」と思っているが、
@@ -193,12 +211,12 @@ internal class BackupService : IBackupService {
                 if(registeredList.Length>0) {
                     await NotifyCompletion(registeredList);
                 }
-                var remoteMap = rawList.Aggregate(new Dictionary<string, RemoteItem>(), (map, item) => {
-                    return map;
-                });
 
                 //Debug.Assert(rawList.All((it) => remoteMap.ContainsKey(it.Id)));
 
+                /**
+                 * リモートで削除されたファイル
+                 */
                 var removedList = _secureStorageService.GetList(OwnerId, (it) => {
                     return !it.IsDeleted && !remoteMap.ContainsKey(it.OriginalId);
                 });
@@ -407,7 +425,7 @@ internal class BackupService : IBackupService {
                         int len = await inStream.ReadAsync(buff, 0, BUFF_SIZE, ct);
                         if (len == 0) {
                             if (total == 0L || total == recv) {
-                                entryCreator.Complete(item.Name, total!=0L ? total : item.Size, item.Type, item.Date, item.CreationDate, null, extAttr);
+                                entryCreator.Complete(item.Name, total!=0L ? total : item.Size, item.Type, item.Date, item.CreationDate, item.Duration, null, extAttr);
                                 ok = true;
                             } else {
                                 // 受信したデータファイルのサイズが不正（途中で切れた、とか？）

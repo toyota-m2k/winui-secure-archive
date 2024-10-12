@@ -212,7 +212,7 @@ internal class ListPageViewModel {
                         //var outFilePath = Path.Combine(outFolder!, item.Name);
                         var ext = Path.GetExtension(item.Name) ?? "*";
                         try {
-                            var newEntry = await _secureStorageService.RegisterFile(item.Path, OwnerInfo.LOCAL_ID, item.Name, Guid.NewGuid().ToString("N"), null, progress);
+                            var newEntry = await _secureStorageService.RegisterFile(item.Path, OwnerInfo.LOCAL_ID, item.Name, Guid.NewGuid().ToString("N"), 0L, null, progress);
                             if (newEntry != null) {
                                 mainThread.Run(() => {
                                     FileList.Value.Add(newEntry);
@@ -315,6 +315,7 @@ internal class ListPageViewModel {
                                         entry.Path,
                                         entry.LastModifiedDate,
                                         entry.OriginalId,
+                                        entry.Duration,
                                         entry.MetaInfo,
                                         new ItemExtAttributes(entry.AttrDataDic));
                                     return true;

@@ -12,15 +12,15 @@ namespace SecureArchive.DI;
 
 public interface IEntryCreator : IDisposable {
     Stream OutputStream { get; }
-    FileEntry Complete(string name, long size, string type, long lastModifiedDate, long creationDate, string? metaInfo, IItemExtAttributes? extAttr);
+    FileEntry Complete(string name, long size, string type, long lastModifiedDate, long creationDate, long duration, string? metaInfo, IItemExtAttributes? extAttr);
 }
 
 internal interface ISecureStorageService {
     bool IsRegistered(string ownerId, string originalId);
     bool IsRegistered(string ownerId, string originalId, long lastModified);
     IList<FileEntry> GetList(string ownerId, Func<FileEntry, bool>? predicate);
-    Task<FileEntry?> RegisterFile(string filePath, string ownerId, string? name, string originalId, string? metaInfo, ProgressProc? progress);
-    Task<FileEntry?> Register(Stream inStream, string ownerId, string name, long size, string type, long lastModifiedDate, long creationDate, string originalId, string? metaInfo, ProgressProc? progress);
+    Task<FileEntry?> RegisterFile(string filePath, string ownerId, string? name, string originalId, long duration, string? metaInfo, ProgressProc? progress);
+    Task<FileEntry?> Register(Stream inStream, string ownerId, string name, long size, string type, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo, ProgressProc? progress);
     Task<IEntryCreator?> CreateEntry(string ownerId, string originalId, bool overwrite=false);
 
     Stream OpenEntry(FileEntry entry);

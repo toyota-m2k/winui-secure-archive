@@ -41,10 +41,15 @@ public class FileEntry : IItemExtAttributes {
         @"ALTER TABLE t_entry ADD Category TEXT",
         @"ALTER TABLE t_entry ADD Chapters TEXT",
     };
+    private static string[] Migrate1_2 = {
+        @"ALTER TABLE t_entry ADD Duration INTEGER DEFAULT 0",
+    };
 
     public static string[]? Migrate(long from, long to) {
         if (from < 1) {
-            return Migrate0_1;
+            return Migrate0_1.Concat(Migrate1_2).ToArray();
+        } else if(from<2) {
+            return Migrate1_2;
         }
         else {
             return null;
@@ -76,6 +81,7 @@ public class FileEntry : IItemExtAttributes {
     public string? Label { get; set; }
     public string? Category { get; set; }
     public string? Chapters { get; set; }
+    public long Duration { get; set; } = 0;
 
     //[ForeignKey("OwnerId")]
     //public OwnerInfo OwnerInfo { get; set; } = new OwnerInfo();
@@ -115,6 +121,7 @@ public class FileEntry : IItemExtAttributes {
             { "label", Label ?? "" },
             { "category", Category ?? "" },
             { "chapters", Chapters ?? "" },
+            { "duration", Duration },
         };
     }
 
@@ -158,6 +165,7 @@ public class FileEntry : IItemExtAttributes {
             Label = dict.GetStringValue("label"),
             Category = dict.GetStringValue("category"),
             Chapters = dict.GetStringValue("chapters"),
+            Duration = dict.GetLongValue("duration"),
         };
     }
 

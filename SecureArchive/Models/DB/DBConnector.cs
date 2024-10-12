@@ -17,12 +17,12 @@ public class DBConnector : DbContext
     public DbSet<KV> KVs { get; set; }
     public DbSet<DeviceMigrationInfo> DeviceMigrationInfos { get; set; }
 
-    public int MajorVersion { get; } = 1;
-    public int MinorVersion { get; } = 1;
+    //public int MajorVersion { get; } = 1;
+    //public int MinorVersion { get; } = 1;
 
     public UtLog _logger = new UtLog("DBConnector");
 
-    public static long DB_VERSION = 1L;
+    public static long DB_VERSION = 2L;
 
     private string _dbPath;
     private SQLiteConnection mConnection;
