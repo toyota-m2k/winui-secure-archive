@@ -120,7 +120,17 @@ internal class DeviceMigrationService : IDeviceMigrationService {
             _databaseService.Transaction((tables) => {
                 var del = tables.Entries.GetByOriginalId(oldOwnerId, oldOriginalId);
                 if (del == null) {
-                    _logger.LogError($"FileEntry({oldOwnerId}/{oldOriginalId}) is not found.");
+                    if (tables.Entries.GetByOriginalId(newOwnerId, newOriginalId) != null) {
+                        _logger.LogInformation($"FileEntry({newOwnerId}/{newOriginalId}) is already migrated.");
+                        // Migrateが実行される前に、同期or Backupによって、エントリーが追加されていたものと考えられる。
+                        // Entry Table的には何もする必要はないが、
+                        // 同期のたびに、これが実行されるのは無駄なので、Migration Tableに追加しておく。
+                        tables.DeviceMigration.Add(oldOwnerId, oldOriginalId, newOwnerId, newOriginalId);
+                        return true;
+                    }
+                    // エントリがバックアップされる前にMigrationの同期が実行されると、ここに入ってくる。
+                    // 次回の同期で、↑のif文に入って、最終的には、Migration Tableが同期される。
+                    _logger.LogInformation($"FileEntry({oldOwnerId}/{oldOriginalId}) is not found.");
                     return false;
                 }
                 if (!_migratingWithSync && del.OwnerId != _migratingInfo!.srcDevice.OwnerId) {

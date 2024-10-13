@@ -21,6 +21,7 @@ internal class SyncArchiveDialogViewModel {
     public ReactivePropertySlim<bool> Running { get; } = new(false);
     public ReactivePropertySlim<string> PeerAddress { get; } = new("");
     public ReactivePropertySlim<string> Password { get; } = new("");
+    public ReactivePropertySlim<bool> PeerToLocalOnly { get; } = new(true);
     public ReactivePropertySlim<string> ErrorMessage { get; } = new("");
     public ReadOnlyReactivePropertySlim<bool> HasError { get; }
     public ReactivePropertySlim<string> ProgressMessage { get; } = new("");
@@ -84,7 +85,7 @@ internal class SyncArchiveDialogViewModel {
             CurrentIndex.Value = 0;
             TotalCount.Value = 0;
             Running.Value = true;
-            var result = await _syncArchiveService.Start(PeerAddress.Value, Password.Value, page.XamlRoot, ErrorMessageProc, SyncTaskProc, CountProgressProc, SizeProgressProc);
+            var result = await _syncArchiveService.Start(PeerAddress.Value, Password.Value, PeerToLocalOnly.Value, page.XamlRoot, ErrorMessageProc, SyncTaskProc, CountProgressProc, SizeProgressProc);
             if (result) {
                 CloseCommand.Execute();
             }

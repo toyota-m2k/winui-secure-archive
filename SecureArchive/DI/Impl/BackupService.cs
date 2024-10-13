@@ -19,7 +19,7 @@ internal class RemoteItem {
     [JsonProperty("date")]
     public long Date { get; set; }              // ファイルのタイムスタンプ --> LastModifiedDate
     [JsonProperty("creationDate")]
-    public long CreationDate { get; set; }      // ファイル名から取り出される日付
+    public long CreationDate { get; set; }      // 動画を撮影した日時 = ファイル名から取り出される日付
     [JsonProperty("type")]
     public string Type { get; set; } = "";
     [JsonProperty("duration")]

@@ -19,6 +19,7 @@
             <TextBox Text="{x:Bind ViewModel.PeerAddress.Value, Mode=TwoWay}"/>
             <TextBlock Text="Peer Password"/>
             <PasswordBox Password="{x:Bind ViewModel.Password.Value, Mode=TwoWay}"/>
+            <CheckBox Content="Peer to Local Only" IsChecked="{x:Bind ViewModel.PeerToLocalOnly.Value, Mode=TwoWay}"/>
             <TextBlock Text="{x:Bind ViewModel.ErrorMessage.Value, Mode=OneWay}"/>
 
             <StackPanel Orientation="Horizontal" Spacing="20" HorizontalAlignment="Center" Visibility="{x:Bind ViewModel.Running.Value, Converter={StaticResource NegBoolVisibilityConverter}, Mode=OneWay}">

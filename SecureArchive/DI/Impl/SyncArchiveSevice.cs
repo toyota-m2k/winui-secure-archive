@@ -201,6 +201,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     { new StringContent($"{entry.CreationDate}"), "CreationDate" },
                     { new StringContent(entry.MetaInfo ?? ""), "MetaInfo" },
                     { new StringContent(entry.AttrDataJson), "ExtAttr" },
+                    { new StringContent($"{entry.Duration}"), "Duration" },
                     { body, "File", entry.Name }
                 };
                 var url = $"http://{peerAddress}/upload";
@@ -368,6 +369,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     public async Task<bool> Start(
         string peerAddress, 
         string peerPassword, 
+        bool peerToLocalOnly,
         XamlRoot? parent, 
         ErrorMessageProc errorMessageProc,
         SyncStateProc syncTaskProc, 
@@ -499,30 +501,36 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     }
                 }
 
-                // ローカル側に新しく追加されたファイルをアップロード
-                if (myNewFile.Count > 0) {
-                    syncTaskProc(SyncTask.UploadingNew);
-                    int counter = 0;
-                    foreach (var entry in myNewFile) {
-                        ct.ThrowIfCancellationRequested();
-                        counter++;
-                        _logger.Debug($"Upload (NEW): [{counter}/{myNewFile.Count}] {entry.Name}");
-                        countProgress(counter, myNewFile.Count);
-                        await UploadEntry(entry, byteProgress, ct);
-                    }
-                }
+                // Peerへのアップロード
+                if (!peerToLocalOnly) {
+                    // ローカル側に新しく追加されたファイルをアップロード
+                    if (myNewFile.Count > 0) {
+                        syncTaskProc(SyncTask.UploadingNew);
+                        int counter = 0;
+                        foreach (var entry in myNewFile) {
+                            ct.ThrowIfCancellationRequested();
+                            counter++;
+                            _logger.Debug($"Upload (NEW): [{counter}/{myNewFile.Count}] {entry.Name}");
+                            countProgress(counter, myNewFile.Count);
+                            await UploadEntry(entry, byteProgress, ct);
 
-                // ローカル側の更新日時が新しいものをアップロード
-                var myUpdates = commonPair.Where(it => it.peer.LastModifiedDate > it.my.LastModifiedDate).ToList();
-                if (myUpdates.Count > 0) {
-                    syncTaskProc(SyncTask.UploadingUpdate);
-                    int counter = 0;
-                    foreach (var pair in myUpdates) {
-                        ct.ThrowIfCancellationRequested();
-                        counter++;
-                        _logger.Debug($"Upload (UPD):  [{counter}/{myUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.LastModifiedDate)} --> {new DateTime(pair.peer.LastModifiedDate)}");
-                        countProgress(counter, myUpdates.Count);
-                        await UploadEntry(pair.my, byteProgress, ct);
+                            // ToDo:
+                            // ExtAttrs が反映されていない。
+                        }
+                    }
+
+                    // ローカル側の更新日時が新しいものをアップロード
+                    var myUpdates = commonPair.Where(it => it.peer.LastModifiedDate > it.my.LastModifiedDate).ToList();
+                    if (myUpdates.Count > 0) {
+                        syncTaskProc(SyncTask.UploadingUpdate);
+                        int counter = 0;
+                        foreach (var pair in myUpdates) {
+                            ct.ThrowIfCancellationRequested();
+                            counter++;
+                            _logger.Debug($"Upload (UPD):  [{counter}/{myUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.LastModifiedDate)} --> {new DateTime(pair.peer.LastModifiedDate)}");
+                            countProgress(counter, myUpdates.Count);
+                            await UploadEntry(pair.my, byteProgress, ct);
+                        }
                     }
                 }
 
