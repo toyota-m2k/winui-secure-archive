@@ -48,7 +48,7 @@ internal class HttpServerService : IHttpServreService {
         _server = new HttpServer(Routes(), _logger);
 
         _cryptoStreamHandler = new CryptoStreamHandler();
-        ListSource = _databaseService.Entries.List(false);
+        //ListSource = _databaseService.Entries.List(false);
         oneTimePasscode = new OneTimePasscode(_passwordService);
     }
 
@@ -464,7 +464,7 @@ internal class HttpServerService : IHttpServreService {
                     var oid = p.GetValue("o");
                     var hasOid = !string.IsNullOrEmpty(oid);
 
-                    var list = ListSource.Where((it) => {
+                    var list = FileEntryList.Where((it) => {
                         if(!sync && it.IsDeleted) return false;
                         if(hasOid && it.OwnerId!=oid) return false;
                         if(types!=null) {
@@ -827,6 +827,8 @@ internal class HttpServerService : IHttpServreService {
         _server.Stop();
     }
 
-    public IList<FileEntry> ListSource { get; set; }
+    //public IList<FileEntry> ListSource { get; set; }
+    public IListSource? ListSource { get; set; } = null;
+    private IList<FileEntry> FileEntryList => ListSource?.GetFileList() ?? _databaseService.Entries.List(false);
     #endregion
 }

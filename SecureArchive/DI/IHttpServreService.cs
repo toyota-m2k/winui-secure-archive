@@ -6,10 +6,14 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace SecureArchive.DI; 
+namespace SecureArchive.DI;
+
+internal interface IListSource {
+    IList<FileEntry> GetFileList();
+}
 internal interface IHttpServreService {
     IObservable<bool> Running { get; }
     bool Start(int port);
     void Stop();
-    IList<FileEntry> ListSource { get; set; }
+    IListSource? ListSource { get; set; }
 }

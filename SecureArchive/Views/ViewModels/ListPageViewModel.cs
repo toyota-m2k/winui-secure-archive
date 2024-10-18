@@ -17,7 +17,7 @@ using System.Threading.Tasks;
 
 namespace SecureArchive.Views.ViewModels;
 
-internal class ListPageViewModel {
+internal class ListPageViewModel : IListSource {
     private IPageService _pageService;
     //private ICryptographyService _cryptoService;
     //private IFileStoreService _fileStoreService;
@@ -39,6 +39,10 @@ internal class ListPageViewModel {
     public IReadOnlyReactiveProperty<ProgressMode> ProgressMode { get; } 
     public IReadOnlyReactiveProperty<int> ProgressInPercent { get; }
     public ReadOnlyReactivePropertySlim<bool> HasMessage { get; }
+
+    public IList<FileEntry> GetFileList() {
+        return FileList.Value;
+    }
 
     public ListPageViewModel(
         IPageService pageService, 
@@ -97,10 +101,10 @@ internal class ListPageViewModel {
             });
         });
 
-        FileList.Subscribe((list) => {
-            _httpServreService.ListSource = list;
-            //Validate(true);
-        });
+        //FileList.Subscribe((list) => {
+        //    _httpServreService.ListSource = ()=> { return list };
+        //    //Validate(true);
+        //});
     }
 
     public async Task<bool> ExportFileTo(FileEntry entry, string outFile, ProgressProc progress) {
