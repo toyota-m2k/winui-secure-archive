@@ -61,6 +61,16 @@ public static class CsExtensions {
         }
         return defValue;
     }
+    public static long GetLong(this IDictionary<string, string> dic, string key, long defValue = 0L) {
+        if (dic.TryGetValue(key, out var value)) {
+            if (value is string s) {
+                if (long.TryParse(s, out var l2)) {
+                    return l2;
+                }
+            }
+        }
+        return defValue;
+    }
     public static int GetInt(this IDictionary<string, object> dic, string key, int defValue=0) {
         return (int)GetLong(dic, key, defValue);
     }

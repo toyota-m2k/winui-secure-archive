@@ -26,7 +26,6 @@ internal class ListPageViewModel : IListSource {
     private ITaskQueueService _taskQueueService;
     private IStatusNotificationService _statusNotificationService;
     private IMainThreadService _mainThreadService;
-    private IHttpServreService _httpServreService;
     public ILogger _logger;
 
     public ReactiveCommandSlim AddCommand { get; } = new ReactiveCommandSlim();
@@ -53,7 +52,6 @@ internal class ListPageViewModel : IListSource {
         ITaskQueueService taskQueueService,
         IStatusNotificationService statusNotificationService,
         IMainThreadService mainThreadService,
-        IHttpServreService httpServreService,
         ILoggerFactory loggerFactory) {
         _pageService = pageService;
         //_cryptoService = cryptographyService;
@@ -63,7 +61,6 @@ internal class ListPageViewModel : IListSource {
         _taskQueueService = taskQueueService;
         _statusNotificationService = statusNotificationService;
         _mainThreadService = mainThreadService;
-        _httpServreService = httpServreService;
         _logger = loggerFactory.CreateLogger("ListPage");
         
         GoBackCommand.Subscribe(_pageService.ShowMenuPage);

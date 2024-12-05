@@ -9,6 +9,7 @@ using SecureArchive.Utils.Crypto;
 using SecureArchive.Utils.Server.lib;
 using SecureArchive.Utils.Server.lib.model;
 using SecureArchive.Utils.Server.lib.response;
+using SecureArchive.Views.ViewModels;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Security.Cryptography;
 using System.Text.RegularExpressions;
@@ -37,14 +38,16 @@ internal class HttpServerService : IHttpServreService {
         IDatabaseService databaseService,
         IPasswordService passwordService,
         IBackupService backupService,
-        IDeviceMigrationService deviceMigrationService) {
+        IDeviceMigrationService deviceMigrationService,
+        ListPageViewModel listPageViewModel
+        ) {
         _logger = factory.CreateLogger<HttpServerService>();
         _secureStorageService = secureStorageService;
         _databaseService = databaseService;
         _passwordService = passwordService;
         _backupService = backupService;
         _deviceMigrationService = deviceMigrationService;
-
+        ListSource = listPageViewModel;
         _server = new HttpServer(Routes(), _logger);
 
         _cryptoStreamHandler = new CryptoStreamHandler();
@@ -462,9 +465,10 @@ internal class HttpServerService : IHttpServreService {
                     var type = p.GetValue("type")?.ToLower();
                     var types = p.GetValue("f")?.ToLower();
                     var oid = p.GetValue("o");
+                    var listMode = p.GetLong("s", 0L);
                     var hasOid = !string.IsNullOrEmpty(oid);
 
-                    var list = FileEntryList.Where((it) => {
+                    var list = GetFileEntryList(listMode).Where((it) => {
                         if(!sync && it.IsDeleted) return false;
                         if(hasOid && it.OwnerId!=oid) return false;
                         if(types!=null) {
@@ -829,6 +833,13 @@ internal class HttpServerService : IHttpServreService {
 
     //public IList<FileEntry> ListSource { get; set; }
     public IListSource? ListSource { get; set; } = null;
-    private IList<FileEntry> FileEntryList => ListSource?.GetFileList() ?? _databaseService.Entries.List(false);
+    private IList<FileEntry> GetFileEntryList(long listMode) {
+        if (listMode == 1 && ListSource != null) {
+            return ListSource.GetFileList();
+        }
+        else {
+            return _databaseService.Entries.List(false);
+        }
+    }
     #endregion
 }
