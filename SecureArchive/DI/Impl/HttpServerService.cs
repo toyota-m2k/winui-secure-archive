@@ -492,6 +492,7 @@ internal class HttpServerService : IHttpServreService {
                                 { "type", it.Type },
                                 { "size", it.Size },
                                 { "media", it.MediaType },
+                                { "date", it.CreationDate }
                             };
                         }
                     }).ToList();
