@@ -213,6 +213,7 @@ internal class HttpServerService : IHttpServreService {
     class OneTimePasscode {
         IPasswordService _passwordService;
         readonly TimeSpan ValidTerm = new TimeSpan(0, 30, 0);    // 30分
+        //readonly TimeSpan ValidTerm = new TimeSpan(0, 0, 30);    // 30秒　（デバッグ用）
         string _challenge = null!; // = Guid.NewGuid().ToString();
         string _authToken = null!; // = CryptographicBuffer.EncodeToHexString(RandomNumberGenerator.GetBytes(8).AsBuffer());
         DateTime _tick = DateTime.MinValue;
@@ -345,7 +346,7 @@ internal class HttpServerService : IHttpServreService {
                 name: "nop",
                 regex: "/nop",
                 process: (HttpRequest request) => {
-                    return new TextHttpResponse(request, HttpStatusCode.Ok, "nothing to do.");
+                    return new TextHttpResponse(request, HttpStatusCode.Ok, "SecureArchive server is running.");
                 }),
             Route.post(
                 name: "upload",
