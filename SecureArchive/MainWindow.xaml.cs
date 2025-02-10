@@ -6,7 +6,6 @@ using SecureArchive.Utils;
 using SecureArchive.Views.ViewModels;
 using System.Windows.Interop;
 using Windows.UI.ViewManagement;
-using WinUIEx;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -15,7 +14,7 @@ namespace SecureArchive;
 /// <summary>
 /// An empty window that can be used on its own or navigated to within a Frame.
 /// </summary>
-public sealed partial class MainWindow : WindowEx, IMainFrameContract {
+public sealed partial class MainWindow : Window, IMainFrameContract {
     public Frame RootFrame => _rootFrame;
     public UIElement AppTitleBar => _appTitleBar;
 
