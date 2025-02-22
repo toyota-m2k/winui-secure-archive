@@ -1,13 +1,14 @@
 ﻿using Microsoft.Extensions.Logging;
 using System.CodeDom;
 using System.Diagnostics;
+using System.IO;
 
 namespace SecureArchive.Utils;
 
 public class SeekableInputStream : Stream {
     private const int BUFFER_SIZE = 8192;
     private Stream _internalStream;
-    public delegate Stream ReopenStreamProc(Stream currentStream);
+    public delegate Stream ReopenStreamProc(Stream? currentStream);
     private ReopenStreamProc? _reopenStream;
     private UtLog _logger = new(typeof(SeekableInputStream));
 
@@ -15,6 +16,12 @@ public class SeekableInputStream : Stream {
         Debug.Assert(inStream.CanRead);
         _internalStream = inStream;
         _reopenStream = reopenStreamProc;
+        Length = getLength();
+    }
+    public SeekableInputStream(ReopenStreamProc reopenStreamProc) {
+        _internalStream = reopenStreamProc(null);
+        _reopenStream = reopenStreamProc;
+        Debug.Assert(_internalStream.CanRead);
         Length = getLength();
     }
 

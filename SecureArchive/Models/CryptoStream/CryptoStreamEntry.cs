@@ -14,9 +14,9 @@ internal class CryptoStreamEntry : ICryptoStreamContainer, IDisposable
     {
         FileEntry = entry;
         var secureStorageService = App.GetService<ISecureStorageService>();
-        Stream = new SeekableInputStream(secureStorageService.OpenEntry(entry), reopenStreamProc: (oldStream) =>
+        Stream = new SeekableInputStream(reopenStreamProc: (oldStream) =>
         {
-            oldStream.Dispose();
+            oldStream?.Dispose();
             return secureStorageService.OpenEntry(entry);
         });
     }

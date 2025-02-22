@@ -1,11 +1,14 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using io.github.toyota32k.media;
+using Microsoft.Extensions.Logging;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using System.ComponentModel.DataAnnotations;
+using System.Reactive.Disposables;
 using System.Security.Cryptography;
 using System.Xml.Linq;
 using Windows.Storage.Streams;
+using static io.github.toyota32k.media.MovieFastStart;
 
 namespace SecureArchive.DI.Impl;
 
@@ -410,60 +413,152 @@ internal class SecureStorageService : ISecureStorageService {
         try {
             File.Move(src, dst);
             return true;
-        } catch(Exception) {
+        } catch(Exception e) {
+            _logger.Error(e);
             return false;
         }
     }
 
-    private async Task<bool> ConvertFastStart(FileEntry entry, IStatusNotificationService? notificationService) {
+    private class OutputFileSource : IOutputStreamFactory {
+        private ICryptographyService _cryptoService;
+        private string _path;
+
+        public OutputFileSource(ICryptographyService cryptService, string path) {
+            _cryptoService = cryptService;
+            _path = path;
+        }
+        public Stream Create() {
+            var outStream = new FileStream(_path, FileMode.Create, FileAccess.Write, FileShare.None);
+            return _cryptoService.OpenStreamForEncryption(outStream);
+        }
+        public void Delete() {
+            FileUtils.SafeDelete(_path);
+        }
+    }
+
+    private class Notifier : INotify, IDisposable {
+        IProgressHandle _progressHandle;
+        public Notifier(IStatusNotificationService notificationService) {
+            _progressHandle = notificationService.BeginProgress("FastStart");
+        }
+        public void Error(string message) {
+            _progressHandle.UpdateMessage(message);
+        }
+
+        public void Message(string message) {
+            _progressHandle.UpdateMessage(message);
+        }
+
+        public void UpdateProgress(long current, long total, string? message) {
+            if (message != null) {
+                _progressHandle.UpdateMessage(message);
+            }
+            _progressHandle.UpdateProgress(current, total);
+        }
+
+        public void Verbose(string message) {
+        }
+
+        public void Warning(string message) {
+            _progressHandle.UpdateMessage(message);
+        }
+
+        public void Dispose() {
+            _progressHandle.Dispose();
+        }
+    }
+
+    private async Task<bool> ConvertFastStart(FileEntry entry, IStatusNotificationService? notificationService, bool onlyCheck) {
         bool success = false;
-        string backupPath = entry.Path + ".bak";
-        if(!RenameFile(entry.Path, backupPath)) {
+        var backupPath = entry.Path + ".bak";
+        var workingPath = entry.Path + ".mfs";
+        if (File.Exists(backupPath)) {
+            // 既に*.bakファイルが存在する場合は、何もしない。
+            notificationService?.ShowMessage("Already converted.", 5000);
             return false;
+        }
+        if(File.Exists(workingPath)) {
+            // 既に*.mfsファイルが存在する場合は、削除する
+            FileUtils.SafeDelete(workingPath);
         }
 
         try {
-            var srcStream = _cryptoService.OpenStreamForDecryption(File.OpenRead(backupPath));
-
-            using (var inputStream = new SeekableInputStream(srcStream, (oldStream) => {
-                oldStream.Dispose();
-                return _cryptoService.OpenStreamForDecryption(File.OpenRead(backupPath));
-            })) {
-                var fs = new MovieFastStart() { TaskName = entry.Name };
-                success = await fs.Process(inputStream, () => {
-                    var outStream = new FileStream(entry.Path, FileMode.Create, FileAccess.Write, FileShare.None);
-                    return _cryptoService.OpenStreamForEncryption(outStream);
-                }, notificationService);
-                if (success) {
-                    // 成功すれば、データベースを更新。
-                    _databaseService.EditEntry((entryList) => {
-                        // Overwrite
-                        var mutableEntry = entryList.GetById(entry.Id)!;
-                        mutableEntry.Size = fs.OutputLength;
-                        return true;
-                    });
+            using var notifier = notificationService != null ? new Notifier(notificationService) : null;
+            using var inputStream = new SeekableInputStream(oldStream => {
+                oldStream?.Dispose();
+                return _cryptoService.OpenStreamForDecryption(File.OpenRead(entry.Path));
+            });
+            var fs = new MovieFastStart() {
+                TaskName = entry.Name,
+                Notify = notifier
+            };
+            if (onlyCheck) {
+                await fs.Check(inputStream);
+                if (fs.SourceStatus.AlreadySuitable) {
+                    notificationService?.ShowMessage("Already suitable.", 5000);
+                    return false;
                 }
-                return success;
+                else if (fs.SourceStatus.Unsupported) {
+                    notificationService?.ShowMessage("Unsupported.", 5000);
+                    return false;
+                }
+                else {
+                    notificationService?.ShowMessage("Need to convert.", 5000);
+                    return true;
+                }
             }
+            var output = new OutputFileSource(_cryptoService, workingPath);
+            success = await fs.Process(inputStream, output);
+            if (success) {
+                // 成功すれば、ファイル、データベースを更新
+                // まず、元のファイルを *.bak にリネームして退避
+                if (!RenameFile(entry.Path, backupPath)) {
+                    // オリジナルファイルをリネームできない場合は、FastStartファイルを削除して終了
+                    notificationService?.ShowMessage("Cannot rename original file.", 5000);
+                    output.Delete();
+                    return false;
+                }
+                // FastStartファイルを元のファイル名にリネーム
+                if (!RenameFile(workingPath, entry.Path)) {
+                    // FastStartファイルをリネームできない場合は、オリジナルファイルを戻して終了
+                    notificationService?.ShowMessage("Cannot rename FastStart file.", 5000);
+                    if (!RenameFile(backupPath, entry.Path)) {
+                        // fatal error.
+                        notificationService?.ShowMessage("Fatal Error: Cannot restore original file.", 5000);
+                    }
+                    return false;
+                }
+                // *.bak を削除
+                FileUtils.SafeDelete(backupPath);
+
+                _databaseService.EditEntry((entryList) => {
+                    // Overwrite
+                    var mutableEntry = entryList.GetById(entry.Id)!;
+                    mutableEntry.Size = fs.OutputLength;
+                    mutableEntry.LastModifiedDate = DateTime.Now.Ticks;
+                    return true;
+                });
+            }
+            else {
+                // 失敗した場合は、FastStartファイルを削除して終了
+                // MovieFastStartが削除しているはずだが、念のため。
+                output.Delete();
+            }
+            return success;
+            
         } catch (Exception e) {
             _logger.Error(e);
             return false;
-        } finally {
-            if (!success) {
-                // 失敗したら元に戻す。
-                _logger.Error($"Error: {entry.Name}");
-                RenameFile(backupPath, entry.Path);
-            }
         }
     }
 
     /**
      * すべてのmp4ファイルをFastStartに変換する。
      */
-    public async Task ConvertFastStart(IStatusNotificationService? notificationService) {
-        var entries = _databaseService.Entries.List((entry) => {
-            return entry.Type == "mp4";
-        }, true);
+    public async Task ConvertFastStart(IStatusNotificationService? notificationService, List<FileEntry> entries) {
+        //var entries = _databaseService.Entries.List((entry) => {
+        //    return entry.Type == "mp4";
+        //}, true);
         //var entry = entries.FirstOrDefault();
         //if (entry == null) {
         //    _logger.Info("No mp4 files.");
@@ -474,7 +569,8 @@ internal class SecureStorageService : ISecureStorageService {
         //await ConvertFastStart(entry);
 
         foreach (var entry in entries) {
-            await ConvertFastStart(entry, notificationService);
+            if (entry.Type != "mp4") continue;
+            await ConvertFastStart(entry, notificationService, onlyCheck: true);
         }
     }
 

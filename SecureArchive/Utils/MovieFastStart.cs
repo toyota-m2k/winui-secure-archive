@@ -4,8 +4,8 @@ using System.Text;
 
 namespace SecureArchive.Utils;
 
-internal class MovieFastStart {
-    static UtLog logger = new UtLog(typeof(MovieFastStart));
+internal class MovieFastStart__old {
+    static UtLog logger = new UtLog(typeof(MovieFastStart__old));
     private const int CHUNK_SIZE = 8192;
 
     public Exception? LastException { get; private set; } = null;

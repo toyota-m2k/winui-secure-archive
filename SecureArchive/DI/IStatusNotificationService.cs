@@ -19,11 +19,18 @@ internal enum ProgressMode {
     ProgressBar,
 }
 
+internal interface IProgressHandle : IDisposable {
+    void UpdateMessage(string newMessage);
+    void UpdateProgress(long current, long total);
+}
+
 internal interface IStatusNotificationService {
     IReadOnlyReactiveProperty<string> Message { get; }
     IReadOnlyReactiveProperty<int> ProgressInPercent { get; }
     IReadOnlyReactiveProperty<ProgressMode> ProgressMode { get; }
     Task WithProgress(string initialMessage, WithProgressProc proc);
+    IProgressHandle BeginProgress(string initialMessage);
+
     Task WithBusy(string initialMessage, WithBusyProc proc);
     void ShowMessage(string message, int termInMs);
 }

@@ -71,6 +71,30 @@ internal class StatusNotificationService : IStatusNotificationService {
         }
     }
 
+    private class ProgressHandle : IProgressHandle {
+        private StatusNotificationService _service;
+        private int _id;
+        public int ID => _id;
+        public ProgressHandle(StatusNotificationService service, int id) {
+            _service = service;
+            _id = id;
+        }
+        public void Dispose() {
+            _service.ResetMessage(_id);
+        }
+        public void UpdateMessage(string newMessage) {
+            _id = _service.UpdateMessage(newMessage);
+        }
+        public void UpdateProgress(long current, long total) {
+            _service.SetProgress(current, total);
+        }
+    }
+
+    public IProgressHandle BeginProgress(string initialMessage) {
+        int id = SetMessage(initialMessage, DI.ProgressMode.ProgressBar);
+        return new ProgressHandle(this, id);
+    }
+
     public async Task WithBusy(string initialMessage, WithBusyProc proc) {
         int id = SetMessage(initialMessage, DI.ProgressMode.WaitRing);
         try {

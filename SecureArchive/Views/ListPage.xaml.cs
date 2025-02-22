@@ -23,6 +23,9 @@ namespace SecureArchive.Views {
             ViewModel.ExportCommand.Subscribe(() => {
                 _ = ViewModel.ExportFiles(FileListGrid.SelectedItems.Cast<FileEntry>().ToList());
             });
+            ViewModel.PatchCommand.Subscribe(() => {
+                _ = ViewModel.ConvertFastStart(FileListGrid.SelectedItems.Cast<FileEntry>().ToList());
+            });
         }
 
         private void OnColumnHeaderClicked(object sender, RoutedEventArgs e) {

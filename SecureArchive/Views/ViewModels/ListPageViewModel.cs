@@ -65,14 +65,14 @@ internal class ListPageViewModel : IListSource {
         
         GoBackCommand.Subscribe(_pageService.ShowMenuPage);
         AddCommand.Subscribe(AddLocalFile);
-        PatchCommand.Subscribe(() => Task.Run(()=>_secureStorageService.ConvertFastStart(_statusNotificationService)));
+        //PatchCommand.Subscribe(() => Task.Run(()=>_secureStorageService.ConvertFastStart(_statusNotificationService)));
 
         FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(true));
         Message = _statusNotificationService.Message;
         ProgressMode = _statusNotificationService.ProgressMode;
         ProgressInPercent = _statusNotificationService.ProgressInPercent;
 
-        HasMessage = Message.Select((it)=>!string.IsNullOrEmpty(it)).ToReadOnlyReactivePropertySlim();
+        HasMessage = Message.Select((it) => !string.IsNullOrEmpty(it)).ToReadOnlyReactivePropertySlim();
         //HasMessage.Subscribe((v) => {
         //    _logger.LogDebug($"HasMessage={v}");
         //});
@@ -146,6 +146,17 @@ internal class ListPageViewModel : IListSource {
                 updateMessage($"Exported: {success}/{success+error} file(s).");
             });
         });
+    }
+
+    public async Task<bool> ConvertFastStart(List<FileEntry> list) {
+        try {
+            await _secureStorageService.ConvertFastStart(_statusNotificationService, list);
+            return true;
+        }
+        catch (Exception ex) {
+            _logger.Error(ex, "FastStart Error.");
+            return false;
+        }
     }
 
     private void AddItem(FileEntry entry) {

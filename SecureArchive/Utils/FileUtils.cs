@@ -93,11 +93,12 @@ internal static class FileUtils {
         return (await folder.GetItemsAsync()).Count == 0;
     }
 
-    internal static void SafeDelete(string outFilePath) {
+    internal static bool SafeDelete(string outFilePath) {
         try {
             File.Delete(outFilePath);
+            return true;
         } catch {
-            // nothing to do
+            return false;
         }
     }
     internal static string SafeNameOf(string name) {
