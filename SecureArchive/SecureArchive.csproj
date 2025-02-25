@@ -14,7 +14,7 @@
 	<PlatformTarget>x64</PlatformTarget>
 	<Nullable>enable</Nullable>
 	<ImplicitUsings>enable</ImplicitUsings>
-	<Version>1.10.3.0</Version>
+	<Version>1.11.0.0</Version>
 	<SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
   </PropertyGroup>
   <ItemGroup>
@@ -45,7 +45,8 @@
     <PackageReference Include="CommunityToolkit.WinUI.Animations" Version="8.0.240109" />
     <PackageReference Include="CommunityToolkit.WinUI.UI.Controls.DataGrid" Version="7.1.2" />
     <PackageReference Include="HttpMultipartParser" Version="9.0.0" />
-    <PackageReference Include="io.github.toyota32k.FastStart" Version="1.0.0" />
+    <PackageReference Include="io.github.toyota32k.dotnetLittleToolkit" Version="0.1.0" />
+    <PackageReference Include="io.github.toyota32k.MP4FastStart" Version="0.2.1" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.2" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.2" />
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.2" />

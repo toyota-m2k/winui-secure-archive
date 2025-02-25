@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.DependencyInjection;
+﻿using io.github.toyota32k.toolkit.net;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Windowing;
@@ -9,7 +10,6 @@ using SecureArchive.DI.Impl;
 using SecureArchive.Utils;
 using SecureArchive.Views;
 using SecureArchive.Views.ViewModels;
-using System.Diagnostics;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -36,6 +36,31 @@ namespace SecureArchive {
 
             return service;
         }
+
+        private class DebugTracer : ILogTracer {
+            private ILogger logger;
+            public DebugTracer(ILogger logger) {
+                this.logger = logger;
+            }
+            public void trace(io.github.toyota32k.toolkit.net.LogLevel level, string message) {
+                switch (level) {
+                    case io.github.toyota32k.toolkit.net.LogLevel.INFO:
+                        logger.LogInformation(message);
+                        break;
+                    case io.github.toyota32k.toolkit.net.LogLevel.WARN:
+                        logger.LogWarning(message);
+                        break;
+                    case io.github.toyota32k.toolkit.net.LogLevel.ERROR:
+                        logger.LogError(message);
+                        break;
+                    case io.github.toyota32k.toolkit.net.LogLevel.DEBUG:
+                        logger.LogDebug(message);
+                        break;
+                }
+            }
+        }
+
+
 
         public static MainWindow MainWindow { get; } = new MainWindow();
         public static Frame RootFrame => MainWindow.RootFrame;
@@ -93,6 +118,8 @@ namespace SecureArchive {
             Logger = GetService<ILoggerFactory>().CreateLogger("");
             UtLog.SetGlobalLogger(Logger);
             UnhandledException += OnUnhandledException;
+
+            io.github.toyota32k.toolkit.net.Logger.Tracer = new DebugTracer(Logger);
         }
 
         private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e) {

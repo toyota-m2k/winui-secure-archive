@@ -31,6 +31,7 @@ internal interface ISecureStorageService {
 
     Task<bool> DeleteEntry(FileEntry entry, bool deleteDbEntry=false);
 
-    Task ConvertFastStart(IStatusNotificationService? notificationService, List<FileEntry> entries);
+    Task ConvertFastStart(IStatusNotificationService notificationService, List<FileEntry> entries);
+    Task CheckFastStart(IStatusNotificationService notificationService, List<FileEntry> entries);
 
 }

@@ -3,11 +3,7 @@ using Microsoft.Extensions.Logging;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
-using System.ComponentModel.DataAnnotations;
-using System.Reactive.Disposables;
 using System.Security.Cryptography;
-using System.Xml.Linq;
-using Windows.Storage.Streams;
 using static io.github.toyota32k.media.MovieFastStart;
 
 namespace SecureArchive.DI.Impl;
@@ -438,8 +434,10 @@ internal class SecureStorageService : ISecureStorageService {
 
     private class Notifier : INotify, IDisposable {
         IProgressHandle _progressHandle;
-        public Notifier(IStatusNotificationService notificationService) {
+        ILogger _logger;
+        public Notifier(IStatusNotificationService notificationService, ILogger logger) {
             _progressHandle = notificationService.BeginProgress("FastStart");
+            _logger = logger;
         }
         public void Error(string message) {
             _progressHandle.UpdateMessage(message);
@@ -457,6 +455,7 @@ internal class SecureStorageService : ISecureStorageService {
         }
 
         public void Verbose(string message) {
+            _logger.LogDebug(message);
         }
 
         public void Warning(string message) {
@@ -468,14 +467,21 @@ internal class SecureStorageService : ISecureStorageService {
         }
     }
 
-    private async Task<bool> ConvertFastStart(FileEntry entry, IStatusNotificationService? notificationService, bool onlyCheck) {
+    private async Task<bool> ConvertFastStartCore(FileEntry entry, IStatusNotificationService? notificationService, bool onlyCheck) {
         bool success = false;
         var backupPath = entry.Path + ".bak";
         var workingPath = entry.Path + ".mfs";
         if (File.Exists(backupPath)) {
             // 既に*.bakファイルが存在する場合は、何もしない。
-            notificationService?.ShowMessage("Already converted.", 5000);
-            return false;
+            // notificationService?.ShowMessage("Already converted.", 5000);
+            if (File.Exists(entry.Path)) {
+                // 元ファイルが存在するなら *.bakは削除
+                FileUtils.SafeDelete(backupPath);
+            }
+            else {
+                notificationService?.ShowMessage($"Aborted: {entry.Path}", 15000);
+                return false;
+            }
         }
         if(File.Exists(workingPath)) {
             // 既に*.mfsファイルが存在する場合は、削除する
@@ -483,7 +489,7 @@ internal class SecureStorageService : ISecureStorageService {
         }
 
         try {
-            using var notifier = notificationService != null ? new Notifier(notificationService) : null;
+            using var notifier = notificationService != null ? new Notifier(notificationService, _logger) : null;
             using var inputStream = new SeekableInputStream(oldStream => {
                 oldStream?.Dispose();
                 return _cryptoService.OpenStreamForDecryption(File.OpenRead(entry.Path));
@@ -495,21 +501,24 @@ internal class SecureStorageService : ISecureStorageService {
             if (onlyCheck) {
                 await fs.Check(inputStream);
                 if (fs.SourceStatus.AlreadySuitable) {
-                    notificationService?.ShowMessage("Already suitable.", 5000);
+                    notificationService?.ShowMessage($"Already suitable: {entry.Name}", 5000);
                     return false;
                 }
                 else if (fs.SourceStatus.Unsupported) {
-                    notificationService?.ShowMessage("Unsupported.", 5000);
+                    notificationService?.ShowMessage($"Unsupported: {entry.Name}", 5000);
                     return false;
                 }
                 else {
-                    notificationService?.ShowMessage("Need to convert.", 5000);
+                    notificationService?.ShowMessage($"Need to convert: {entry.Name}", 5000);
                     return true;
                 }
             }
             var output = new OutputFileSource(_cryptoService, workingPath);
             success = await fs.Process(inputStream, output);
             if (success) {
+                // input file を閉じる
+                inputStream.Dispose();
+
                 // 成功すれば、ファイル、データベースを更新
                 // まず、元のファイルを *.bak にリネームして退避
                 if (!RenameFile(entry.Path, backupPath)) {
@@ -535,7 +544,7 @@ internal class SecureStorageService : ISecureStorageService {
                     // Overwrite
                     var mutableEntry = entryList.GetById(entry.Id)!;
                     mutableEntry.Size = fs.OutputLength;
-                    mutableEntry.LastModifiedDate = DateTime.Now.Ticks;
+                    mutableEntry.LastModifiedDate = TimeUtils.dateTime2javaTime(DateTime.Now);
                     return true;
                 });
             }
@@ -551,30 +560,71 @@ internal class SecureStorageService : ISecureStorageService {
             return false;
         }
     }
+    private async Task<bool> ConvertFastStart(FileEntry entry, IStatusNotificationService? notificationService, bool onlyCheck) {
+        return await Task.Run(() => {
+            return ConvertFastStartCore(entry, notificationService, onlyCheck);
+        });
+    }
 
     /**
      * すべてのmp4ファイルをFastStartに変換する。
      */
-    public async Task ConvertFastStart(IStatusNotificationService? notificationService, List<FileEntry> entries) {
-        //var entries = _databaseService.Entries.List((entry) => {
-        //    return entry.Type == "mp4";
-        //}, true);
-        //var entry = entries.FirstOrDefault();
-        //if (entry == null) {
-        //    _logger.Info("No mp4 files.");
-        //    return;
-        //}
-        //_logger.Debug(entry.Name);
-        //_logger.Debug(entry.Path);
-        //await ConvertFastStart(entry);
+    public async Task ConvertFastStart(IStatusNotificationService notificationService, List<FileEntry> entries) {
+        entries = entries.Where(e => e.Type == "mp4").ToList();
+        if (entries.Count == 0) {
+            _logger.Info("No mp4 files.");
+            return;
+        }
 
-        foreach (var entry in entries) {
-            if (entry.Type != "mp4") continue;
-            await ConvertFastStart(entry, notificationService, onlyCheck: true);
+        if (entries.Count == 1) {
+            if(!await ConvertFastStart(entries[0], notificationService, onlyCheck: false)) {
+                _logger.Error($"not converted: {entries[0].Name}");
+            }
+        }
+        else {
+            await notificationService.WithProgress("FastStart", async (message, progress) => {
+                for (int i = 0; i < entries.Count; i++) {
+                    var entry = entries[i];
+                    message($"Processing {entry.Name}");
+                    progress(i + 1, entries.Count);
+                    if (!await ConvertFastStart(entries[i], null, onlyCheck: false)) {
+                        _logger.Error($"not converted: {entries[0].Name}");
+                    }
+                }
+                message($"FastStart: completed.");
+            });
         }
     }
+    public async Task CheckFastStart(IStatusNotificationService notificationService, List<FileEntry> entries) {
+        entries = entries.Where(e => e.Type == "mp4").ToList();
+        if (entries.Count == 0) {
+            _logger.Info("No mp4 files.");
+            return;
+        }
 
-    public async Task CheckItemLength() {
-
+        if (entries.Count == 1) {
+            if(await ConvertFastStart(entries[0], notificationService, onlyCheck: true)) {
+                _logger.Debug($"need to convert: {entries[0].Name}:{entries[0].Path}");
+            }
+        }
+        else {
+            var slow = new List<FileEntry>();
+            await notificationService.WithProgress("FastStart", async (message, progress) => {
+                for (int i = 0; i < entries.Count; i++) {
+                    var entry = entries[i];
+                    message($"Processing {entry.Name}");
+                    progress(i + 1, entries.Count);
+                    if (await ConvertFastStart(entries[i], null, onlyCheck: true)) {
+                        slow.Add(entry);
+                    }
+                }
+                if (slow.Any()) {
+                    foreach (var e in slow) {
+                        _logger.Debug($"need to convert: {e.Name}:{e.Path}");
+                    }
+                }
+                message($"FastStart: completed.");
+            });
+        }
     }
 }
