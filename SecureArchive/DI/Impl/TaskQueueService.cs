@@ -4,7 +4,7 @@ using SecureArchive.Utils;
 namespace SecureArchive.DI.Impl;
 internal class TaskQueueService : ITaskQueueService {
     IMainThreadService _mainThreadService;
-    ILogger _logger;
+    UtLog _logger;
     AtomicInteger _taskIdGenerator = new();
 
     struct QueueingTask {
@@ -21,7 +21,7 @@ internal class TaskQueueService : ITaskQueueService {
 
     public TaskQueueService(IMainThreadService mainThreadService, ILoggerFactory loggerFactory) {
         _mainThreadService = mainThreadService;
-        _logger = loggerFactory.CreateLogger<TaskQueueService>();
+        _logger = UtLog.Instance(typeof(TaskQueueService));
     }
 
     public void PushTask(Action action) {

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="SecureArchive.Views.LogView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:SecureArchive.Views"
+    xmlns:model="using:SecureArchive.Views.ViewModels"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Loaded="OnLoaded"
+    Unloaded="OnUnloaded"
+    >
+    <UserControl.Resources>
+        <ResourceDictionary Source="./Converters.xaml"/>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+            <ToggleButton IsChecked="{x:Bind ViewModel.StopScroll.Value, Mode=TwoWay}" ToolTipService.ToolTip="Stop automatic scrolling">
+                <PathIcon Data="M 13 16V 8H 15V 16H 13M 9 16V 8H 11V 16H 9M 12 2A 10,10,0,0,1,22,12 10,10,0,0,1,12,22 10,10,0,0,1,2,12 10,10,0,0,1,12,2M 12 4A 8,8,0,0,0,4,12 8,8,0,0,0,12,20 8,8,0,0,0,20,12 8,8,0,0,0,12,4Z"  HorizontalAlignment="Center"/>
+            </ToggleButton>
+            <Button Command="{x:Bind ViewModel.CopyCommand}" ToolTipService.ToolTip="Copy log content to clipboard">
+                <PathIcon Data="M 19 21H 8V 7H 19M 19 5H 8A 2,2,0,0,0,6,7V 21A 2,2,0,0,0,8,23H 19A 2,2,0,0,0,21,21V 7A 2,2,0,0,0,19,5M 16 1H 4A 2,2,0,0,0,2,3V 17H 4V 3H 16V 1Z"  HorizontalAlignment="Center"/>
+            </Button>
+            <Button Command="{x:Bind ViewModel.ClearCommand}" ToolTipService.ToolTip="Clear all log entries.">
+                <PathIcon Data="M 19 6.41L 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"  HorizontalAlignment="Center"/>
+            </Button>
+        </StackPanel>
+        <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1" Padding="5">
+            <ScrollViewer x:Name="scrollViewer" VerticalScrollBarVisibility="Auto">
+                <ItemsControl ItemsSource="{x:Bind ViewModel.LogMessages}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate x:DataType="model:LogMessage">
+                            <TextBlock 
+                                Text="{x:Bind Message}" TextWrapping="Wrap" 
+                                Foreground="{Binding Level, Converter={StaticResource LogLevelToColorConverter}}"/>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </ScrollViewer>
+        </Border>
+    </Grid>
+</UserControl>

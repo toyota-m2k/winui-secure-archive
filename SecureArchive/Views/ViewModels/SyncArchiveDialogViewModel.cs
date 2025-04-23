@@ -16,7 +16,7 @@ internal class SyncArchiveDialogViewModel {
     ISyncArchiveService _syncArchiveService;
     IMainThreadService _mainThreadService;
     IUserSettingsService _userSettingsService;
-    ILogger _logger;
+    UtLog _logger;
 
     public ReactivePropertySlim<bool> Running { get; } = new(false);
     public ReactivePropertySlim<string> PeerAddress { get; } = new("");
@@ -37,11 +37,11 @@ internal class SyncArchiveDialogViewModel {
     public ReactiveCommandSlim CancelCommand { get; } = new();
     public ReactiveCommandSlim CloseCommand { get; } = new();
 
-    public SyncArchiveDialogViewModel(ISyncArchiveService syncArchiveService, IMainThreadService mainThreadService, IUserSettingsService userSettingsService, ILoggerFactory loggerFactory) { 
+    public SyncArchiveDialogViewModel(ISyncArchiveService syncArchiveService, IMainThreadService mainThreadService, IUserSettingsService userSettingsService) { 
         _syncArchiveService = syncArchiveService;
         _mainThreadService = mainThreadService;
         _userSettingsService = userSettingsService;
-        _logger = loggerFactory.CreateLogger<SyncArchiveDialogViewModel>();
+        _logger = UtLog.Instance(typeof(SyncArchiveDialogViewModel));
 
         CanStart = PeerAddress.Select(it => it.IsNotEmpty()).ToReadOnlyReactivePropertySlim();
         CountProgress = CurrentIndex.CombineLatest(TotalCount, (current, total) => total > 0 ? (double)current * 100.0 / (double)total : 0).ToReadOnlyReactivePropertySlim();

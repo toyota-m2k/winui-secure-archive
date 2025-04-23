@@ -26,7 +26,7 @@ internal class ListPageViewModel : IListSource {
     private ITaskQueueService _taskQueueService;
     private IStatusNotificationService _statusNotificationService;
     private IMainThreadService _mainThreadService;
-    public ILogger _logger;
+    public UtLog _logger;
 
     public ReactiveCommandSlim AddCommand { get; } = new ReactiveCommandSlim();
     public ReactiveCommandSlim ExportCommand { get; } = new ReactiveCommandSlim();
@@ -51,8 +51,7 @@ internal class ListPageViewModel : IListSource {
         IDatabaseService dataBaseService,
         ITaskQueueService taskQueueService,
         IStatusNotificationService statusNotificationService,
-        IMainThreadService mainThreadService,
-        ILoggerFactory loggerFactory) {
+        IMainThreadService mainThreadService) {
         _pageService = pageService;
         //_cryptoService = cryptographyService;
         //_fileStoreService = fileStoreService;
@@ -61,8 +60,8 @@ internal class ListPageViewModel : IListSource {
         _taskQueueService = taskQueueService;
         _statusNotificationService = statusNotificationService;
         _mainThreadService = mainThreadService;
-        _logger = loggerFactory.CreateLogger("ListPage");
-        
+        _logger = UtLog.Instance(typeof(ListPageViewModel));
+
         GoBackCommand.Subscribe(_pageService.ShowMenuPage);
         AddCommand.Subscribe(AddLocalFile);
         //PatchCommand.Subscribe(() => Task.Run(()=>_secureStorageService.ConvertFastStart(_statusNotificationService)));
@@ -244,7 +243,7 @@ internal class ListPageViewModel : IListSource {
             });
 
         } catch(Exception e) {
-            _logger.LogError(e, "LocalFile Error");
+            _logger.Error(e, "LocalFile Error");
         }
     }
 
@@ -284,7 +283,7 @@ internal class ListPageViewModel : IListSource {
             try {
                 return _secureStorageService.OpenEntry(entry);
             } catch (FileNotFoundException) {
-                _logger.LogError($"Cannot open entry: {entry.Name}[ID={entry.Id}]");
+                _logger.Error($"Cannot open entry: {entry.Name}[ID={entry.Id}]");
                 if(repair) {
                     _dataBaseService.EditEntry((entries) => {
                         entries.Remove(entry);
@@ -293,7 +292,7 @@ internal class ListPageViewModel : IListSource {
                 }
             }
             catch (Exception e) {
-                _logger.LogError(e, $"Error: {entry.Name}[ID={entry.Id}] {e.Message} ");
+                _logger.Error(e, $"Error: {entry.Name}[ID={entry.Id}] {e.Message} ");
             }
             return null;
         }
@@ -306,17 +305,17 @@ internal class ListPageViewModel : IListSource {
         foreach (var entry in list) {
             i++;
             if (entry.IsDeleted) continue;
-            _logger.LogDebug($"Validating ({i}/{count}): {entry.Name}[ID={entry.Id}]");
+            _logger.Debug($"Validating ({i}/{count}): {entry.Name}[ID={entry.Id}]");
             var stream = openEntryStream(entry);
             if (stream != null) {
                 using (stream) {
                     if (stream == null) {
-                        _logger.LogError($"Cannot open entry: {entry.Name}[ID={entry.Id}]");
+                        _logger.Error($"Cannot open entry: {entry.Name}[ID={entry.Id}]");
                     }
                     else {
                         long length = getLengthByRead(stream);
                         if (length != entry.Size) {
-                            _logger.LogError($"Size mismatch: {entry.Name}[ID={entry.Id}] DB={entry.Size}, Stream={length}");
+                            _logger.Error($"Size mismatch: {entry.Name}[ID={entry.Id}] DB={entry.Size}, Stream={length}");
                             if (repair) {
                                 _dataBaseService.EditEntry((entries) => {
                                     entries.Update(
@@ -339,7 +338,7 @@ internal class ListPageViewModel : IListSource {
                 }
             }
         }
-        _logger.LogInformation($"Validation Completed: {result}");
+        _logger.Info($"Validation Completed: {result}");
         return result;
     }
 }

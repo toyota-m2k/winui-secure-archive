@@ -1,6 +1,8 @@
 ﻿using Microsoft.UI.Xaml.Data;
 using Microsoft.UI.Xaml;
 using System.Text.RegularExpressions;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI;
 
 namespace SecureArchive.Utils;
 
@@ -261,5 +263,24 @@ public class FileNameToDateStringConverter : IValueConverter {
 
     public object ConvertBack(object value, Type targetType, object parameter, string language) {
         throw new NotSupportedException();
+    }
+}
+
+public class LogLevelToColorConverter : IValueConverter {
+    public object Convert(object value, Type targetType, object parameter, string language) {
+        if (value is UtLog.Level level) {
+            return level switch {
+                UtLog.Level.Error or UtLog.Level.Fatal => new SolidColorBrush(Colors.Red),
+                UtLog.Level.Warn => new SolidColorBrush(Colors.Blue),
+                UtLog.Level.Info => new SolidColorBrush(Colors.Green),
+                UtLog.Level.Debug=> new SolidColorBrush(Colors.Black),
+                _ => new SolidColorBrush(Colors.Gray),
+            };
+        }
+        return new SolidColorBrush(Colors.Gray);
+    }
+
+    public object ConvertBack(object value, Type targetType, object parameter, string language) {
+        throw new NotImplementedException();
     }
 }

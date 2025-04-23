@@ -12,11 +12,11 @@ namespace SecureArchive.DI.Impl {
         const string IV_SEED = "E6lTn1MxdwdvmF/FmCi28+LRbLKLphW95Fd+TwrSs4x9SJdQlc2h5u4y9gk0";
 
         ILocalSettingsService _localSettingsService;
-        ILogger _logger;
+        UtLog _logger;
 
         public CryptographyService(ILocalSettingsService localSettingsService, ILoggerFactory loggerFactory) {
             _localSettingsService = localSettingsService;
-            _logger = loggerFactory.CreateLogger("Crypto");
+            _logger = UtLog.Instance(typeof(CryptographyService));
         }
 
         string? _cryptoKey = null;

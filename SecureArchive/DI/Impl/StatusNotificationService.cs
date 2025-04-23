@@ -5,10 +5,10 @@ using SecureArchive.Utils;
 namespace SecureArchive.DI.Impl;
 internal class StatusNotificationService : IStatusNotificationService {
     IMainThreadService _mainThreadService;
-    ILogger _logger;
+    UtLog _logger;
     public StatusNotificationService(IMainThreadService mainThreadService, ILoggerFactory loggerFactory) { 
         _mainThreadService = mainThreadService;
-        _logger = loggerFactory.CreateLogger<StatusNotificationService>();
+        _logger = UtLog.Instance(typeof(StatusNotificationService));
     }
 
     private AtomicInteger _idGenerator = new();

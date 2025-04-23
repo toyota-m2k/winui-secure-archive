@@ -39,24 +39,32 @@ namespace SecureArchive {
 
         private class DebugTracer : ILogTracer {
             private ILogger logger;
-            public DebugTracer(ILogger logger) {
+            private LogViewModel logViewModel = null!;
+            public DebugTracer(ILogger logger, LogViewModel logViewModel) {
                 this.logger = logger;
+                this.logViewModel = logViewModel;
             }
             public void trace(io.github.toyota32k.toolkit.net.LogLevel level, string message) {
+                var myLevel = UtLog.Level.Debug;
                 switch (level) {
                     case io.github.toyota32k.toolkit.net.LogLevel.INFO:
                         logger.LogInformation(message);
+                        myLevel = UtLog.Level.Info;
                         break;
                     case io.github.toyota32k.toolkit.net.LogLevel.WARN:
                         logger.LogWarning(message);
+                        myLevel = UtLog.Level.Warn;
                         break;
                     case io.github.toyota32k.toolkit.net.LogLevel.ERROR:
                         logger.LogError(message);
+                        myLevel = UtLog.Level.Error;
                         break;
                     case io.github.toyota32k.toolkit.net.LogLevel.DEBUG:
                         logger.LogDebug(message);
+                        myLevel = UtLog.Level.Debug;
                         break;
                 }
+                logViewModel.AddLog(myLevel, message);
             }
         }
 
@@ -66,7 +74,7 @@ namespace SecureArchive {
         public static Frame RootFrame => MainWindow.RootFrame;
 
         public static UIElement? AppTitleBar => MainWindow.AppTitleBar;
-        public ILogger Logger { get; }
+        private UtLog Logger { get; }
 
         /// <summary>
         /// Initializes the singleton application object.  This is the first line of authored code
@@ -100,6 +108,7 @@ namespace SecureArchive {
                         builder.AddFilter(level => true);
                         builder.AddConsole();
                     })
+                    .AddSingleton<LogViewModel>()
                     .AddSingleton<MainWindowViewModel>()
                     .AddTransient<MenuPageViewModel>()
                     .AddTransient<SettingsPageViewModel>()
@@ -115,11 +124,11 @@ namespace SecureArchive {
                 })
                 .Build();
 
-            Logger = GetService<ILoggerFactory>().CreateLogger("");
-            UtLog.SetGlobalLogger(Logger);
+            var loggerService = GetService<ILoggerFactory>().CreateLogger("");
+            Logger = UtLog.Instance(typeof(App));
+            UtLog.SetGlobalLogger(loggerService, GetService<LogViewModel>());
             UnhandledException += OnUnhandledException;
-
-            io.github.toyota32k.toolkit.net.Logger.Tracer = new DebugTracer(Logger);
+            io.github.toyota32k.toolkit.net.Logger.Tracer = new DebugTracer(loggerService, GetService<LogViewModel>());
         }
 
         private void OnUnhandledException(object sender, Microsoft.UI.Xaml.UnhandledExceptionEventArgs e) {

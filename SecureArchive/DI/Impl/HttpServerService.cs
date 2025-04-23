@@ -20,7 +20,7 @@ using HttpContent = SecureArchive.Utils.Server.lib.model.HttpContent;
 namespace SecureArchive.DI.Impl;
 
 internal class HttpServerService : IHttpServreService {
-    private ILogger _logger;
+    private UtLog _logger;
     private HttpServer _server;
     private ISecureStorageService _secureStorageService;
     private IDatabaseService _databaseService;
@@ -33,7 +33,6 @@ internal class HttpServerService : IHttpServreService {
 
     //private IUserSettingsService _userSettingsService;
     public HttpServerService(
-        ILoggerFactory factory, 
         ISecureStorageService secureStorageService,
         IDatabaseService databaseService,
         IPasswordService passwordService,
@@ -41,7 +40,7 @@ internal class HttpServerService : IHttpServreService {
         IDeviceMigrationService deviceMigrationService,
         ListPageViewModel listPageViewModel
         ) {
-        _logger = factory.CreateLogger<HttpServerService>();
+        _logger = UtLog.Instance(typeof(HttpServerService));
         _secureStorageService = secureStorageService;
         _databaseService = databaseService;
         _passwordService = passwordService;
