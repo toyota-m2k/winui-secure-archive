@@ -51,7 +51,7 @@ internal class TaskQueueService : ITaskQueueService {
     private void Push(Func<Task> internalAction) {
         int id = _taskIdGenerator.IncrementAndGet();
         lock (this) {
-            _logger.Debug($"Task ({id}): Enqueued.");
+            _logger.Debug($"Task-[{id}]: Enqueued.");
             _taskQueue.Enqueue(new QueueingTask(id, internalAction));
         }
         Execute();

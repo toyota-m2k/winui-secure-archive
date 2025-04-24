@@ -56,7 +56,7 @@ public class HttpProcessor {
                         Logger.Error(e, $"[{id}] Failed: {url}");
                     }
                     finally {
-                        chronos.Lap($"completed ({id}): {url}");
+                        chronos.Lap($"[{id}] Completed: {url}");
                     }
                 }
                 //Logger.Debug($"[{id}] Shutdown Send-Socket: {url}");
@@ -186,19 +186,21 @@ public class HttpProcessor {
     private IHttpResponse ProcessRequest(int id, string peerAddress, Stream inputStream, Stream outputStream, Chronos chronos) {
         try {
             var request = ParseHeader(id, peerAddress, inputStream, outputStream);
-            chronos.Start($"request({id}): {request.Url}");
+            chronos.Start($"[{id}] request: {request.Url}");
             Route route = GetRoute(request);
             ParseContent(inputStream, request, route);
             return route.Process(request);
         }
         catch (Exception ex) {
-            Logger.Error(ex, "Route.Process");
             if (ex is HttpException httpException) {
+                Logger.Error($"[{id}] Routing Error");
+                httpException.ErrorResponse.WriteLog(Logger, "  ");
                 return httpException.ErrorResponse;
             } else if (ex is HttpCorsException corsException) {
                 return corsException.Response;
             }
             else {
+                Logger.Error(ex, $"[{id}] Routing Error");
                 return HttpErrorResponse.InternalServerError(HttpRequest.InvalidRequest(id));
             }
         }
@@ -254,6 +256,7 @@ public class HttpProcessor {
         if (route == null) {
             if(request.Method == "OPTIONS") {
                 // CORS のための OPTIONS メソッドの場合は、例外を投げて上位で処理する
+                Logger.Info("CORS request.");
                 throw new HttpCorsException(request);
             }
 

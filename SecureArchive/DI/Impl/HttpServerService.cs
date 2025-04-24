@@ -235,7 +235,7 @@ internal class HttpServerService : IHttpServreService {
             }
         }
 
-        void Reset() {
+        public void Reset() {
             _challenge = Guid.NewGuid().ToString();
             _authToken = CryptographicBuffer.EncodeToHexString(RandomNumberGenerator.GetBytes(8).AsBuffer());
             _tick = DateTime.Now;
@@ -277,11 +277,18 @@ internal class HttpServerService : IHttpServreService {
     }
     #endregion
 
+    public bool CheckAuthToken(string? token, HttpRequest request) {
+        if (oneTimePasscode.CheckAuthToken(token)) {
+            return true;
+        }
+        _logger.Info($"[{request.Id}] Unauthorized: maybe timeout of auth token.");
+        return false;
+    }
+
     // Shared Routed Handler
     private IHttpResponse RequestItem(HttpRequest request, string? type) {
         var p = QueryParser.Parse(request.Url);
-        if (!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
-            _logger.Info("Unauthorized: maybe timeout of auth token.");
+        if (!CheckAuthToken(p.GetValue("auth"), request)) {
             return oneTimePasscode.UnauthorizedResponse(request);
         }
         var id = Convert.ToInt64(p.GetValue("id", "0"));
@@ -296,15 +303,18 @@ internal class HttpServerService : IHttpServreService {
             entry = _databaseService.Entries.GetById(id);
         }
         if (entry == null) {
+            _logger.Warn($"[{request.Id}] no entry ({request.Url})");
             return HttpErrorResponse.NotFound(request);
         }
         if (type!=null && type != entry.MediaType) {
             // type指定があるが、実際のメディアタイプと異なる場合は、Not Found
+            _logger.Warn($"[{request.Id}] media type mismatch ({request.Url})");
             return HttpErrorResponse.NotFound(request);
         }
 
         if (entry.MediaType=="p") {
             // 画像ならNoRanged なレスポンスを返す
+            _logger.Debug($"[{request.Id}] No-Ranged Request (photo).");
             var streamContainer = _cryptoStreamHandler.LockStream(entry, request.Id);
             return StreamingHttpResponse.CreateForNoRanged(request, entry.ContentType, streamContainer.Stream, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer, request.Id));
         }
@@ -312,19 +322,19 @@ internal class HttpServerService : IHttpServreService {
         // 動画の場合は、Range指定に対応する。
         if (!request.Headers.TryGetValue("range", out var range)) {
             //Source?.StandardOutput($"BooServer: cmd=video({id})");
-            _logger.Debug("No-Ranged Request.");
+            _logger.Debug($"[{request.Id}] No-Ranged Request.");
             var streamContainer = _cryptoStreamHandler.LockStream(entry, request.Id);
             return StreamingHttpResponse.CreateForRangedInitial(request, "video/mp4", streamContainer.Stream, entry.Size, () => _cryptoStreamHandler.UnlockStream(streamContainer, request.Id));
         }
         else {
-            _logger.Debug($"Ranged Request: {range}");
+            _logger.Debug($"[{request.Id}] Ranged Request: {range}");
             var match = RegRange.Match(range);
             var ms = match.Groups["start"];
             var me = match.Groups["end"];
             var start = ms.Success ? Convert.ToInt64(ms.Value) : 0L;
             var end = me.Success ? Convert.ToInt64(me.Value) : 0L;
             if (start < 0 || end < 0 || (end > 0 && start > end)) {
-                _logger.Error($"Hah? Start={start} End={end}");
+                _logger.Error($"[{request.Id}] Hah? Start={start} End={end}");
             }
             //_logger.Debug($"Ranged Request. {start} - {end}");
             var streamContainer = _cryptoStreamHandler.LockStream(entry, request.Id);
@@ -367,13 +377,13 @@ internal class HttpServerService : IHttpServreService {
 
                         //// そのあとで登録処理を実行
                         try {
-                            _logger.Debug("Parsing Multipart");
+                            _logger.Debug($"[{request.Id}] Parsing Multipart");
                             content.ParseMultipartContent(handler);
                             //UnregisterUploadTask(handler);
-                            _logger.Debug("Parsing Multipart ... Completed");
+                            _logger.Debug($"[{request.Id}] Parsing Multipart ... Completed");
                             return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
                         } catch (Exception ex) {
-                            _logger.Error(ex, "Parsing multipart body error.");
+                            _logger.Error(ex, $"[{request.Id}] Parsing multipart body error.");
                             handler.HasError = true;
                             return HttpErrorResponse.InternalServerError(request);
                         }
@@ -448,7 +458,7 @@ internal class HttpServerService : IHttpServreService {
                 name: "auth & nop",
                 regex: @"/auth/.*",
                 process: (HttpRequest request) => {
-                    if(!oneTimePasscode.CheckAuthToken(request.Url.Substring(6))) {
+                    if(!CheckAuthToken(request.Url.Substring(6), request)) {
                         return oneTimePasscode.UnauthorizedResponse(request);
                     }
                     return new TextHttpResponse(request, HttpStatusCode.Ok, "Ok");
@@ -458,7 +468,7 @@ internal class HttpServerService : IHttpServreService {
                 regex: @"/list(?:\?.*)?",
                 process: (HttpRequest request) => {
                     var p = QueryParser.Parse(request.Url);
-                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+                    if(!CheckAuthToken(p.GetValue("auth"), request)) {
                         return oneTimePasscode.UnauthorizedResponse(request);
                     }
                     var sync = p.GetValue("sync")?.ToLower() == "true";
@@ -664,7 +674,7 @@ internal class HttpServerService : IHttpServreService {
                 regex: @"/migration/devices",
                 process: (request) => {
                     var p = QueryParser.Parse(request.Url);
-                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+                    if(!CheckAuthToken(p.GetValue("auth"), request)) {
                         return oneTimePasscode.UnauthorizedResponse(request);
                     }
                     var newOwnerId = p.GetValue("o");
@@ -688,7 +698,7 @@ internal class HttpServerService : IHttpServreService {
                 regex: @"/migration/start",
                 process: (request) => {
                     var p = QueryParser.Parse(request.Url);
-                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+                    if(!CheckAuthToken(p.GetValue("auth"), request)) {
                         return oneTimePasscode.UnauthorizedResponse(request);
                     }
                     var newOwnerId = p.GetValue("n");
@@ -730,7 +740,7 @@ internal class HttpServerService : IHttpServreService {
                 regex: @"/migration/exec",
                 process: (request) => {
                     var p = QueryParser.Parse(request.Url);
-                    if(!oneTimePasscode.CheckAuthToken(p.GetValue("auth"))) {
+                    if(!CheckAuthToken(p.GetValue("auth"), request)) {
                         return oneTimePasscode.UnauthorizedResponse(request);
                     }
                     var content = request.Content?.TextContent;
@@ -825,6 +835,7 @@ internal class HttpServerService : IHttpServreService {
     
     public bool Start(int port) {
         //var port = await _userSettingsService.GetAsync<int>(SettingsKey.PortNo);
+        oneTimePasscode.Reset();        // for Debug
         return _server.Start(port);
     }
 

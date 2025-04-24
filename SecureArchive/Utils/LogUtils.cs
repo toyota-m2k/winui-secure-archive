@@ -45,9 +45,16 @@ public class UtLog {
             else {
                 // ログサービスがセットされていない場合は、Debug出力する
                 System.Diagnostics.Debug.WriteLine(message);
-                System.Diagnostics.Debug.WriteLine(exception);
+                System.Diagnostics.Debug.WriteLine(exception.Message);
+                if (exception.StackTrace != null) {
+                    System.Diagnostics.Debug.WriteLine(exception.StackTrace);
+                }
             }
             _logViewModel?.AddLog(Level.Error, message);
+            _logViewModel?.AddLog(Level.Error, exception.Message);
+            if (exception.StackTrace != null) {
+                _logViewModel?.AddLog(Level.Error, exception.StackTrace);
+            }
         }
     }
 
@@ -140,6 +147,6 @@ public class Chronos(UtLog logger, UtLog.Level level=UtLog.Level.Debug) {
 
     public void Lap(string message) {
         var elapsed = DateTime.Now - Time;
-        logger.Log(Level, $"{message} {elapsed.Seconds}.{elapsed.Milliseconds}");
+        logger.Log(Level, $"{message} {elapsed.Seconds}.{elapsed.Milliseconds} sec");
     }
 }

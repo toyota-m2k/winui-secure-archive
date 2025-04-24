@@ -21,14 +21,14 @@
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
         <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
-            <ToggleButton IsChecked="{x:Bind ViewModel.StopScroll.Value, Mode=TwoWay}" ToolTipService.ToolTip="Stop automatic scrolling">
+            <ToggleButton Width="46" Height="36" IsChecked="{x:Bind ViewModel.StopScroll.Value, Mode=TwoWay}" ToolTipService.ToolTip="Stop automatic scrolling">
                 <PathIcon Data="M 13 16V 8H 15V 16H 13M 9 16V 8H 11V 16H 9M 12 2A 10,10,0,0,1,22,12 10,10,0,0,1,12,22 10,10,0,0,1,2,12 10,10,0,0,1,12,2M 12 4A 8,8,0,0,0,4,12 8,8,0,0,0,12,20 8,8,0,0,0,20,12 8,8,0,0,0,12,4Z"  HorizontalAlignment="Center"/>
             </ToggleButton>
-            <Button Command="{x:Bind ViewModel.CopyCommand}" ToolTipService.ToolTip="Copy log content to clipboard">
-                <PathIcon Data="M 19 21H 8V 7H 19M 19 5H 8A 2,2,0,0,0,6,7V 21A 2,2,0,0,0,8,23H 19A 2,2,0,0,0,21,21V 7A 2,2,0,0,0,19,5M 16 1H 4A 2,2,0,0,0,2,3V 17H 4V 3H 16V 1Z"  HorizontalAlignment="Center"/>
+            <Button Width="46" Height="36" Command="{x:Bind ViewModel.CopyCommand}" ToolTipService.ToolTip="Copy log content to clipboard">
+                <PathIcon Data="M 15.2 16.8H 6.4V 5.6H 15.2M 15.2 4H 6.4A 1.6,1.6,0,0,0,4.8,5.6V 16.8A 1.6,1.6,0,0,0,6.4,18.4H 15.2A 1.6,1.6,0,0,0,16.8,16.8V 5.6A 1.6,1.6,0,0,0,15.2,4M 12.8 0.8H 3.2A 1.6,1.6,0,0,0,1.6,2.4V 13.6H 3.2V 2.4H 12.8V 0.8Z"  HorizontalAlignment="Center"/>
             </Button>
-            <Button Command="{x:Bind ViewModel.ClearCommand}" ToolTipService.ToolTip="Clear all log entries.">
-                <PathIcon Data="M 19 6.41L 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12 19 6.41Z"  HorizontalAlignment="Center"/>
+            <Button Width="46" Height="36" Command="{x:Bind ViewModel.ClearCommand}" ToolTipService.ToolTip="Clear all log entries.">
+                <PathIcon Data="M 15 2.41L 13.59 1 8 6.59 2.41 1 1 2.41 6.59 8 1 13.59 2.41 15 8 9.41 13.59 15 15 13.59 9.41 8 15 2.41Z"  HorizontalAlignment="Center" VerticalAlignment="Center"/>
             </Button>
         </StackPanel>
         <Border Grid.Row="1" BorderBrush="Gray" BorderThickness="1" Padding="5">
