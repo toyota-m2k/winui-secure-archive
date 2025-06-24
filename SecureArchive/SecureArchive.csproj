@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-	<TargetFramework>net9.0-windows10.0.26100.0</TargetFramework>
+	<TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
 	<TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>SecureArchive</RootNamespace>
 	<ApplicationIcon>Assets/WindowIcon.ico</ApplicationIcon>
@@ -14,15 +14,15 @@
 	<PlatformTarget>x64</PlatformTarget>
 	<Nullable>enable</Nullable>
 	<ImplicitUsings>enable</ImplicitUsings>
-	<Version>1.11.0.0</Version>
+	<Version>1.12.0.0</Version>
 	<SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
-	<PublishAot>False</PublishAot>
   </PropertyGroup>
   <ItemGroup>
     <None Remove="Views\BackupDialogPage.xaml" />
     <None Remove="Views\Converters.xaml" />
     <None Remove="Views\DeleteBackupDialogPage.xaml" />
     <None Remove="Views\ListPage.xaml" />
+    <None Remove="Views\LogView.xaml" />
     <None Remove="Views\MenuPage.xaml" />
     <None Remove="Views\RemotePasswordDialogPage.xaml" />
     <None Remove="Views\SettingsPage.xaml" />
@@ -43,15 +43,15 @@
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
-    <PackageReference Include="CommunityToolkit.WinUI.Animations" Version="8.0.240109" />
+    <PackageReference Include="CommunityToolkit.WinUI.Animations" Version="8.2.250402" />
     <PackageReference Include="CommunityToolkit.WinUI.UI.Controls.DataGrid" Version="7.1.2" />
     <PackageReference Include="HttpMultipartParser" Version="9.0.0" />
     <PackageReference Include="io.github.toyota32k.dotnetLittleToolkit" Version="0.1.0" />
     <PackageReference Include="io.github.toyota32k.MP4FastStart" Version="0.3.0" />
-    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.2" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.2" />
-    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.2" />
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.4" />
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.4" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.7.250401001" />
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.26100.1742" />
     <PackageReference Include="Microsoft.Xaml.Behaviors.WinUI.Managed" Version="3.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
@@ -70,6 +70,11 @@
   -->
   <ItemGroup Condition="'$(DisableMsixProjectCapabilityAddedByProject)'!='true' and '$(EnableMsixTooling)'=='true'">
     <ProjectCapability Include="Msix" />
+  </ItemGroup>
+  <ItemGroup>
+    <Page Update="Views\LogView.xaml">
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
   </ItemGroup>
   <ItemGroup>
     <Page Update="Views\UpdateBackupDialogPage.xaml">

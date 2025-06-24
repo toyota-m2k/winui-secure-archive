@@ -20,7 +20,7 @@ public class HttpServer
 
     //private static readonly ILog log = LogManager.GetLogger(typeof(HttpServer));    
     private bool Alive = true;
-    public ILogger Logger;
+    public UtLog Logger;
 
     private BehaviorSubject<bool> _running = new BehaviorSubject<bool>(false);
     public IObservable<bool> Running => _running;
@@ -35,7 +35,7 @@ public class HttpServer
     //private IReportOutput ReportOutput => mReportOutput?.GetValue();
 
     #region Public Methods
-    public HttpServer(List<Route> routes, ILogger logger)
+    public HttpServer(List<Route> routes, UtLog logger)
     {
         Processor = new HttpProcessor(); ;
         //mReportOutput = new WeakReference<IReportOutput>(reportOutput);

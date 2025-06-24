@@ -11,7 +11,7 @@ namespace SecureArchive.Views.ViewModels;
 internal class BackupDialogViewModel {
     private IBackupService _backupService;
     private IMainThreadService _mainThreadService;
-    private ILogger _logger;
+    private UtLog _logger;
     
     public ReactiveCommandSlim StartCommand { get; } = new ReactiveCommandSlim();
     public ReactiveCommandSlim StopCommand { get; } = new ReactiveCommandSlim();
@@ -34,7 +34,7 @@ internal class BackupDialogViewModel {
     public BackupDialogViewModel(IBackupService backupService, IMainThreadService mainThreadService,ILoggerFactory loggerFactory) {
         _backupService = backupService;
         _mainThreadService = mainThreadService;
-        _logger = loggerFactory.CreateLogger<BackupDialogViewModel>();
+        _logger = UtLog.Instance(typeof(BackupDialogViewModel));
         RemoteItems = new ObservableCollection<RemoteItem>(_backupService.RemoteNewItems);
         CountProgress = CurrentIndex.CombineLatest(TotalCount, (current, total) => total>0 ? (double)current*100.0 / (double)total: 0).ToReadOnlyReactivePropertySlim();
         SizeProgress = CurrentBytes.CombineLatest(TotalBytes, (current, total) => total>0 ? (double)current*100.0 / (double)total : 0).ToReadOnlyReactivePropertySlim();

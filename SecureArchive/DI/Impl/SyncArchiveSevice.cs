@@ -12,7 +12,7 @@ using System.Text.RegularExpressions;
 
 namespace SecureArchive.DI.Impl;
 internal class SyncArchiveSevice : ISyncArchiveService {
-    private readonly ILogger _logger;
+    private readonly UtLog _logger;
     private ISecureStorageService _secureStorageService;
     private IDatabaseService _databaseService;
     private IPasswordService _passwordService;
@@ -48,8 +48,8 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         IPageService pageService,
         IMainThreadService mainThreadSercice,
         IHttpClientFactory httpClientFactory,
-        IDeviceMigrationService deviceMigrationService,
-        ILoggerFactory loggerFactory) {
+        IDeviceMigrationService deviceMigrationService
+        ) {
         _secureStorageService = secureStorageService;
         _databaseService = databaseService;
         _passwordService = passwordService;
@@ -58,7 +58,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         _mainThreadService = mainThreadSercice;
         _httpClientFactory = httpClientFactory;
         _deviceMigrationService = deviceMigrationService;
-        _logger = loggerFactory.CreateLogger<SyncArchiveSevice>();
+        _logger = UtLog.Instance(typeof(SyncArchiveSevice));
     }
 
     private async Task<string> GetChallengeFromResponse(HttpResponseMessage response) {

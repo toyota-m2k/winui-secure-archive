@@ -1,7 +1,9 @@
 ﻿using Microsoft.Extensions.Logging;
+using Microsoft.UI.Xaml;
 using Reactive.Bindings;
 using SecureArchive.DI;
 using SecureArchive.Utils;
+using System.Reactive.Linq;
 
 namespace SecureArchive.Views.ViewModels {
     internal class MenuPageViewModel {
@@ -15,6 +17,8 @@ namespace SecureArchive.Views.ViewModels {
         public ReactiveCommandSlim MirrorCommand { get; } = new ReactiveCommandSlim();
         //public ReactiveCommandSlim RepairCommand { get; } = new ReactiveCommandSlim();
         public ReactivePropertySlim<bool> IsServerRunning { get; } = new ReactivePropertySlim<bool>(false);
+        public ReactivePropertySlim<bool> ShowLog { get; } = new ReactivePropertySlim<bool>(false);
+        public ReadOnlyReactivePropertySlim<VerticalAlignment> PanelVerticalAlignment { get; }
 
         public MenuPageViewModel(
             //ILoggerFactory loggerFactory,
@@ -48,6 +52,7 @@ namespace SecureArchive.Views.ViewModels {
             _httpServreService.Running.Subscribe((it) => {
                 IsServerRunning.Value = it;
             });
+            PanelVerticalAlignment = ShowLog.Select(it => it ? VerticalAlignment.Stretch : VerticalAlignment.Center).ToReadOnlyReactivePropertySlim();
             InitServer();
         }
 

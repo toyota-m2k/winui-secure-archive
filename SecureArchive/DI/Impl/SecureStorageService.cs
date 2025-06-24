@@ -14,21 +14,21 @@ internal class SecureStorageService : ISecureStorageService {
     private IDatabaseService _databaseService;
     private ITaskQueueService _taskQueueService;
     //private IStatusNotificationService _statusNotificationService;
-    private ILogger _logger;
+    private UtLog _logger;
 
     public SecureStorageService(
             ICryptographyService cryptographyService,
             IFileStoreService fileStoreService,
             IDatabaseService databaseService,
-            ITaskQueueService taskQueueService,
+            ITaskQueueService taskQueueService
             //IStatusNotificationService statusNotificationService,
-            ILoggerFactory loggerFactory) {
+            ) {
         _cryptoService = cryptographyService;
         _fileStoreService = fileStoreService;   
         _databaseService = databaseService; 
         _taskQueueService = taskQueueService;
         //_statusNotificationService = statusNotificationService;
-        _logger = loggerFactory.CreateLogger<SecureStorageService>();
+        _logger = UtLog.Instance(typeof(SecureStorageService));
     }
 
     #region Write
@@ -434,10 +434,10 @@ internal class SecureStorageService : ISecureStorageService {
 
     private class Notifier : INotify, IDisposable {
         IProgressHandle _progressHandle;
-        ILogger _logger;
-        public Notifier(IStatusNotificationService notificationService, ILogger logger) {
+        UtLog _logger;
+        public Notifier(IStatusNotificationService notificationService) {
             _progressHandle = notificationService.BeginProgress("FastStart");
-            _logger = logger;
+            _logger = UtLog.Instance(typeof(Notifier));
         }
         public void Error(string message) {
             _progressHandle.UpdateMessage(message);
@@ -455,7 +455,7 @@ internal class SecureStorageService : ISecureStorageService {
         }
 
         public void Verbose(string message) {
-            _logger.LogDebug(message);
+            _logger.Debug(message);
         }
 
         public void Warning(string message) {
@@ -489,7 +489,7 @@ internal class SecureStorageService : ISecureStorageService {
         }
 
         try {
-            using var notifier = notificationService != null ? new Notifier(notificationService, _logger) : null;
+            using var notifier = notificationService != null ? new Notifier(notificationService) : null;
             using var inputStream = new SeekableInputStream(oldStream => {
                 oldStream?.Dispose();
                 return _cryptoService.OpenStreamForDecryption(File.OpenRead(entry.Path));

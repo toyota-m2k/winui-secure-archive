@@ -12,7 +12,7 @@ namespace SecureArchive.DI.Impl {
         PasswordStatus _passwordStatus = PasswordStatus.NotChecked;
         ILocalSettingsService _localSettingsService;
         ICryptographyService _cryptographyService;
-        ILogger _logger;
+        UtLog _logger;
 
         bool _isInitialized = false;
         string? _hashedPassword = null;
@@ -21,7 +21,7 @@ namespace SecureArchive.DI.Impl {
         public PasswordService(ILocalSettingsService localSettingsService, ICryptographyService cryptographyService, ILoggerFactory loggerFactory) {
             _localSettingsService = localSettingsService;
             _cryptographyService = cryptographyService;
-            _logger = loggerFactory.CreateLogger("Pwd");
+            _logger = UtLog.Instance(typeof(PasswordService));
         }
 
         private async Task Initialize() {

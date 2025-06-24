@@ -55,7 +55,7 @@ internal class BackupCompletion {
 }
 
 internal class BackupService : IBackupService {
-    private readonly ILogger _logger;
+    private readonly UtLog _logger = UtLog.Instance(typeof(BackupService));
     private ISecureStorageService _secureStorageService;
     private IPageService _pageService;
     private IMainThreadService _mainThreadService;
@@ -123,7 +123,6 @@ internal class BackupService : IBackupService {
         ILoggerFactory loggerFactory,
         IDeviceMigrationService deviceMigrationService
         ) {
-        _logger = loggerFactory.CreateLogger<BackupService>();
         _secureStorageService = secureStorageService;
         _pageService = pageService;
         _mainThreadService = mainThreadSercice;

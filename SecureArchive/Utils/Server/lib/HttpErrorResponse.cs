@@ -7,6 +7,10 @@ class HttpErrorResponse : TextHttpResponse
 {
     public HttpErrorResponse(HttpRequest req, HttpStatusCode statusCode, string content, string contentType = "text/plain") : base(req, statusCode, content, contentType) {
     }
+    public void WriteLog(UtLog logger, string prefix, UtLog.Level level = UtLog.Level.Error) {
+        logger.Log(level, $"{prefix}{StatusCode} {Content} (from {Request.PeerAddress})");
+        logger.Log(level, $"{prefix}{Request.Url}");
+    }
 
     public HttpException Exception => new HttpException(this);
 

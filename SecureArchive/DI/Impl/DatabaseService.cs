@@ -7,7 +7,7 @@ using System.Globalization;
 namespace SecureArchive.DI.Impl;
 public class DatabaseService : IDatabaseService, IMutableTables {
     IAppConfigService _appConfigService;
-    ILogger _logger;
+    UtLog _logger = UtLog.Instance(typeof(DatabaseService));
     DBConnector _connector;
 
     private FileEntryList _entries { get; }
@@ -28,8 +28,6 @@ public class DatabaseService : IDatabaseService, IMutableTables {
     public DatabaseService(IAppConfigService appConfigService, ILoggerFactory loggerFactory)
     {
         _appConfigService = appConfigService;
-        _logger = loggerFactory.CreateLogger("DataService");
-
         _logger.Debug(appConfigService.DBPath);
 
         _connector = new DBConnector(appConfigService.DBPath);
