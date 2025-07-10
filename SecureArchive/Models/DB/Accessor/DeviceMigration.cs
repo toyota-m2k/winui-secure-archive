@@ -8,12 +8,12 @@ using System.Threading.Tasks;
 namespace SecureArchive.Models.DB.Accessor;
 
 public interface IDeviceMigration {
-    DeviceMigrationInfo? Get(string oldOwnerId, string oldOriginalId);
+    DeviceMigrationInfo? Get(string oldOwnerId, int slot, string oldOriginalId);
     IList<DeviceMigrationInfo> List();
 }
 
 public interface IMutableDeviceMigration:IDeviceMigration {
-    DeviceMigrationInfo? Add(string oldOwnerId, string oldOriginalId, string newOwnerId, string newOrignalId, DateTime? migratedOn = null);
+    DeviceMigrationInfo? Add(string oldOwnerId, int slot, string oldOriginalId, string newOwnerId, string newOrignalId, DateTime? migratedOn = null);
 }
 
 public class DeviceMigration : IMutableDeviceMigration {
@@ -23,9 +23,9 @@ public class DeviceMigration : IMutableDeviceMigration {
         _connector = connector;
         _migrationInfos = connector.DeviceMigrationInfos;
     }
-    public DeviceMigrationInfo? Add(string oldOwnerId, string oldOriginalId, string newOwnerId, string newOrignalId, DateTime? migratedOn = null) {
+    public DeviceMigrationInfo? Add(string oldOwnerId, int slot, string oldOriginalId, string newOwnerId, string newOrignalId, DateTime? migratedOn = null) {
         lock (_connector) {
-            var rec = Get(oldOwnerId, oldOriginalId);
+            var rec = Get(oldOwnerId, slot, oldOriginalId);
             if(rec != null) {
                 return null;    // already registered
             }
@@ -40,9 +40,9 @@ public class DeviceMigration : IMutableDeviceMigration {
         }
     }
 
-    public DeviceMigrationInfo? Get(string oldOwnerId, string oldOriginalId) {
+    public DeviceMigrationInfo? Get(string oldOwnerId, int slot, string oldOriginalId) {
         lock(_connector) {
-            return _migrationInfos.FirstOrDefault(x => x.OldOwnerId == oldOwnerId && x.OldOriginalId == oldOriginalId);
+            return _migrationInfos.FirstOrDefault(x => x.OldOwnerId == oldOwnerId && x.Slot == slot && x.OldOriginalId == oldOriginalId);
         }
     }
 

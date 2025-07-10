@@ -16,9 +16,14 @@ namespace SecureArchive.DI.Impl {
 
         public bool IsMSIX { get; }
 
+        private string? customAppDataPath = null;
+
         public string AppDataPath {
             get {
-                if (IsMSIX) {
+                if (!string.IsNullOrEmpty(customAppDataPath)) {
+                    return customAppDataPath!;
+                }
+                else if (IsMSIX) {
                     return ApplicationData.Current.LocalFolder.Path;
                 } else {
                     var path = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppName);
@@ -32,7 +37,8 @@ namespace SecureArchive.DI.Impl {
 
         public string DBPath => Path.Combine(AppDataPath, $"{AppName}.db");
 
-        public AppConfigService() {
+        public AppConfigService(string? appDataPath) {
+            customAppDataPath = appDataPath;
             IsMSIX = RuntimeHelper.IsMSIX;
             if (IsMSIX) {
                 var package = Package.Current;

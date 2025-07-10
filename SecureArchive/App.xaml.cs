@@ -83,12 +83,17 @@ namespace SecureArchive {
         public App() {
             this.InitializeComponent();
 
+            // コマンドライン引数の取得
+            string[] args = Environment.GetCommandLineArgs();
+            // 例: 設定ファイルパスを引数で指定
+            string? appDataPath = args.Length > 1 ? args[1] : null;
+
             Host = Microsoft.Extensions.Hosting.Host.CreateDefaultBuilder()
                 .UseContentRoot(AppContext.BaseDirectory)
                 .ConfigureServices((context, service) => {
                     service
                     .AddHttpClient()
-                    .AddSingleton<IAppConfigService, AppConfigService>()
+                    .AddSingleton<IAppConfigService>(sp=>new AppConfigService(appDataPath))
                     .AddSingleton<ILocalSettingsService, LocalSettingsService>()
                     .AddSingleton<IUserSettingsService, UserSettingsService>()
                     .AddSingleton<IPageService, PageService>()
@@ -97,6 +102,7 @@ namespace SecureArchive {
                     .AddSingleton<IPasswordService, PasswordService>()
                     .AddSingleton<IFileStoreService, FileStoreService>()
                     .AddSingleton<ISecureStorageService, SecureStorageService>()
+                    .AddSingleton<ICryptoStreamHandler, CryptoStreamHandler>()
                     .AddSingleton<IHttpServreService,  HttpServerService>()
                     .AddSingleton<IMainThreadService, MainThradService>()
                     .AddSingleton<IBackupService, BackupService>()

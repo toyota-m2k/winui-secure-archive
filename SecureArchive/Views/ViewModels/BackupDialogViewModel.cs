@@ -74,11 +74,13 @@ internal class BackupDialogViewModel {
                         TotalBytes.Value = 0;
                         CurrentItem.Value = item.Name;
                     });
-                    if(await _backupService.DownloadTarget(item, Progress, _cts.Token)) {
+                    _logger.Info($"download start: {item.Name}");
+                    if (await _backupService.DownloadTarget(item, Progress, _cts.Token)) {
                         _mainThreadService.Run(() => {
                             RemoteItems.Remove(item);
                         });
                     }
+                    _logger.Info($"download completed: {item.Name}");
                 }
             } catch(Exception e) {
                 _logger.Error(e);

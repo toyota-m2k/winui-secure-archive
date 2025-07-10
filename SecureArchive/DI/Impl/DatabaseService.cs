@@ -1,8 +1,10 @@
 ﻿using Microsoft.Extensions.Logging;
+using Microsoft.UI.Composition;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using System.Globalization;
+using System.Xml.Linq;
 
 namespace SecureArchive.DI.Impl;
 public class DatabaseService : IDatabaseService, IMutableTables {
@@ -37,20 +39,31 @@ public class DatabaseService : IDatabaseService, IMutableTables {
             _kvs = new KVList(_connector);
             _deviceMigration = new DeviceMigration(_connector);
         }
+        Task.Run(async () => {
+            //var trial = 0;
+            //while(true) {
+            //    try {
+            //        _ = _connector.Model;
+            //        _logger.Debug($"Database connection established. (trial={trial})");
+            //        dbReady.TrySetResult(true);
+            //        break;
+            //    } catch (Exception e) {
+            //        _logger.Error(e, $"Database connection failed, retrying {trial}...");
+            //        trial++;
+            //        if (trial>=30) {
+            //            dbReady.TrySetException(e);
+            //            throw new Exception("Failed to connect to the database after multiple attempts.", e);
+            //        }
+            //        await Task.Delay(1000);
+            //        continue;
+            //    }
+            //}
+            EditOwnerList(owners => {
+                owners.Add(OwnerInfo.LOCAL_ID, "Local", "PC", 0, null);
+                return true;
+            });
+        });
 
-        //EditEntry((entries) => {
-        //    bool modified = false;
-        //    string csharpFormat = "yyyy.MM.dd-HH:mm:ss";
-        //    foreach (var entry in entries.List(false)) {
-        //        if (/*entry.CreationDate == 0 && */ (entry.Name.StartsWith("mov-") || entry.Name.StartsWith("img-"))) {
-        //            var timeText = entry.Name.Substring(4, entry.Name.Length - 8);
-        //            var dt = DateTime.ParseExact(timeText, csharpFormat, CultureInfo.InvariantCulture);
-        //            entry.CreationDate = TimeUtils.dateTime2javaTime(dt);
-        //            modified = true;
-        //        }
-        //    }
-        //    return modified;
-        //});
     }
 
     private IMutableTables mutableTables => this;

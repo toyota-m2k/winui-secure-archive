@@ -9,6 +9,7 @@ internal class CryptoStreamEntry : ICryptoStreamContainer, IDisposable
     public FileEntry FileEntry { get; }
     public Stream Stream { get; }
     public bool InUse { get; set; } = false;
+    public bool Disposed { get; private set; } = false;
 
     public CryptoStreamEntry(FileEntry entry)
     {
@@ -24,5 +25,6 @@ internal class CryptoStreamEntry : ICryptoStreamContainer, IDisposable
     public void Dispose()
     {
         Stream.Dispose();
+        Disposed = true;
     }
 }

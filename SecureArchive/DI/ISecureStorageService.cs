@@ -16,12 +16,12 @@ public interface IEntryCreator : IDisposable {
 }
 
 internal interface ISecureStorageService {
-    bool IsRegistered(string ownerId, string originalId);
-    bool IsRegistered(string ownerId, string originalId, long lastModified);
-    IList<FileEntry> GetList(string ownerId, Func<FileEntry, bool>? predicate);
-    Task<FileEntry?> RegisterFile(string filePath, string ownerId, string? name, string originalId, long duration, string? metaInfo, ProgressProc? progress);
-    Task<FileEntry?> Register(Stream inStream, string ownerId, string name, long size, string type, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo, ProgressProc? progress);
-    Task<IEntryCreator?> CreateEntry(string ownerId, string originalId, bool overwrite=false);
+    bool IsRegistered(string ownerId, int slot, string originalId);
+    bool IsRegistered(string ownerId, int slot, string originalId, long lastModified);
+    IList<FileEntry> GetList(string ownerId, int slot, Func<FileEntry, bool>? predicate);
+    Task<FileEntry?> RegisterFile(string filePath, string ownerId, int slot, string? name, string originalId, long duration, string? metaInfo, ProgressProc? progress);
+    Task<FileEntry?> Register(Stream inStream, string ownerId, int slot, string name, long size, string type, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo, ProgressProc? progress);
+    Task<IEntryCreator?> CreateEntry(string ownerId, int slot, string originalId, bool overwrite=false);
 
     Stream OpenEntry(FileEntry entry);
     Task Export(FileEntry entry, string outPath);

@@ -20,7 +20,11 @@
             <DataTemplate x:Key="BackupTargetListItem" x:DataType="data:RemoteItem">
                 <StackPanel Orientation="Vertical">
                     <TextBlock Text="{x:Bind Name}"/>
-                    <TextBlock Text="{x:Bind Size, Converter={StaticResource SizeStringConverter}}"/>
+                    <TextBlock>
+                        <Run Text="{x:Bind Slot}" Foreground="Red"/>
+                        <Run Text="-"/>
+                        <Run Text="{x:Bind Size, Converter={StaticResource SizeStringConverter}}"/>
+                    </TextBlock>
                 </StackPanel>
             </DataTemplate>
         </Grid.Resources>

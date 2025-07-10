@@ -66,7 +66,13 @@ internal class ListPageViewModel : IListSource {
         AddCommand.Subscribe(AddLocalFile);
         //PatchCommand.Subscribe(() => Task.Run(()=>_secureStorageService.ConvertFastStart(_statusNotificationService)));
 
-        FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(true));
+        FileList.Value = new ObservableCollection<FileEntry>();
+        Task.Run(async () => {
+            var entries = _dataBaseService.Entries.List(-1, true);
+            _mainThreadService.Run(() => {
+                FileList.Value = new ObservableCollection<FileEntry>(entries);
+            });
+        });
         Message = _statusNotificationService.Message;
         ProgressMode = _statusNotificationService.ProgressMode;
         ProgressInPercent = _statusNotificationService.ProgressInPercent;
@@ -91,7 +97,7 @@ internal class ListPageViewModel : IListSource {
                         UpdateItem(change.Item);
                         break;
                     case DataChangeInfo.Change.ResetAll:
-                        FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(true));
+                        FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(-1,true));
                         break;
                 }
             });
@@ -223,7 +229,7 @@ internal class ListPageViewModel : IListSource {
                         //var outFilePath = Path.Combine(outFolder!, item.Name);
                         var ext = Path.GetExtension(item.Name) ?? "*";
                         try {
-                            var newEntry = await _secureStorageService.RegisterFile(item.Path, OwnerInfo.LOCAL_ID, item.Name, Guid.NewGuid().ToString("N"), 0L, null, progress);
+                            var newEntry = await _secureStorageService.RegisterFile(item.Path, OwnerInfo.LOCAL_ID, 0, item.Name, Guid.NewGuid().ToString("N"), 0L, null, progress);
                             if (newEntry != null) {
                                 mainThread.Run(() => {
                                     FileList.Value.Add(newEntry);
@@ -320,6 +326,7 @@ internal class ListPageViewModel : IListSource {
                                 _dataBaseService.EditEntry((entries) => {
                                     entries.Update(
                                         entry.OwnerId,
+                                        entry.Slot,
                                         entry.Name,
                                         length,
                                         entry.Type,

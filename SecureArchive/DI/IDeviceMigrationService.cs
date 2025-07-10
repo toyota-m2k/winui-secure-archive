@@ -35,9 +35,9 @@ internal interface IDeviceMigrationService {
      * 
      * 端末間同期時は、Migration Table の同期を最優先で実行すること。
      */
-    FileEntry? Migrate(string migrationHandle, string oldOwnerId, string oldOriginalId, string newOwnerId, string newOriginalId);
+    FileEntry? Migrate(string migrationHandle, string oldOwnerId, int slot, string oldOriginalId, string newOwnerId, string newOriginalId);
 
-    bool IsMigrated(string ownerId, string originalId);
+    bool IsMigrated(string ownerId, int slot, string originalId);
 
 
     IList<DeviceMigrationInfo> ApplyHistoryFromPeerServer(IList<DeviceMigrationInfo> history);

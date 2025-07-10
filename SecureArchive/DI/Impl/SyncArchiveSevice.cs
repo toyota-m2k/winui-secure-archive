@@ -226,7 +226,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 if (!response.IsSuccessStatusCode) return false;
                 using (var content = response.Content)
                 using (var inStream = await content.ReadAsStreamAsync())
-                using (var entryCreator = await _secureStorageService.CreateEntry(entry.OwnerId, entry.OriginalId, true)) {
+                using (var entryCreator = await _secureStorageService.CreateEntry(entry.OwnerId, entry.Slot, entry.OriginalId, true)) {
                     if (entryCreator == null) { throw new InvalidOperationException("cannot create entry."); }
                     var total = content.Headers.ContentLength ?? 0L;
                     var buff = new byte[BUFF_SIZE];
@@ -440,7 +440,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     }
                 }
 
-                var myList = _databaseService.Entries.List(false);
+                var myList = _databaseService.Entries.List(-1, false);
                 var peerList = await GetPeerList();
                 if (peerList == null) {
                     errorProc("No peer items.", false);

@@ -77,6 +77,7 @@
                     Sorting="FileListGrid_Sorting"
                     >
                     <toolkit:DataGrid.Columns>
+                        <toolkit:DataGridTextColumn Header="Slot" Tag="Slot" Binding="{Binding Slot}"/>
                         <toolkit:DataGridTextColumn Header="Name" Tag="Name" Binding="{Binding Name}"/>
                         <toolkit:DataGridTextColumn Header="Owner" Tag="OwnerId" Binding="{Binding OwnerInfo.Name}"/>
                         <toolkit:DataGridTextColumn Header="Size" Tag="Size" Binding="{Binding Size, Converter={StaticResource DecimalStringConverter}}">

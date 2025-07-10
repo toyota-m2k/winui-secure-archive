@@ -69,7 +69,7 @@ internal class DeviceMigrationService : IDeviceMigrationService {
                 _logger.LogError("srcDevice or dstDevice is not found.");
                 return null;
             }
-            var list = _databaseService.Entries.List(e => e.OwnerId == srcDeviceId, resolveOwnerInfo: false);
+            var list = _databaseService.Entries.List(-1, e => e.OwnerId == srcDeviceId, resolveOwnerInfo: false);
             if(list.Count == 0) {
                 _logger.LogError("No target to migrate.");
                 return null;
@@ -100,7 +100,7 @@ internal class DeviceMigrationService : IDeviceMigrationService {
      * 
      * 端末間同期時は、Migration Table の同期を最優先で実行すること。
      */
-    public FileEntry? Migrate(string migrationHandle, string oldOwnerId, string oldOriginalId, string newOwnerId, string newOriginalId) {
+    public FileEntry? Migrate(string migrationHandle, string oldOwnerId, int slot, string oldOriginalId, string newOwnerId, string newOriginalId) {
         lock (this) {
             if (!_migratingWithSync) {
                 if (!checkMigrationHandle(migrationHandle)) {
@@ -118,37 +118,37 @@ internal class DeviceMigrationService : IDeviceMigrationService {
             }
             FileEntry? newEntry = null;
             _databaseService.Transaction((tables) => {
-                var del = tables.Entries.GetByOriginalId(oldOwnerId, oldOriginalId);
+                var del = tables.Entries.GetByOriginalId(oldOwnerId, slot, oldOriginalId);
                 if (del == null) {
-                    if (tables.Entries.GetByOriginalId(newOwnerId, newOriginalId) != null) {
-                        _logger.LogInformation($"FileEntry({newOwnerId}/{newOriginalId}) is already migrated.");
+                    if (tables.Entries.GetByOriginalId(newOwnerId, slot, newOriginalId) != null) {
+                        _logger.LogInformation($"FileEntry({newOwnerId}/{slot}/{newOriginalId}) is already migrated.");
                         // Migrateが実行される前に、同期or Backupによって、エントリーが追加されていたものと考えられる。
                         // Entry Table的には何もする必要はないが、
                         // 同期のたびに、これが実行されるのは無駄なので、Migration Tableに追加しておく。
-                        tables.DeviceMigration.Add(oldOwnerId, oldOriginalId, newOwnerId, newOriginalId);
+                        tables.DeviceMigration.Add(oldOwnerId, slot, oldOriginalId, newOwnerId, newOriginalId);
                         return true;
                     }
                     // エントリがバックアップされる前にMigrationの同期が実行されると、ここに入ってくる。
                     // 次回の同期で、↑のif文に入って、最終的には、Migration Tableが同期される。
-                    _logger.LogInformation($"FileEntry({oldOwnerId}/{oldOriginalId}) is not found.");
+                    _logger.LogInformation($"FileEntry({oldOwnerId}/{slot}/{oldOriginalId}) is not found.");
                     return false;
                 }
                 if (!_migratingWithSync && del.OwnerId != _migratingInfo!.srcDevice.OwnerId) {
-                    _logger.LogError($"FileEntry({oldOwnerId}/{oldOriginalId}) is not owned by srcDevice.");
+                    _logger.LogError($"FileEntry({oldOwnerId}/{slot}/{oldOriginalId}) is not owned by srcDevice.");
                     return false;
                 }
-                tables.DeviceMigration.Add(del.OwnerId, del.OriginalId, newOwnerId, newOriginalId);
+                tables.DeviceMigration.Add(del.OwnerId, slot, del.OriginalId, newOwnerId, newOriginalId);
                 tables.Entries.Remove(del, deleteDbEntry: true);
-                newEntry = tables.Entries.Add(newOwnerId, del.Name, del.Size, del.Type, del.Path, del.LastModifiedDate, del.CreationDate, newOriginalId, del.Duration, del.MetaInfo, del);
+                newEntry = tables.Entries.Add(newOwnerId, del.Slot, del.Name, del.Size, del.Type, del.Path, del.LastModifiedDate, del.CreationDate, newOriginalId, del.Duration, del.MetaInfo, del);
                 return true;
             });
             return newEntry;
         }
     }
 
-    public bool IsMigrated(string ownerId, string originalId) {
+    public bool IsMigrated(string ownerId, int slot, string originalId) {
         lock(this) {
-            return null != _databaseService.DeviceMigration.Get(ownerId, originalId);
+            return null != _databaseService.DeviceMigration.Get(ownerId, slot, originalId);
         }
     }
 
@@ -158,10 +158,10 @@ internal class DeviceMigrationService : IDeviceMigrationService {
             try {
                 var common = new HashSet<string>();
                 foreach (var peer in history) {
-                    var mine = _databaseService.DeviceMigration.Get(peer.OldOwnerId, peer.OldOriginalId);
+                    var mine = _databaseService.DeviceMigration.Get(peer.OldOwnerId, peer.Slot, peer.OldOriginalId);
                     if ( mine == null) {
                         // peerにのみ存在する
-                        Migrate("sync", peer.OldOwnerId, peer.OldOriginalId, peer.NewOwnerId, peer.NewOriginalId);
+                        Migrate("sync", peer.OldOwnerId, peer.Slot, peer.OldOriginalId, peer.NewOwnerId, peer.NewOriginalId);
                     } else {
                         common.Add(mine.OldOwnerId + "/" + mine.OldOriginalId);
                     }

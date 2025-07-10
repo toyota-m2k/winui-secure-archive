@@ -1,4 +1,5 @@
-﻿using SecureArchive.Models.DB;
+﻿using SecureArchive.DI;
+using SecureArchive.Models.DB;
 using SecureArchive.Utils;
 
 namespace SecureArchive.Models.CryptoStream;
@@ -36,6 +37,20 @@ internal class CryptoStreamPool : IDisposable {
 
         entry.InUse = false;
         LastAccess = DateTime.Now.Ticks;
+    }
+
+    public bool AbortStream(bool force) {
+        var result = true;
+        foreach (var entry in _streamList) {
+            if (!entry.InUse || force) {
+                _logger.Debug($"Abort stream for {FileEntry.Name} ({Id})");
+                entry.Dispose();
+            } else {
+                result = false;
+            }
+        }
+        _streamList.RemoveAll(it => it.Disposed);
+        return result;
     }
 
     public bool Sweep() {

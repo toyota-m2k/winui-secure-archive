@@ -1,7 +1,6 @@
 ﻿using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using SecureArchive.Models.CryptoStream;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
@@ -27,7 +26,7 @@ internal class HttpServerService : IHttpServreService {
     private IPasswordService _passwordService;
     private IBackupService _backupService;
     private IDeviceMigrationService _deviceMigrationService;
-    private CryptoStreamHandler _cryptoStreamHandler;
+    private ICryptoStreamHandler _cryptoStreamHandler;
     private OneTimePasscode oneTimePasscode;
 
 
@@ -38,6 +37,7 @@ internal class HttpServerService : IHttpServreService {
         IPasswordService passwordService,
         IBackupService backupService,
         IDeviceMigrationService deviceMigrationService,
+        ICryptoStreamHandler cryptoStreamHandler,
         ListPageViewModel listPageViewModel
         ) {
         _logger = UtLog.Instance(typeof(HttpServerService));
@@ -46,10 +46,10 @@ internal class HttpServerService : IHttpServreService {
         _passwordService = passwordService;
         _backupService = backupService;
         _deviceMigrationService = deviceMigrationService;
+        _cryptoStreamHandler = cryptoStreamHandler;
         ListSource = listPageViewModel;
         _server = new HttpServer(Routes(), _logger);
 
-        _cryptoStreamHandler = new CryptoStreamHandler();
         //ListSource = _databaseService.Entries.List(false);
         oneTimePasscode = new OneTimePasscode(_passwordService);
     }
@@ -90,7 +90,7 @@ internal class HttpServerService : IHttpServreService {
         private IEntryCreator? _entryCreator = null;
         public bool HasError { get; set; }
 
-        public Stream CreateFile(HttpContent multipartBody) {
+        public Stream CreateFile(int slot, HttpContent multipartBody) {
             Dispose();
             ContentLength = 0;
             ReceivedLength = 0;
@@ -101,11 +101,11 @@ internal class HttpServerService : IHttpServreService {
             if (!Parameters.TryGetValue("OriginalId", out var originalId)) {
                 throw new InvalidOperationException("no original id.");
             }
-            if (_deviceMigrationService.IsMigrated(ownerId, originalId)) {
+            if (_deviceMigrationService.IsMigrated(ownerId, slot, originalId)) {
                 throw new InvalidOperationException("already migrated.");
             }
 
-            var entryCreator = _secureStorageService.CreateEntry(ownerId, originalId, true).Result;
+            var entryCreator = _secureStorageService.CreateEntry(ownerId, slot, originalId, true).Result;
             if(entryCreator==null) {
                 throw new InvalidOperationException("cannot create entry.");
             }
@@ -294,10 +294,11 @@ internal class HttpServerService : IHttpServreService {
         var id = Convert.ToInt64(p.GetValue("id", "0"));
         var oid = p.GetValue("o");
         var cid = p.GetValue("c");
+        var slot = SafeGetSlot(request.Url);
 
         FileEntry? entry = null;
         if (oid.IsNotEmpty() && cid.IsNotEmpty()) {
-            entry = _databaseService.Entries.GetByOriginalId(oid, cid);
+            entry = _databaseService.Entries.GetByOriginalId(oid, slot, cid);
         }
         else {
             entry = _databaseService.Entries.GetById(id);
@@ -344,6 +345,20 @@ internal class HttpServerService : IHttpServreService {
 
 
     #region Router
+    public Regex RegSlot = new Regex(@"/slot(?<slot>\d+)/");
+    private int GetSlot(string url) {
+        var m = RegSlot.Match(url);
+        if (m.Success) {
+            var slot = m.Groups["slot"];
+            if (slot.Success) {
+                return Convert.ToInt32(slot.Value);
+            }
+        }
+        return -1;
+    }
+    private int SafeGetSlot(string url) {
+        return Math.Max(0,GetSlot(url));
+    }
 
     public Regex RegRange = new Regex(@"bytes=(?<start>\d+)(?:-(?<end>\d+))?");
     public Regex RegUploading = new Regex(@"/uploading/(?<hid>[^?/]+)(?:[?].*)*");
@@ -355,7 +370,8 @@ internal class HttpServerService : IHttpServreService {
                 name: "nop",
                 regex: "/nop",
                 process: (HttpRequest request) => {
-                    return new TextHttpResponse(request, HttpStatusCode.Ok, "SecureArchive server is running.");
+                    var slot = GetSlot(request.Url);
+                    return new TextHttpResponse(request, HttpStatusCode.Ok, $"SecureArchive server (slot={slot}) is running.");
                 }),
             Route.post(
                 name: "upload",
@@ -367,20 +383,17 @@ internal class HttpServerService : IHttpServreService {
                     }
                     //var p = QueryParser.Parse(request.Url);
                     using(var handler = new UploadHandler(_secureStorageService, _deviceMigrationService)) {
-                        //RegisterUploadTask(handler);
-                        //// Uploadされたファイルの登録に時間がかかるので、一旦、202応答を返しておく。
-                        //// 登録処理の経過が知りたければ、GET /uploading/<taskId> で取得する。
-                        //var response = new TextHttpResponse(request, HttpStatusCode.Accepted, "");
-                        //response.Headers.Add("Location", $"/uploading/{handler.ID}");
-                        //response.WriteResponse(request.OutputStream);
-                        //_logger.Debug("Accept file : 202 Response.");
-
-                        //// そのあとで登録処理を実行
+                        //// 登録処理を実行
                         try {
-                            _logger.Debug($"[{request.Id}] Parsing Multipart");
-                            content.ParseMultipartContent(handler);
+                            int slot = GetSlot(request.Url);
+                            if (slot < 0) {
+                                _logger.Error("No Slot");
+                                return HttpErrorResponse.InternalServerError(request);
+                            }
+                            _logger.Debug($"[{request.Id}] Parsing Multipart (slot={slot})");
+                            content.ParseMultipartContent(slot, handler);
                             //UnregisterUploadTask(handler);
-                            _logger.Debug($"[{request.Id}] Parsing Multipart ... Completed");
+                            _logger.Debug($"[{request.Id}] Parsing Multipart (slot={slot}) ... Completed");
                             return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
                         } catch (Exception ex) {
                             _logger.Error(ex, $"[{request.Id}] Parsing multipart body error.");
@@ -389,40 +402,7 @@ internal class HttpServerService : IHttpServreService {
                         }
                         // 処理完了
                     }
-                    //// すでに応答を返しているので、ここは制御を戻すだけ。
-                    //return NullResponse.Get(request);
                 }),
-            //Route.get(
-            //    name: "upload task",
-            //    regex: @"/uploading/\w+",
-            //    process: (HttpRequest request) => {
-            //        var m = RegUploading.Match(request.Url);
-            //        if(!m.Success) {
-            //            return HttpErrorResponse.BadRequest(request);
-            //        }
-            //        var handlerId = m.Groups["hid"].Value;
-            //        if(handlerId.IsEmpty()) {
-            //            return HttpErrorResponse.BadRequest(request);
-            //        }
-
-            //        var handler = LookupUploadTask(handlerId);
-            //        if(handler==null) {
-            //            var p = QueryParser.Parse(request.Url);
-            //            var oid = p.GetValue("o");
-            //            var cid = p.GetValue("c");
-            //            if(oid.IsNotEmpty() && cid.IsNotEmpty() && _secureStorageService.IsRegistered(oid,cid)) {
-            //                return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
-            //            } else {
-            //                return HttpErrorResponse.NotFound(request);
-            //            }
-            //        } else {
-            //            var dic = new Dictionary<string, object> {
-            //                { "current", $"{handler.ReceivedLength}" },
-            //                { "total", $"{handler.ContentLength}" },
-            //            };
-            //            return TextHttpResponse.FromJson(request, dic, HttpStatusCode.Accepted);
-            //        }
-            //    }),
             Route.get(
                 name: "capability",
                 regex:@"/capability",
@@ -477,8 +457,8 @@ internal class HttpServerService : IHttpServreService {
                     var oid = p.GetValue("o");
                     var listMode = p.GetLong("s", 0L);
                     var hasOid = !string.IsNullOrEmpty(oid);
-
-                    var list = GetFileEntryList(listMode).Where((it) => {
+                    var slot = GetSlot(request.Url);
+                    var list = GetFileEntryList(slot, listMode).Where((it) => {
                         if(!sync && it.IsDeleted) return false;
                         if(hasOid && it.OwnerId!=oid) return false;
                         if(types!=null) {
@@ -502,33 +482,12 @@ internal class HttpServerService : IHttpServreService {
                                 { "type", it.Type },
                                 { "size", it.Size },
                                 { "media", it.MediaType },
-                                { "date", it.CreationDate }
+                                { "date", it.CreationDate },
+                                { "slot", it.Slot }
                             };
                         }
                     }).ToList();
 
-                    //var list = _databaseService.Entries.List(
-                    //    predicate: (it) => {
-                    //        if(!sync && it.IsDeleted) return false;
-                    //        switch(type) {
-                    //            case "all": return true;
-                    //            case "photo": return it.Type == "jpg" || it.Type == "png";
-                    //            default: return it.Type == "mp4";
-                    //        }
-                    //    }, 
-                    //    select: (entry) => {
-                    //        if(sync) {
-                    //            return entry.ToDictionary();
-                    //        } else {
-                    //            return new Dictionary<string, object>() {
-                    //                { "id", entry.Id },
-                    //                { "name", entry.Name },
-                    //                { "type", entry.Type },
-                    //                { "size", entry.Size },
-                    //            };
-                    //        }
-                    //    }
-                    //);
                     var dic = new Dictionary<string,object> {
                         {"cmd", "list" },
                         {"date", DateTime.UtcNow.ToFileTimeUtc() },
@@ -754,6 +713,7 @@ internal class HttpServerService : IHttpServreService {
                     var migrationHandle = dic.GetValue("handle");
                     var oldOwnerId = dic.GetValue("oldOwnerId");
                     var oldOriginalId = dic.GetValue("oldOriginalId");
+                    var slot = (int)dic.GetLong("slot", 0L);
                     var newOwnerId = dic.GetValue("newOwnerId")?.ToString();
                     var newOriginalId = dic.GetValue("newOriginalId")?.ToString();
                     if(string.IsNullOrEmpty(migrationHandle) || string.IsNullOrEmpty(oldOwnerId)  || string.IsNullOrEmpty(oldOriginalId) || string.IsNullOrEmpty(newOwnerId) || string.IsNullOrEmpty(newOriginalId)) {
@@ -761,7 +721,7 @@ internal class HttpServerService : IHttpServreService {
                     }
 
                     RegisterOwner(dic);
-                    var entry = _deviceMigrationService.Migrate(migrationHandle, oldOwnerId, oldOriginalId, newOwnerId, newOriginalId);
+                    var entry = _deviceMigrationService.Migrate(migrationHandle, oldOwnerId, slot, oldOriginalId, newOwnerId, newOriginalId);
                     if(entry==null) {
                         return HttpErrorResponse.BadRequest(request);
                     }
@@ -845,12 +805,12 @@ internal class HttpServerService : IHttpServreService {
 
     //public IList<FileEntry> ListSource { get; set; }
     public IListSource? ListSource { get; set; } = null;
-    private IList<FileEntry> GetFileEntryList(long listMode) {
+    private IList<FileEntry> GetFileEntryList(int slot, long listMode) {
         if (listMode == 1 && ListSource != null) {
             return ListSource.GetFileList();
         }
         else {
-            return _databaseService.Entries.List(false);
+            return _databaseService.Entries.List(slot, false);
         }
     }
     #endregion

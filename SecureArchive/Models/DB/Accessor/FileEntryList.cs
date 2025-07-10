@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using io.github.toyota32k.toolkit.net;
+using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json;
 using SecureArchive.DI;
 using SecureArchive.Utils;
@@ -100,18 +101,18 @@ public class ItemExtAttributes : IItemExtAttributes {
 
 public interface IFileEntryList {
     IObservable<DataChangeInfo> Changes { get; }
-    IList<FileEntry> List(bool resolveOwnerInfo);
-    IList<FileEntry> List(Func<FileEntry, bool> predicate, bool resolveOwnerInfo);
-    IList<T> List<T>(Func<FileEntry, bool> predicate, Func<FileEntry, T>select);
-    IList<T> List<T>(Func<FileEntry, T?> predicate) where T:class;
+    IList<FileEntry> List(int slot, bool resolveOwnerInfo);
+    IList<FileEntry> List(int slot, Func<FileEntry, bool> predicate, bool resolveOwnerInfo);
+    IList<T> List<T>(int slot, Func<FileEntry, bool> predicate, Func<FileEntry, T>select);
+    IList<T> List<T>(int slot, Func<FileEntry, T?> predicate) where T:class;
     FileEntry? GetById(long id);
-    FileEntry? GetByOriginalId(string ownerId, string originalId);
+    FileEntry? GetByOriginalId(string ownerId, int slot, string originalId);
 }
 
 public interface IMutableFileEntryList : IFileEntryList {
-    FileEntry Add(string ownerId, string name, long size, string type, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr=null);
-    FileEntry Update(string ownerId, string name, long size, string type_, string path, long lastModifiedDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null);
-    FileEntry AddOrUpdate(string ownerId, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null); 
+    FileEntry Add(string ownerId, int slot, string name, long size, string type, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr=null);
+    FileEntry Update(string ownerId, int slot, string name, long size, string type_, string path, long lastModifiedDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null);
+    FileEntry AddOrUpdate(string ownerId, int slot, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null); 
     void Remove(FileEntry entry, bool deleteDbEntry = false);
     //void Remove(Func<FileEntry, bool> predicate);
 }
@@ -158,23 +159,33 @@ public class FileEntryList : IMutableFileEntryList {
         _entries = connector.Entries;
     }
 
-    private IEnumerable<FileEntry> rawList => _entries.OrderBy(it => it.CreationDate);
+    // private IEnumerable<FileEntry> rawList => _entries.OrderBy(it => it.CreationDate);
+    private IEnumerable<FileEntry> rawList(int slot) {
+        return _entries.Where(it => slot < 0 || it.Slot == slot).OrderBy(it => it.CreationDate);
+    }
 
-    public IList<FileEntry> List(bool resolveOwnerInfo) {
+    public IList<FileEntry> List(int slot, bool resolveOwnerInfo) {
         lock (_connector) {
-            if(resolveOwnerInfo) {
-                return ResolveOwnerInfo(rawList);
-            } else {
-                return rawList.ToList();
+            try {
+                if (resolveOwnerInfo) {
+                    return ResolveOwnerInfo(rawList(slot));
+                }
+                else {
+                    return rawList(slot).ToList();
+                }
+            }
+            catch (Exception ex) {
+                Logger.error(ex, "Error while listing file entries.");
+                return new List<FileEntry>();
             }
         }
     }
-    public IList<FileEntry> List(Func<FileEntry, bool> predicate, bool resolveOwnerInfo) {
+    public IList<FileEntry> List(int slot, Func<FileEntry, bool> predicate, bool resolveOwnerInfo) {
         lock (_connector) {
             if (resolveOwnerInfo) {
-                return ResolveOwnerInfo(rawList.Where(predicate));
+                return ResolveOwnerInfo(rawList(slot).Where(predicate));
             } else {
-                return rawList.Where(predicate).ToList();
+                return rawList(slot).Where(predicate).ToList();
             }
         }
     }
@@ -203,28 +214,28 @@ public class FileEntryList : IMutableFileEntryList {
         return entry;
     }
 
-    public IList<T> List<T>(Func<FileEntry, bool> predicate, Func<FileEntry, T> select) {
+    public IList<T> List<T>(int slot, Func<FileEntry, bool> predicate, Func<FileEntry, T> select) {
         lock (_connector) {
-            return rawList.Where(predicate).Select(select).ToList();
+            return rawList(slot).Where(predicate).Select(select).ToList();
         }
     }
-    public IList<T> List<T>(Func<FileEntry, T?> predicate) where T : class {
+    public IList<T> List<T>(int slot, Func<FileEntry, T?> predicate) where T : class {
         lock (_connector) {
-            return rawList.Select(predicate).Where(it => it is not null).Select(it => it!).ToList();
+            return rawList(slot).Select(predicate).Where(it => it is not null).Select(it => it!).ToList();
         }
     }
 
-    public FileEntry AddOrUpdate(string ownerId, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null) {
-        if (GetByOriginalId(ownerId, originalId) != null) {
-            return Update(ownerId, name, size, type_, path, lastModifiedDate, originalId, duration, metaInfo, extAttr);
+    public FileEntry AddOrUpdate(string ownerId, int slot, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null) {
+        if (GetByOriginalId(ownerId, slot, originalId) != null) {
+            return Update(ownerId, slot, name, size, type_, path, lastModifiedDate, originalId, duration, metaInfo, extAttr);
         } else {
-            return Add(ownerId, name, size, type_, path, lastModifiedDate, creationDate, originalId, duration, metaInfo, extAttr);
+            return Add(ownerId, slot, name, size, type_, path, lastModifiedDate, creationDate, originalId, duration, metaInfo, extAttr);
         }
     }
     
-    public FileEntry Add(string ownerId, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null) {
-        if(GetByOriginalId(ownerId, originalId) != null) {
-            throw new ArgumentException($"already exists: {ownerId}/{originalId}");
+    public FileEntry Add(string ownerId, int slot, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null) {
+        if(GetByOriginalId(ownerId, slot, originalId) != null) {
+            throw new ArgumentException($"already exists: {ownerId}/{slot}/{originalId}");
         }
         var type = type_;
         if(type_.StartsWith(".")) {
@@ -233,7 +244,7 @@ public class FileEntryList : IMutableFileEntryList {
         FileEntry entry;
         lock (_connector) {
             entry = new FileEntry { 
-                OwnerId = ownerId, OriginalId = originalId, Name = name, Size = size, Duration=duration, Type = type, Path = path, MetaInfo = metaInfo, LastModifiedDate = lastModifiedDate, CreationDate = creationDate, RegisteredDate = DateTime.UtcNow.Ticks,
+                OwnerId = ownerId, OriginalId = originalId, Name = name, Size = size, Duration=duration, Slot=slot, Type = type, Path = path, MetaInfo = metaInfo, LastModifiedDate = lastModifiedDate, CreationDate = creationDate, RegisteredDate = DateTime.UtcNow.Ticks,
                 ExtAttrDate = extAttr?.ExtAttrDate ?? 0, Rating = extAttr?.Rating ?? 0, Mark = extAttr?.Mark ?? 0, Label = extAttr?.Label, Category = extAttr?.Category, Chapters = extAttr?.Chapters,
             };
             _entries.Add(entry);
@@ -242,8 +253,8 @@ public class FileEntryList : IMutableFileEntryList {
         return entry;
     }
 
-    public FileEntry Update(string ownerId, string name, long size, string type_, string path, long lastModifiedDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null) {
-        var entry = GetByOriginalId(ownerId, originalId);
+    public FileEntry Update(string ownerId, int slot, string name, long size, string type_, string path, long lastModifiedDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null) {
+        var entry = GetByOriginalId(ownerId, slot, originalId);
         if (entry == null) {
             throw new ArgumentException($"no entry: {ownerId}/{originalId}");
         }
@@ -262,7 +273,8 @@ public class FileEntryList : IMutableFileEntryList {
             entry.OriginalId = originalId;
             entry.Duration = duration;
             entry.MetaInfo = metaInfo;
-            if(extAttr != null) {
+            entry.Slot = slot;
+            if (extAttr != null) {
                 entry.ExtAttrDate = extAttr.ExtAttrDate;
                 entry.Rating = extAttr.Rating;
                 entry.Mark = extAttr.Mark;
@@ -305,9 +317,9 @@ public class FileEntryList : IMutableFileEntryList {
         }
     }
 
-    public FileEntry? GetByOriginalId(string ownerId, string originalId) {
+    public FileEntry? GetByOriginalId(string ownerId, int slot, string originalId) {
         lock (_connector) {
-            return _entries.Where(it => it.OwnerId == ownerId && it.OriginalId == originalId).FirstOrDefault();
+            return _entries.Where(it => it.OwnerId == ownerId && it.Slot == slot && it.OriginalId == originalId).FirstOrDefault();
         }
     }
 }

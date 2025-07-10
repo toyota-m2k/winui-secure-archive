@@ -17,18 +17,32 @@ public class DeviceMigrationInfo {
             Key INTEGER NOT NULL PRIMARY KEY,
             OldOriginalId TEXT NOT NULL,
             OldOwnerId TEXT NOT NULL,
+            Slot INTEGER DEFAULT 0,
             NewOriginalId TEXT NOT NULL,
             NewOwnerId TEXT NOT NULL,
             MigratedOn INTEGER NOT NULL
         )",
     };
 
-    [Key, Required]
+    private static string[] Migrate0_3 = {
+        @"ALTER TABLE t_migration ADD Slot INTEGER DEFAULT 0",
+    };
+    public static string[]? Migrate(long from, long to) {
+        if (from < 3) {
+            return Migrate0_3;
+        } else {
+            return null;
+        }
+    }
+
+        [Key, Required]
     public long Key { get; set; }
     [Required]
     public string OldOriginalId { get; set; } = string.Empty;  // Owner App 内でのID
     [Required]
     public string OldOwnerId { get; set; } = string.Empty;
+    [Required]
+    public int Slot { get; set; } = 0;
     [Required]
     public string NewOriginalId { get; set; } = string.Empty;  // Owner App 内でのID
     [Required]
@@ -40,6 +54,7 @@ public class DeviceMigrationInfo {
             { "Key", Key },
             { "OldOriginalId", OldOriginalId },
             { "OldOwnerId", OldOwnerId },
+            { "Slot", Slot },
             { "NewOriginalId", NewOriginalId },
             { "NewOwnerId", NewOwnerId },
             { "MigratedOn", MigratedOn }
@@ -50,6 +65,7 @@ public class DeviceMigrationInfo {
             Key = dict.GetLongValue("Key"),
             OldOriginalId = dict.GetStringValue("OldOriginalId", ""),
             OldOwnerId = dict.GetStringValue("OldOwnerId", ""),
+            Slot = dict.GetIntValue("Slot", 0),
             NewOriginalId = dict.GetStringValue("NewOriginalId", ""),
             NewOwnerId = dict.GetStringValue("NewOwnerId", ""),
             MigratedOn = dict.GetLongValue("MigratedOn")

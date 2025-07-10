@@ -41,7 +41,7 @@ public class HttpContent {
 
     public interface IMultipartContentHander {
         IDictionary<string, string> Parameters { get; }
-        Stream CreateFile(HttpContent multipartBody);
+        Stream CreateFile(int slot, HttpContent multipartBody);
         void CloseFile(HttpContent multipartBody, Stream outStream);
         void Progress(long current, long total);
     }
@@ -62,7 +62,7 @@ public class HttpContent {
     //    }
     //}
 
-    public void ParseMultipartContent(IMultipartContentHander multipartContentHandler, string[]? expectingBodyTypes = null) {
+    public void ParseMultipartContent(int slot, IMultipartContentHander multipartContentHandler, string[]? expectingBodyTypes = null) {
         if (!HasStream) {
             throw new InvalidOperationException("this is not a streamed content.");
         }
@@ -95,7 +95,7 @@ public class HttpContent {
                     contentLength = Convert.ToInt64(contentLengthText);
                 }
                 partContent = new HttpContent(contentType, contentLength) { Name = name, Filename = fileName };
-                outStream = multipartContentHandler.CreateFile(partContent);
+                outStream = multipartContentHandler.CreateFile(slot, partContent);
             }
             outStream?.Write(buffer, 0, bytes);
             receivedLength += bytes;

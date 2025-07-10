@@ -26,8 +26,11 @@ public class FileEntry : IItemExtAttributes {
             ExtAttrDate INTEGER DEFAULT 0,
             Rating INTEGER DEFAULT 0,
             Mark INTEGER DEFAULT 0,
+            Label TEXT,
             Category TEXT,
-            Chapters TEXT
+            Chapters TEXT,
+            Duration INTEGER DEFAULT 0,
+            Slot INTEGER DEFAULT 0
         )",
 
         // FOREIGN KEY(OwnerId) REFERENCES t_owner_info(OwnerId)
@@ -44,12 +47,17 @@ public class FileEntry : IItemExtAttributes {
     private static string[] Migrate1_2 = {
         @"ALTER TABLE t_entry ADD Duration INTEGER DEFAULT 0",
     };
+    private static string[] Migrate2_3 = {
+        @"ALTER TABLE t_entry ADD Slot INTEGER DEFAULT 0",
+    };
 
     public static string[]? Migrate(long from, long to) {
         if (from < 1) {
-            return Migrate0_1.Concat(Migrate1_2).ToArray();
+            return Migrate0_1.Concat(Migrate1_2).Concat(Migrate2_3).ToArray();
         } else if(from<2) {
-            return Migrate1_2;
+            return Migrate1_2.Concat(Migrate2_3).ToArray();
+        } else if (from < 3) {
+            return Migrate2_3;
         }
         else {
             return null;
@@ -82,6 +90,7 @@ public class FileEntry : IItemExtAttributes {
     public string? Category { get; set; }
     public string? Chapters { get; set; }
     public long Duration { get; set; } = 0;
+    public int Slot { get; set; } = 0;
 
     //[ForeignKey("OwnerId")]
     //public OwnerInfo OwnerInfo { get; set; } = new OwnerInfo();
@@ -122,6 +131,7 @@ public class FileEntry : IItemExtAttributes {
             { "category", Category ?? "" },
             { "chapters", Chapters ?? "" },
             { "duration", Duration },
+            { "slot", Slot },
         };
     }
 
@@ -166,6 +176,7 @@ public class FileEntry : IItemExtAttributes {
             Category = dict.GetStringValue("category"),
             Chapters = dict.GetStringValue("chapters"),
             Duration = dict.GetLongValue("duration"),
+            Slot = dict.GetIntValue("slot"),
         };
     }
 

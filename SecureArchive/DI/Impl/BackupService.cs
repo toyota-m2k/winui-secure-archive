@@ -28,6 +28,8 @@ internal class RemoteItem {
     public long Cloud { get; set; } = 0;
     [JsonProperty("attrDate")]
     public long ExtAttrDate { get; set; } = 0;
+    [JsonProperty("slot")]
+    public int Slot { get; set; } = 0;          // スロット番号（0:未登録、1:登録済み）
 
     [JsonIgnore]
     public string UrlType => (Type == "mp4" || Type == ".mp4") ? "video" : "photo";
@@ -44,8 +46,12 @@ internal class RemoteItemResponse {
 internal class BackupCompletion {
     [JsonProperty("auth")]
     public string AuthToken { get; set; } = "";
+    [JsonProperty("slot")]
+    public int Slot { get; set; } = 0;
     [JsonProperty("id")]
     public string Id { get; set; } = "";
+    [JsonProperty("slots")]
+    public List<int>? Slots { get; set; } = null;
     [JsonProperty("ids")]
     public List<string>? Ids { get; set; } = null;
     [JsonProperty("owner")]
@@ -174,6 +180,17 @@ internal class BackupService : IBackupService {
         Cloud = 2,      // ファイルはサーバー(SecureArchive)にのみ存在
     }
 
+    private string GetSlotId(int slot) {
+        return $"slot{slot}/";
+    }
+
+    private string itemKey(RemoteItem item) {
+        return $"{item.Slot}/{item.Id}";
+    }
+    private string itemKey(FileEntry item) {
+        return $"{item.Slot}/{item.OriginalId}";
+    }
+
     private async Task<bool> ListProc() {         
         Reset();
         return await Task.Run(async () => {
@@ -182,18 +199,18 @@ internal class BackupService : IBackupService {
                 // 移行済みのアイテムは除外する（リモート上に存在しないものとして扱う）
                 // SecureArchive 側では、移行済みアイテムのOwnerIdは、すでに別のデバイスのものになっているので、辻褄は合うはず。
                 var rawList = (await GetList($"http://{Address}/list?auth={Token}&type=all&backup"))
-                    .Where(it => !_deviceMigrationService.IsMigrated(OwnerId, it.Id));
+                    .Where(it => !_deviceMigrationService.IsMigrated(OwnerId, it.Slot, it.Id));
 
                 // Id (OriginalId) --> RemoteItem のマップを作成
-                var remoteMap = rawList.ToDictionary(it => it.Id);
+                var remoteMap = rawList.ToDictionary(it => itemKey(it));
 
                 // durationフィールドを補完する
                 _databaseService.EditEntry(entries => {
-                    var noDurations = entries.List(it => it.Duration == 0 && it.Type == "mp4" && it.OwnerId == OwnerId, false);
+                    var noDurations = entries.List(-1, it => it.Duration == 0 && it.Type == "mp4" && it.OwnerId == OwnerId, false);
                     var result = false;
                     if (noDurations.Count > 0) {
                         foreach (var e in noDurations) {
-                            if (remoteMap.TryGetValue(e.OriginalId, out var item)) {
+                            if (remoteMap.TryGetValue(itemKey(e), out var item)) {
                                 e.Duration = item.Duration;
                                 result = true;
                             }
@@ -206,27 +223,26 @@ internal class BackupService : IBackupService {
                  * リモート（モバイル端末）側で「ローカル（モバイル端末）にだけ存在する」と思っているが、
                  * 実は、SecureArchive にアップロード済み、というものがあれば、ここでバックアップ完了通知を送っておく。
                  */
-                var registeredList = rawList.Where(it => it.Cloud==(int)CloudState.Local && _secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToArray();
+                var registeredList = rawList.Where(it => it.Cloud==(int)CloudState.Local && _secureStorageService.IsRegistered(OwnerId, it.Slot, it.Id, it.Date)).ToArray();
                 if(registeredList.Length>0) {
                     await NotifyCompletion(registeredList);
                 }
 
-                //Debug.Assert(rawList.All((it) => remoteMap.ContainsKey(it.Id)));
-
                 /**
                  * リモートで削除されたファイル
+                 * （ローカルにだけ存在するファイル。ただし、削除フラグがついているものは除く。）
                  */
-                var removedList = _secureStorageService.GetList(OwnerId, (it) => {
-                    return !it.IsDeleted && !remoteMap.ContainsKey(it.OriginalId);
+                var removedList = _secureStorageService.GetList(OwnerId, -1, (it) => {
+                    return !it.IsDeleted && !remoteMap.ContainsKey(itemKey(it));
                 });
 
                 // 初期バージョンの不具合で、LastModifiedDate/CreationDate が 0 になっているものがある。
                 _databaseService.EditEntry((entries) => {
-                    var list = entries.List(e => e.LastModifiedDate == 0 || e.CreationDate == 0, false);
+                    var list = entries.List(-1, e => e.LastModifiedDate == 0 || e.CreationDate == 0, false);
                     if(list==null || list.FirstOrDefault()==null) return false;
                     bool modified = false;
                     foreach(var e in list) {
-                        var item = remoteMap[e.OriginalId];
+                        var item = remoteMap[itemKey(e)];
                         if (item != null && (e.LastModifiedDate!=item.Date || e.CreationDate!=item.Date)) {
                             e.LastModifiedDate = item.Date;
                             e.CreationDate = item.CreationDate;
@@ -240,14 +256,14 @@ internal class BackupService : IBackupService {
                 /**
                  * リモートで変更されたファイルのリスト
                  */
-                var modifiedList = _secureStorageService.GetList(OwnerId, (it) => {
-                    return !it.IsDeleted && remoteMap.ContainsKey(it.OriginalId) && it.ExtAttrDate != remoteMap[it.OriginalId].ExtAttrDate;
+                var modifiedList = _secureStorageService.GetList(OwnerId, -1, (it) => {
+                    return !it.IsDeleted && remoteMap.ContainsKey(itemKey(it)) && it.ExtAttrDate != remoteMap[itemKey(it)].ExtAttrDate;
                 });
 
                 /**
                  * リモート側で追加または更新されたファイルのリスト
                  */
-                var newList = rawList.Where(it => it.Cloud!=(int)CloudState.Cloud && !_secureStorageService.IsRegistered(OwnerId, it.Id, it.Date)).ToList();
+                var newList = rawList.Where(it => it.Cloud!=(int)CloudState.Cloud && !_secureStorageService.IsRegistered(OwnerId, it.Slot, it.Id, it.Date)).ToList();
 
                 /**
                  * 変更がなければメッセージを表示して終了
@@ -380,9 +396,9 @@ internal class BackupService : IBackupService {
 
         BackupCompletion bc;
         if (items.Length == 1) {
-            bc = new BackupCompletion() { AuthToken = Token, Id = items[0].Id, OwnerId = OwnerId, Status = true };
+            bc = new BackupCompletion() { AuthToken = Token, Slot=items[0].Slot, Id = items[0].Id, OwnerId = OwnerId, Status = true };
         } else {
-            bc = new BackupCompletion() { AuthToken = Token, Ids = items.Select(it=>it.Id).ToList(), OwnerId = OwnerId, Status = true };
+            bc = new BackupCompletion() { AuthToken = Token, Ids = items.Select(it=>it.Id).ToList(), Slots=items.Select(it=>it.Slot).ToList(), OwnerId = OwnerId, Status = true };
         }
         var url = $"http://{Address}/backup/done";
         var json = JsonConvert.SerializeObject(bc);
@@ -403,17 +419,17 @@ internal class BackupService : IBackupService {
 
     private const int BUFF_SIZE = 1 * 1024 * 1024;
     public async Task<bool> DownloadTarget(RemoteItem item, ProgressProc progress, CancellationToken ct) {
-        var url = $"http://{Address}/{item.UrlType}?id={item.Id}&auth={Token}";
+        var url = $"http://{Address}/{GetSlotId(item.Slot)}{item.UrlType}?id={item.Id}&auth={Token}";
         try {
             await Task.Delay(500);          // これを入れないと、Pixel3 でエラーになる。
-            var extAttr = await GetExtAttributes(item.Id, ct);
-            if (extAttr == null) return false;
+            var extAttr = await GetExtAttributes(item.Slot, item.Id, ct);
+            //if (extAttr == null) return false;
 
             using (var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
                 if (!response.IsSuccessStatusCode) return false;
                 using (var content = response.Content)
                 using (var inStream = await content.ReadAsStreamAsync())
-                using (var entryCreator = await _secureStorageService.CreateEntry(OwnerId, item.Id, true)) {
+                using (var entryCreator = await _secureStorageService.CreateEntry(OwnerId, item.Slot, item.Id, true)) {
                     if (entryCreator == null) { throw new InvalidOperationException("cannot create entry."); }
                     var total = content.Headers.ContentLength ?? 0L;
                     var buff = new byte[BUFF_SIZE];
@@ -454,8 +470,8 @@ internal class BackupService : IBackupService {
     }
 
 
-    private async Task<IItemExtAttributes?> GetExtAttributes(string originalId, CancellationToken ct) {
-        var url = $"http://{Address}/extension?id={originalId}&auth={Token}";
+    private async Task<IItemExtAttributes?> GetExtAttributes(int slot, string originalId, CancellationToken ct) {
+        var url = $"http://{Address}/{GetSlotId(slot)}extension?id={originalId}&auth={Token}";
         try {
             using (var response = await httpClient.GetAsync(url, ct)) {
                 if (!response.IsSuccessStatusCode) return null;
@@ -474,7 +490,7 @@ internal class BackupService : IBackupService {
     }
 
     public async Task<bool> UpdateBackupEntry(FileEntry entry, CancellationToken ct) {
-        var dic = await GetExtAttributes(entry.OriginalId, ct);
+        var dic = await GetExtAttributes(entry.Slot, entry.OriginalId, ct);
         if(dic == null) return false;
         return _databaseService.EditEntry(entries => {
             var e = entries.GetById(entry.Id);
