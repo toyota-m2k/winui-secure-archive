@@ -1,4 +1,6 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using Newtonsoft.Json.Linq;
+using SecureArchive.Utils;
+using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
 namespace SecureArchive.Models.DB;
@@ -49,4 +51,24 @@ public class OwnerInfo {
             Option = string.Empty, 
             Flags = 0 
         };
+
+    public static OwnerInfo FromDictionary(JObject dic) {
+        return new OwnerInfo() {
+            OwnerId = dic.GetStringValue("ownerId", string.Empty),
+            Name = dic.GetStringValue("name", string.Empty),
+            Type = dic.GetStringValue("type", string.Empty),
+            Option = dic.GetStringValue("option"),
+            Flags = dic.GetIntValue("flags", 0),
+        };
+    }
+    public Dictionary<string,object> ToDictionary() {
+        return new Dictionary<string, object>() {
+            { "ownerId", OwnerId },
+            { "name", Name },
+            { "type", Type },
+            { "option", Option ?? "" },
+            { "flags", Flags }
+
+        };
+    }
 }

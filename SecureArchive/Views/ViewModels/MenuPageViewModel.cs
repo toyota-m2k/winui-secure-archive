@@ -16,9 +16,10 @@ namespace SecureArchive.Views.ViewModels {
         public ReactiveCommandSlim SettingsCommand { get; } = new ReactiveCommandSlim();
         public ReactiveCommandSlim MirrorCommand { get; } = new ReactiveCommandSlim();
         //public ReactiveCommandSlim RepairCommand { get; } = new ReactiveCommandSlim();
-        public ReactivePropertySlim<bool> IsServerRunning { get; } = new ReactivePropertySlim<bool>(false);
-        public ReactivePropertySlim<bool> ShowLog { get; } = new ReactivePropertySlim<bool>(false);
+        public ReactivePropertySlim<bool> IsServerRunning { get; } = new ReactivePropertySlim<bool>(false, ReactivePropertyMode.DistinctUntilChanged);
+        public ReactivePropertySlim<bool> ShowLog { get; } = new ReactivePropertySlim<bool>(false, ReactivePropertyMode.DistinctUntilChanged);
         public ReadOnlyReactivePropertySlim<VerticalAlignment> PanelVerticalAlignment { get; }
+        public ReactivePropertySlim<int> PortNo { get; } = new ReactivePropertySlim<int>(0);
 
         public MenuPageViewModel(
             //ILoggerFactory loggerFactory,
@@ -52,18 +53,28 @@ namespace SecureArchive.Views.ViewModels {
             _httpServreService.Running.Subscribe((it) => {
                 IsServerRunning.Value = it;
             });
+            ShowLog.Subscribe((it) => {
+                _userSettingsService.EditAsync(us => {
+                    us.ShowLog = it;
+                    return true;
+                });
+            });
             PanelVerticalAlignment = ShowLog.Select(it => it ? VerticalAlignment.Stretch : VerticalAlignment.Center).ToReadOnlyReactivePropertySlim();
             InitServer();
         }
 
         private async void InitServer() {
-            if((await _userSettingsService.GetAsync()).ServerAutoStart) {
+            var us = await _userSettingsService.GetAsync();
+            ShowLog.Value = us.ShowLog;
+            PortNo.Value = us.PortNo;
+            if (us.ServerAutoStart) {
                 StartServer();
             }
         }
 
         private async void StartServer() {
-            _httpServreService.Start((await _userSettingsService.GetAsync()).PortNo);
+            PortNo.Value = (await _userSettingsService.GetAsync()).PortNo;
+            _httpServreService.Start(PortNo.Value);
         }
         private void StopServer() {
             _httpServreService.Stop();

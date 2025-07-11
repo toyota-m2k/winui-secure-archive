@@ -591,6 +591,20 @@ internal class HttpServerService : IHttpServreService {
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "extension" }, {"status", "ok"} });
                 }),
             Route.put(
+                name:"sync OwnerList",
+                regex:@"/sync/owners",
+                process: (request) => {
+                    var content = request.Content?.TextContent;
+                    if (content== null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    _databaseService.EditOwnerList(ownerList => {
+                        return ownerList.SyncByJson(content);
+                    });
+                    return TextHttpResponse.FromJsonString(request, _databaseService.OwnerList.JsonForSync());
+
+                }),
+            Route.put(
                 name:"register owner",
                 regex: @"/owner",
                 process: (request) => {

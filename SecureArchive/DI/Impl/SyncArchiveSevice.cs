@@ -27,11 +27,26 @@ internal class SyncArchiveSevice : ISyncArchiveService {
      * このタイムアウトは、要求全体に対するタイムアウトであり、接続の確立と要求本体の送受信の間を区別しないので要注意。
      * ファイルのアップロードやダウンロードのように、要求本体の送受信に時間がかかる場合は、Timeout.InfiniteTimeSpan を設定した infiniteHttpClient を使うこと。
      */
-    private HttpClient defaultHttpClient => _httpClientFactory.CreateClient();
+    private HttpClient? _defaultClient = null;
+    private HttpClient getDefaultHttpClient() {
+        if (_defaultClient == null) {
+            _defaultClient = _httpClientFactory.CreateClient();
+            _defaultClient.Timeout = TimeSpan.FromSeconds(100); // デフォルトのタイムアウトを100秒に設定
+        }
+        return _defaultClient;
+    }
     /**
      * タイムアウト無しの HttpClient
      */
-    private HttpClient infiniteHttpClient => _httpClientFactory.CreateClient().Also(it => it.Timeout = Timeout.InfiniteTimeSpan);
+    private HttpClient? _infiniteClient = null;
+    private HttpClient getInfiniteHttpClient() {
+        if (_infiniteClient == null) {
+            _infiniteClient = _httpClientFactory.CreateClient();
+            _infiniteClient.Timeout = Timeout.InfiniteTimeSpan; // タイムアウト無し
+        }
+        return _infiniteClient;
+    }
+
     private string peerAddress = "";
     private string challenge = "";
     private string authToken = "";
@@ -73,7 +88,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
     private async Task<bool> AuthWithToken(string token) {
         var url = $"http://{peerAddress}/auth/{token}";
-        using (var response = await defaultHttpClient.GetAsync(url)) {
+        using (var response = await getDefaultHttpClient().GetAsync(url)) {
             if (response.StatusCode == HttpStatusCode.OK) {
                 return true;
             }
@@ -88,7 +103,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     private async Task<string> AuthWithPassPhrase(string passPhrase) {
         var content = new StringContent(passPhrase, Encoding.UTF8, "text/plain");
         var url = $"http://{peerAddress}/auth";
-        using (var response = await defaultHttpClient.PutAsync(url, content)) {
+        using (var response = await getDefaultHttpClient().PutAsync(url, content)) {
             if(response.StatusCode == HttpStatusCode.OK) {
                 var jsonString = await response.Content.ReadAsStringAsync();
                 var json = JsonConvert.DeserializeObject<Dictionary<string, string>>(jsonString);
@@ -146,20 +161,22 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         //}
     }
 
+
+
     class FileEntryComparator : IEqualityComparer<FileEntry> {
         public bool Equals(FileEntry? x, FileEntry? y) {
-            return y != null && x != null && x.OriginalId== y.OriginalId && x.OwnerId == y.OwnerId;
+            return y != null && x != null && x.OriginalId== y.OriginalId && x.Slot == y.Slot && x.OwnerId == y.OwnerId;
         }
 
         public int GetHashCode(FileEntry obj) {
-            return (obj.OriginalId+obj.OwnerId).GetHashCode();
+            return (obj.OriginalId+obj.OwnerId+$"slot={obj.Slot}").GetHashCode();
         }
     }
 
     private async Task<List<FileEntry>?> GetPeerList(bool retry=false) {
         var url = $"http://{peerAddress}/list?auth={authToken}&type=all&sync";
         bool needRetry = false;
-        using (var response = await defaultHttpClient.GetAsync(url)) {
+        using (var response = await getDefaultHttpClient().GetAsync(url)) {
             if (response.IsSuccessStatusCode) {
                 var jsonString = await response.Content.ReadAsStringAsync();
                 var json = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonString);
@@ -196,6 +213,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
                 var content = new MultipartFormDataContent {
                     { new StringContent(entry.OwnerId), "OwnerId" },
+                    { new StringContent($"{entry.Slot}"), "Slot" },
                     { new StringContent(entry.OriginalId), "OriginalId" },
                     { new StringContent($"{entry.LastModifiedDate}"), "FileDate" },
                     { new StringContent($"{entry.CreationDate}"), "CreationDate" },
@@ -204,8 +222,8 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     { new StringContent($"{entry.Duration}"), "Duration" },
                     { body, "File", entry.Name }
                 };
-                var url = $"http://{peerAddress}/upload";
-                using (var response = await infiniteHttpClient.PostAsync(url, content, ct)) {
+                var url = $"http://{peerAddress}/{GetSlotId(entry.Slot)}/upload";
+                using (var response = await getInfiniteHttpClient().PostAsync(url, content, ct)) {
                     return response.IsSuccessStatusCode;
                 }
             }
@@ -217,12 +235,16 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
     private const int BUFF_SIZE = 1 * 1024 * 1024;
 
+    private string GetSlotId(int slot) {
+        return $"slot{slot}/";
+    }
+
     private async Task<bool> DownloadEntry(FileEntry entry, ProgressProc progress, CancellationToken ct) {
         string type = entry.Type == "mp4" ? "video" : "photo";
         string url = $"http://{peerAddress}/{type}?id={entry.Id}&auth={authToken}";
         progress(0, entry.Size);
         try {
-            using (var response = await infiniteHttpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
+            using (var response = await getInfiniteHttpClient().GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
                 if (!response.IsSuccessStatusCode) return false;
                 using (var content = response.Content)
                 using (var inStream = await content.ReadAsStreamAsync())
@@ -257,7 +279,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     private async Task<bool> GetExtAttributes(FileEntry fromPeerEntry, FileEntry toMyEntry) {
         string url = $"http://{peerAddress}/extension?id={fromPeerEntry.Id}&auth={authToken}";
         try {
-            using (var response = await defaultHttpClient.GetAsync(url)) {
+            using (var response = await getDefaultHttpClient().GetAsync(url)) {
                 if (!response.IsSuccessStatusCode) return false;
                 using (var content = response.Content) {
                     var jsonString = await content.ReadAsStringAsync();
@@ -290,6 +312,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 { "cmd", "extension" },
                 { "id", toPeerEntry.Id },
                 { "ownerId", toPeerEntry.OwnerId},
+                { "slot", toPeerEntry.Slot },
                 { "attrDate", fromMyEntry.ExtAttrDate },
                 { "rating", fromMyEntry.Rating },
                 { "mark", fromMyEntry.Mark },
@@ -297,7 +320,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 { "category", fromMyEntry.Category ?? "" },
                 { "chapters", fromMyEntry.Chapters ?? "" },
             });
-            using (var response = await defaultHttpClient.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"))) {
+            using (var response = await getDefaultHttpClient().PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"))) {
                 return response.IsSuccessStatusCode;
             }
         }
@@ -307,10 +330,31 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         }
     }
 
+    private async Task<bool> SyncOwnerList() {
+        try {
+            var url = $"http://{peerAddress}/sync/owners";
+            using (var response = await getDefaultHttpClient().PutAsync(url, new StringContent(_databaseService.OwnerList.JsonForSync(), Encoding.UTF8, "application/json"))) {
+                if(!response.IsSuccessStatusCode) {
+                    return false;
+                }
+                using (var content = response.Content) {
+                    var jsonString = await content.ReadAsStringAsync();
+                    _databaseService.EditOwnerList(ownerList=>{
+                        return ownerList.SyncByJson(jsonString);
+                    });
+                }
+            }
+            return true;
+        } catch(Exception e) {
+            _logger.Error(e, "PutMyOwnerInfo error");
+            return false;
+        }
+    }
+
     private async Task<IList<DeviceMigrationInfo>?> GetMigrationHistoryFromPeer() {
         string url = $"http://{peerAddress}/migration/history";
         try {
-            using (var response = await defaultHttpClient.GetAsync(url)) {
+            using (var response = await getDefaultHttpClient().GetAsync(url)) {
                 if (!response.IsSuccessStatusCode) return null;
                 using (var content = response.Content) {
                     var jsonString = await content.ReadAsStringAsync();
@@ -343,7 +387,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 { "cmd", "put/migration/history" },
                 { "list", list.Select(it=>it.ToDictionary()) }
             });
-            using (var response = await defaultHttpClient.PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"))) {
+            using (var response = await getDefaultHttpClient().PutAsync(url, new StringContent(json, Encoding.UTF8, "application/json"))) {
                 return response.IsSuccessStatusCode;
             }
         }
@@ -375,207 +419,220 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         SyncStateProc syncTaskProc, 
         ProgressProc countProgress, 
         ProgressProc byteProgress) {
-        if(parent!=null) {
-            Parent = new WeakReference<XamlRoot>(parent);
-        }
-        _cancellationTokenSource = new CancellationTokenSource();
-        var ct = _cancellationTokenSource.Token;
+        try { 
+            if(parent!=null) {
+                Parent = new WeakReference<XamlRoot>(parent);
+            }
+            _cancellationTokenSource = new CancellationTokenSource();
+            var ct = _cancellationTokenSource.Token;
 
-        void errorProc(string message, bool fatal) {
-            _mainThreadService.Run(() => {
-                errorMessageProc(message, fatal);
-            });
-        }
+            void errorProc(string message, bool fatal) {
+                _mainThreadService.Run(() => {
+                    errorMessageProc(message, fatal);
+                });
+            }
 
-        var reg = regAddress.Match(peerAddress);
-        if(!reg.Success) {
-            errorProc("Wrong Peer Address.", true);
-            return false;
-        }
-        var ip = reg.Groups["ip"];
-        var name = reg.Groups["name"];
-        var port = reg.Groups["port"];
-        if(ip.Success) {
-            this.peerAddress = peerAddress;
-        } else if (name.Success) {
-            var ips = Dns.GetHostAddresses(name.Value);
-            if (ips == null) {
-                errorProc("Cannot resolve IP address.", true);
+            var reg = regAddress.Match(peerAddress);
+            if(!reg.Success) {
+                errorProc("Wrong Peer Address.", true);
                 return false;
             }
-            var ipv4addr = ips.Where(it=>it.AddressFamily==System.Net.Sockets.AddressFamily.InterNetwork).FirstOrDefault();
-            if (ipv4addr == null) {
-                errorProc("Bad peer address.", true);
+            var ip = reg.Groups["ip"];
+            var name = reg.Groups["name"];
+            var port = reg.Groups["port"];
+            if(ip.Success) {
+                this.peerAddress = peerAddress;
+            } else if (name.Success) {
+                var ips = Dns.GetHostAddresses(name.Value);
+                if (ips == null) {
+                    errorProc("Cannot resolve IP address.", true);
+                    return false;
+                }
+                var ipv4addr = ips.Where(it=>it.AddressFamily==System.Net.Sockets.AddressFamily.InterNetwork).FirstOrDefault();
+                if (ipv4addr == null) {
+                    errorProc("Bad peer address.", true);
+                    return false;
+                }
+                this.peerAddress = $"{ipv4addr}:{port}";
+            } else {
+                errorProc("Invalid peer address.", true);
                 return false;
             }
-            this.peerAddress = $"{ipv4addr}:{port}";
-        } else {
-            errorProc("Invalid peer address.", true);
-            return false;
-        }
 
 
-        this.rawPassword = peerPassword;
-        return await Task.Run(async () => {
-            try {
-                if (!await RemoteAuth()) {
-                    errorProc("Authentication Error.", false);
-                    return false;
-                }
-                // まず最初にマイグレーション情報の同期
-                syncTaskProc(SyncTask.SyncMigration);
-                // Peer側のマイグレーション情報を取得
-                var history = await GetMigrationHistoryFromPeer();
-                if(history == null) {
-                    errorProc("migration data error.", false);
-                    return false;
-                }
-                // ローカルのマイグレーション情報を更新（ローカルにしか存在しないエントリを返してくる）
-                var historyToUpdate = _deviceMigrationService.ApplyHistoryFromPeerServer(history);
-                if (historyToUpdate.Count > 0) {
-                    // ローカルにしかないエントリーをPeerに送信して、Peer側のマイグレーション情報を更新
-                    if (!await PutMigrationHistoryToPeer(historyToUpdate)) {
-                        errorProc("migration data update error.", false);
+            this.rawPassword = peerPassword;
+            return await Task.Run(async () => {
+                try {
+                    if (!await RemoteAuth()) {
+                        errorProc("Authentication Error.", false);
                         return false;
                     }
-                }
 
-                var myList = _databaseService.Entries.List(-1, false);
-                var peerList = await GetPeerList();
-                if (peerList == null) {
-                    errorProc("No peer items.", false);
+                    // OwnerInfoTableの同期
+                    await SyncOwnerList();
+
+
+                    // マイグレーション情報の同期
+                    syncTaskProc(SyncTask.SyncMigration);
+                    // Peer側のマイグレーション情報を取得
+                    var history = await GetMigrationHistoryFromPeer();
+                    if(history == null) {
+                        errorProc("migration data error.", false);
+                        return false;
+                    }
+                    // ローカルのマイグレーション情報を更新（ローカルにしか存在しないエントリを返してくる）
+                    var historyToUpdate = _deviceMigrationService.ApplyHistoryFromPeerServer(history);
+                    if (historyToUpdate.Count > 0) {
+                        // ローカルにしかないエントリーをPeerに送信して、Peer側のマイグレーション情報を更新
+                        if (!await PutMigrationHistoryToPeer(historyToUpdate)) {
+                            errorProc("migration data update error.", false);
+                            return false;
+                        }
+                    }
+
+                    var myList = _databaseService.Entries.List(-1, false);
+                    var peerList = await GetPeerList();
+                    if (peerList == null) {
+                        errorProc("No peer items.", false);
+                        return false;
+                    }
+                    var comparator = new FileEntryComparator();
+                    // ピア側にしか存在しないエントリのリスト
+                    var peerNewFile = peerList.Except(myList, comparator).Where(it => !it.IsDeleted).ToList();
+                    // ローカル側にしか存在しないエントリのリスト
+                    var myNewFile = myList.Except(peerList, comparator).Where(it => !it.IsDeleted).ToList();
+                    // ピア側とローカル側の両方に存在するエントリのマップ(name+ownerId+slot -> my-FileEntry)
+                    string NameKey(FileEntry entry) {
+                        return entry.Name + entry.OwnerId + $"s{entry.Slot}";
+                    }
+                    var myCommonFileDic = myList.Intersect(peerList, comparator).Aggregate(new Dictionary<string, FileEntry>(), (dic, entry) => {
+                        try {
+                            dic.Add(NameKey(entry), entry); return dic;
+                        }
+                        catch (Exception) {
+                            // entry.Name に重複があると、このエラーになる。一時、SecureCameraの不具合で、Idがつけ変わってしまうケースがあって、これが発生した。
+                            _logger.Error($"{entry.Name} {entry.OwnerId}(Slot={entry.Slot})");
+                            var x = myList.Where(it => it.Name == entry.Name).ToList();
+                            var y = peerList.Where(it => it.Name == entry.Name).ToList();
+                            x.ForEach(it => _logger.Error($"{it.Id}"));
+                            y.ForEach(it => _logger.Error($"{it.Id}"));
+                            throw;
+                        }
+                    });
+                    // ピア側で削除されていない、且つ、最終更新日時の異なる peer と my のペアのリスト
+                    var commonPair = peerList.Intersect(myList, comparator).Select(it => new Pair { peer = it, my = myCommonFileDic[NameKey(it)] }).Where(it => !it.IsDeleted && it.peer.LastModifiedDate != it.my.LastModifiedDate).ToList();
+
+
+                    // リモート側に新しく追加されたファイルをダウンロード
+                    if (peerNewFile.Count > 0) {
+                        syncTaskProc(SyncTask.DownloadNew);
+                        int counter = 0;
+                        foreach (var entry in peerNewFile) {
+                            ct.ThrowIfCancellationRequested();
+                            counter++;
+                            _logger.Debug($"Download (NEW): [{counter}/{peerNewFile.Count}] {entry.Name}");
+                            countProgress(counter, peerNewFile.Count);
+                            await DownloadEntry(entry, byteProgress, ct);
+                        }
+                    }
+
+                    // リモート側の更新日時が新しいものをダウンロードして上書き
+                    var peerUpdates = commonPair.Where(it => it.peer.LastModifiedDate > it.my.LastModifiedDate).ToList();
+                    if (peerUpdates.Count > 0) {
+                        syncTaskProc(SyncTask.DownloadUpdate);
+                        int counter = 0;
+                        foreach (var pair in peerUpdates) {
+                            ct.ThrowIfCancellationRequested();
+                            counter++;
+                            _logger.Debug($"Download (UPD):  [{counter}/{peerUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.LastModifiedDate)} <-- {new DateTime(pair.peer.LastModifiedDate)}");
+                            countProgress(counter, peerUpdates.Count);
+                            await DownloadEntry(pair.peer, byteProgress, ct);
+                        }
+                    }
+
+                    // Peerへのアップロード
+                    if (!peerToLocalOnly) {
+                        // ローカル側に新しく追加されたファイルをアップロード
+                        if (myNewFile.Count > 0) {
+                            syncTaskProc(SyncTask.UploadingNew);
+                            int counter = 0;
+                            foreach (var entry in myNewFile) {
+                                ct.ThrowIfCancellationRequested();
+                                counter++;
+                                _logger.Debug($"Upload (NEW): [{counter}/{myNewFile.Count}] {entry.Name}");
+                                countProgress(counter, myNewFile.Count);
+                                await UploadEntry(entry, byteProgress, ct);
+
+                                // ToDo:
+                                // ExtAttrs が反映されていない。
+                            }
+                        }
+
+                        // ローカル側の更新日時が新しいものをアップロード
+                        var myUpdates = commonPair.Where(it => it.peer.LastModifiedDate > it.my.LastModifiedDate).ToList();
+                        if (myUpdates.Count > 0) {
+                            syncTaskProc(SyncTask.UploadingUpdate);
+                            int counter = 0;
+                            foreach (var pair in myUpdates) {
+                                ct.ThrowIfCancellationRequested();
+                                counter++;
+                                _logger.Debug($"Upload (UPD):  [{counter}/{myUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.LastModifiedDate)} --> {new DateTime(pair.peer.LastModifiedDate)}");
+                                countProgress(counter, myUpdates.Count);
+                                await UploadEntry(pair.my, byteProgress, ct);
+                            }
+                        }
+                    }
+
+                    // リモート側で削除されたファイルをローカルからも削除
+                    var deletedFile = myList.Where(it => !it.IsDeleted).Intersect(peerList.Where(it => it.IsDeleted), comparator).ToList();
+                    if (deletedFile.Count > 0) {
+                        syncTaskProc(SyncTask.Deleting);
+                        int counter = 0;
+                        foreach (var entry in deletedFile) {
+                            ct.ThrowIfCancellationRequested();
+                            counter++;
+                            _logger.Debug($"Delete:  [{counter}/{deletedFile.Count}] {entry.Name}");
+                            countProgress(counter, deletedFile.Count);
+                            await _secureStorageService.DeleteEntry(entry);
+                        }
+                    }
+
+                    // 属性の同期
+                    var attrUpdatedPairs = peerList.Intersect(myList, comparator).Select(it => new Pair { peer = it, my = myCommonFileDic[NameKey(it)] }).Where(it => !it.IsDeleted && it.peer.ExtAttrDate != it.my.ExtAttrDate).ToList();
+                    if (attrUpdatedPairs.Count > 0) {
+                        syncTaskProc(SyncTask.SyncAttributes);
+                        int counter = 0;
+                        foreach (var entry in attrUpdatedPairs) {
+                            ct.ThrowIfCancellationRequested();
+                            if (entry.peer.ExtAttrDate > entry.my.ExtAttrDate) {
+                                // Peer側の方が新しい場合、Peer側の属性をローカルにコピー
+                                _logger.Debug($"Download (ATTR): {entry.my.Name}: {new DateTime(entry.my.ExtAttrDate)} <-- {new DateTime(entry.peer.ExtAttrDate)}");
+                                await GetExtAttributes(entry.peer, entry.my);
+                            }
+                            else if (entry.peer.ExtAttrDate < entry.my.ExtAttrDate) {
+                                // ローカル側の方が新しい場合、ローカル側の属性をPeerにコピー
+                                _logger.Debug($"Upload (ATTR): {entry.my.Name}: {new DateTime(entry.my.ExtAttrDate)} --> {new DateTime(entry.peer.ExtAttrDate)}");
+                                await PutExtAttributes(entry.my, entry.peer);
+                            }
+                            countProgress(counter, attrUpdatedPairs.Count);
+                        }
+                    }
+                    return true;
+                }
+                catch (Exception ex) {
+                    _logger.Error(ex);
+                    errorProc("Sync Error.", true);
                     return false;
                 }
-                var comparator = new FileEntryComparator();
-                // ピア側にしか存在しないエントリのリスト
-                var peerNewFile = peerList.Except(myList, comparator).Where(it => !it.IsDeleted).ToList();
-                // ローカル側にしか存在しないエントリのリスト
-                var myNewFile = myList.Except(peerList, comparator).Where(it => !it.IsDeleted).ToList();
-                // ピア側とローカル側の両方に存在するエントリのマップ(name+ownerId -> my-FileEntry)
-                var myCommonFileDic = myList.Intersect(peerList, comparator).Aggregate(new Dictionary<string, FileEntry>(), (dic, entry) => {
-                    try {
-                        dic.Add(entry.Name + entry.OwnerId, entry); return dic;
-                    }
-                    catch (Exception) {
-                        // entry.Name に重複があると、このエラーになる。一時、SecureCameraの不具合で、Idがつけ変わってしまうケースがあって、これが発生した。
-                        _logger.Error($"{entry.Name} {entry.OwnerId}");
-                        var x = myList.Where(it => it.Name == entry.Name).ToList();
-                        var y = peerList.Where(it => it.Name == entry.Name).ToList();
-                        x.ForEach(it => _logger.Error($"{it.Id}"));
-                        y.ForEach(it => _logger.Error($"{it.Id}"));
-                        throw;
-                    }
-                });
-                // ピア側で削除されていない、且つ、最終更新日時の異なる peer と my のペアのリスト
-                var commonPair = peerList.Intersect(myList, comparator).Select(it => new Pair { peer = it, my = myCommonFileDic[it.Name + it.OwnerId] }).Where(it => !it.IsDeleted && it.peer.LastModifiedDate != it.my.LastModifiedDate).ToList();
-
-                //var peerCommonFile = peerList.Intersect(myList, comparator).ToList();
-
-                //var peerUpdateFile = peerCommonFile.Where(it => it.LastModifiedDate > myCommonFileDic[it.Name+it.OwnerId].LastModifiedDate);
-                //var myUpdateFile = peerCommonFile.Where(it=> it.LastModifiedDate < myCommonFileDic[it.Name+it.OwnerId].LastModifiedDate).Select(it=>myCommonFileDic[it.Name+it.OwnerId]);
-
-                // リモート側に新しく追加されたファイルをダウンロード
-                if (peerNewFile.Count > 0) {
-                    syncTaskProc(SyncTask.DownloadNew);
-                    int counter = 0;
-                    foreach (var entry in peerNewFile) {
-                        ct.ThrowIfCancellationRequested();
-                        counter++;
-                        _logger.Debug($"Download (NEW): [{counter}/{peerNewFile.Count}] {entry.Name}");
-                        countProgress(counter, peerNewFile.Count);
-                        await DownloadEntry(entry, byteProgress, ct);
-                    }
-                }
-
-                // リモート側の更新日時が新しいものをダウンロードして上書き
-                var peerUpdates = commonPair.Where(it => it.peer.LastModifiedDate > it.my.LastModifiedDate).ToList();
-                if (peerUpdates.Count > 0) {
-                    syncTaskProc(SyncTask.DownloadUpdate);
-                    int counter = 0;
-                    foreach (var pair in peerUpdates) {
-                        ct.ThrowIfCancellationRequested();
-                        counter++;
-                        _logger.Debug($"Download (UPD):  [{counter}/{peerUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.LastModifiedDate)} <-- {new DateTime(pair.peer.LastModifiedDate)}");
-                        countProgress(counter, peerUpdates.Count);
-                        await DownloadEntry(pair.peer, byteProgress, ct);
-                    }
-                }
-
-                // Peerへのアップロード
-                if (!peerToLocalOnly) {
-                    // ローカル側に新しく追加されたファイルをアップロード
-                    if (myNewFile.Count > 0) {
-                        syncTaskProc(SyncTask.UploadingNew);
-                        int counter = 0;
-                        foreach (var entry in myNewFile) {
-                            ct.ThrowIfCancellationRequested();
-                            counter++;
-                            _logger.Debug($"Upload (NEW): [{counter}/{myNewFile.Count}] {entry.Name}");
-                            countProgress(counter, myNewFile.Count);
-                            await UploadEntry(entry, byteProgress, ct);
-
-                            // ToDo:
-                            // ExtAttrs が反映されていない。
-                        }
-                    }
-
-                    // ローカル側の更新日時が新しいものをアップロード
-                    var myUpdates = commonPair.Where(it => it.peer.LastModifiedDate > it.my.LastModifiedDate).ToList();
-                    if (myUpdates.Count > 0) {
-                        syncTaskProc(SyncTask.UploadingUpdate);
-                        int counter = 0;
-                        foreach (var pair in myUpdates) {
-                            ct.ThrowIfCancellationRequested();
-                            counter++;
-                            _logger.Debug($"Upload (UPD):  [{counter}/{myUpdates.Count}] {pair.my.Name}: {new DateTime(pair.my.LastModifiedDate)} --> {new DateTime(pair.peer.LastModifiedDate)}");
-                            countProgress(counter, myUpdates.Count);
-                            await UploadEntry(pair.my, byteProgress, ct);
-                        }
-                    }
-                }
-
-                // リモート側で削除されたファイルをローカルからも削除
-                var deletedFile = myList.Where(it => !it.IsDeleted).Intersect(peerList.Where(it => it.IsDeleted), comparator).ToList();
-                if (deletedFile.Count > 0) {
-                    syncTaskProc(SyncTask.Deleting);
-                    int counter = 0;
-                    foreach (var entry in deletedFile) {
-                        ct.ThrowIfCancellationRequested();
-                        counter++;
-                        _logger.Debug($"Delete:  [{counter}/{deletedFile.Count}] {entry.Name}");
-                        countProgress(counter, deletedFile.Count);
-                        await _secureStorageService.DeleteEntry(entry);
-                    }
-                }
-
-                // 属性の同期
-                var attrUpdatedPairs = peerList.Intersect(myList, comparator).Select(it => new Pair { peer = it, my = myCommonFileDic[it.Name + it.OwnerId] }).Where(it => !it.IsDeleted && it.peer.ExtAttrDate != it.my.ExtAttrDate).ToList();
-                if (attrUpdatedPairs.Count > 0) {
-                    syncTaskProc(SyncTask.SyncAttributes);
-                    int counter = 0;
-                    foreach (var entry in attrUpdatedPairs) {
-                        ct.ThrowIfCancellationRequested();
-                        if (entry.peer.ExtAttrDate > entry.my.ExtAttrDate) {
-                            // Peer側の方が新しい場合、Peer側の属性をローカルにコピー
-                            _logger.Debug($"Download (ATTR): {entry.my.Name}: {new DateTime(entry.my.ExtAttrDate)} <-- {new DateTime(entry.peer.ExtAttrDate)}");
-                            await GetExtAttributes(entry.peer, entry.my);
-                        }
-                        else if (entry.peer.ExtAttrDate < entry.my.ExtAttrDate) {
-                            // ローカル側の方が新しい場合、ローカル側の属性をPeerにコピー
-                            _logger.Debug($"Upload (ATTR): {entry.my.Name}: {new DateTime(entry.my.ExtAttrDate)} --> {new DateTime(entry.peer.ExtAttrDate)}");
-                            await PutExtAttributes(entry.my, entry.peer);
-                        }
-                        countProgress(counter, attrUpdatedPairs.Count);
-                    }
-                }
-                return true;
-            }
-            catch (Exception ex) {
-                _logger.Error(ex);
-                errorProc("Sync Error.", true);
-                return false;
-            }
-        });
+            });
+    
+        } 
+        finally {
+            _defaultClient?.Dispose();
+            _defaultClient = null;
+            _infiniteClient?.Dispose();
+            _infiniteClient = null;
+        }
     }
 
     public void Cancel() {

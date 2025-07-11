@@ -1,9 +1,12 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Navigation;
 using System.Xml.Linq;
 
 namespace SecureArchive.Models.DB.Accessor;
@@ -14,12 +17,14 @@ public interface IOwnerInfoList {
     IList<T> List<T>(Func<OwnerInfo, T?> predicate) where T : class;
 
     OwnerInfo? Get(string ownerId);
+    string JsonForSync();
 }
 public interface IMutableOwnerInfoList: IOwnerInfoList {
     bool Add(string ownerId, string name, string type, int flag, string? option=null);
     bool AddOrUpdate(string ownerId, string name, string type, int flag, string? option = null);
     void Remove(OwnerInfo entry);
     void Remove(Func<OwnerInfo, bool> predicate);
+    bool SyncByJson(string jsonString);
 }
 
 public class OwnerInfoList : IMutableOwnerInfoList {
@@ -115,4 +120,36 @@ public class OwnerInfoList : IMutableOwnerInfoList {
         }
     }
 
+    public string JsonForSync() {
+        var owners = List<Dictionary<string, object>>(
+            predicate: owner => {
+                return owner.Type != "PC";
+            },
+            select: owner => {
+                return owner.ToDictionary();
+            }).ToList();
+        return JsonConvert.SerializeObject(new Dictionary<string, object> {
+                { "cmd", "sync/owners" },
+                { "list", owners }
+            });
+    }
+
+    public bool SyncByJson(string jsonString) {
+        var json = JsonConvert.DeserializeObject<Dictionary<string, object>>(jsonString);
+        if (json != null && json.ContainsKey("list")) {
+            var list = json["list"] as JArray;
+            if (list != null) {
+                var modified = false;
+                foreach (JObject owner in list) {
+                    var ownerInfo = OwnerInfo.FromDictionary(owner);
+                    if (!string.IsNullOrEmpty(ownerInfo.OwnerId) && Get(ownerInfo.OwnerId) == null) {
+                        Add(ownerInfo.OwnerId, ownerInfo.Name, ownerInfo.Type, ownerInfo.Flags, ownerInfo.Option);
+                        modified = true;
+                    }
+                }
+                return modified;
+            }
+        }
+        return false;
+    }
 }
