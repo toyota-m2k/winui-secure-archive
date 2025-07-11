@@ -59,7 +59,7 @@ namespace SecureArchive.Views.ViewModels {
                     return true;
                 });
             });
-            PanelVerticalAlignment = ShowLog.Select(it => it ? VerticalAlignment.Stretch : VerticalAlignment.Center).ToReadOnlyReactivePropertySlim();
+            PanelVerticalAlignment = ShowLog.Select(it => it ? VerticalAlignment.Stretch : VerticalAlignment.Center).ToReadOnlyReactivePropertySlim(VerticalAlignment.Center);
             InitServer();
         }
 
