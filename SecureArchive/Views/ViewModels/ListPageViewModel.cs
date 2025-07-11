@@ -17,6 +17,24 @@ using System.Threading.Tasks;
 
 namespace SecureArchive.Views.ViewModels;
 
+internal class DispOwnerInfo {
+    public string? OwnerId { get; set; } = null;
+    public string Name { get; set; } = string.Empty;
+    public static DispOwnerInfo All = new DispOwnerInfo() {
+        Name = "All"
+    };
+}
+internal class DispSlotInfo {
+    public int Slot { get; set; } = 0;
+    public string Name { get; set; } = string.Empty;
+
+    public static DispSlotInfo All = new DispSlotInfo() {
+        Slot = -1,
+        Name = "All"
+    };
+}
+
+
 internal class ListPageViewModel : IListSource {
     private IPageService _pageService;
     //private ICryptographyService _cryptoService;
@@ -38,6 +56,12 @@ internal class ListPageViewModel : IListSource {
     public IReadOnlyReactiveProperty<ProgressMode> ProgressMode { get; } 
     public IReadOnlyReactiveProperty<int> ProgressInPercent { get; }
     public ReadOnlyReactivePropertySlim<bool> HasMessage { get; }
+
+    public ReactivePropertySlim<List<DispOwnerInfo>> OwnerList { get; } = new ReactivePropertySlim<List<DispOwnerInfo>>(new List<DispOwnerInfo>());
+    public ReactivePropertySlim<List<DispSlotInfo>> SlotList { get; } = new ReactivePropertySlim<List<DispSlotInfo>>(new List<DispSlotInfo>());
+    public ReactivePropertySlim<DispOwnerInfo> SelectedOwner { get; } = new ReactivePropertySlim<DispOwnerInfo>(DispOwnerInfo.All, ReactivePropertyMode.DistinctUntilChanged);
+    //public ReactivePropertySlim<int> SelectedOwnerIndex { get; } = new ReactivePropertySlim<int>(0, ReactivePropertyMode.DistinctUntilChanged);
+    public ReactivePropertySlim<DispSlotInfo> SelectedSlot { get; } = new ReactivePropertySlim<DispSlotInfo>(DispSlotInfo.All, ReactivePropertyMode.DistinctUntilChanged);
 
     public IList<FileEntry> GetFileList() {
         return FileList.Value;
@@ -67,25 +91,32 @@ internal class ListPageViewModel : IListSource {
         //PatchCommand.Subscribe(() => Task.Run(()=>_secureStorageService.ConvertFastStart(_statusNotificationService)));
 
         FileList.Value = new ObservableCollection<FileEntry>();
-        Task.Run(async () => {
-            var entries = _dataBaseService.Entries.List(-1, true);
-            _mainThreadService.Run(() => {
-                FileList.Value = new ObservableCollection<FileEntry>(entries);
-            });
+        Task.Run(() => {
+            UpdateOwnerList();
+            UpdateSlotList();
+            ResetAllItems();
         });
         Message = _statusNotificationService.Message;
         ProgressMode = _statusNotificationService.ProgressMode;
         ProgressInPercent = _statusNotificationService.ProgressInPercent;
 
         HasMessage = Message.Select((it) => !string.IsNullOrEmpty(it)).ToReadOnlyReactivePropertySlim();
-        //HasMessage.Subscribe((v) => {
-        //    _logger.LogDebug($"HasMessage={v}");
-        //});
 
-        //_statusNotificationService.ShowMessage("ほげほげ", 3000);
+        SelectedSlot.Subscribe((it) => {
+            ResetAllItems();
+        });
+        SelectedOwner.Subscribe((it) => {
+            ResetAllItems();
+        });
 
         _dataBaseService.Entries.Changes.Subscribe(change => {
+            var uo = UpdateOwnerList();
+            var us = UpdateSlotList();
             _mainThreadService.Run(() => {
+                if (uo || us) {
+                    ResetAllItems();
+                    return;
+                }
                 switch (change.Type) {
                     case DataChangeInfo.Change.Add:
                         AddItem(change.Item);
@@ -97,17 +128,58 @@ internal class ListPageViewModel : IListSource {
                         UpdateItem(change.Item);
                         break;
                     case DataChangeInfo.Change.ResetAll:
-                        FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(-1,true));
+                        ResetAllItems();
                         break;
                 }
             });
-        });
 
-        //FileList.Subscribe((list) => {
-        //    _httpServreService.ListSource = ()=> { return list };
-        //    //Validate(true);
-        //});
+        });
     }
+
+    private bool UpdateOwnerList() {
+        var availableOwners = _dataBaseService.Entries.AvailableOwnerIds();
+        var owners = 
+            new List<DispOwnerInfo>() { DispOwnerInfo.All }
+            .Concat(
+            _dataBaseService.OwnerList
+            .List()
+            .Where(it=>availableOwners
+            .Contains(it.OwnerId))
+            .Select((it) => new DispOwnerInfo() { OwnerId = it.OwnerId, Name = it.Name })
+            ).ToList();
+
+        if (OwnerList.Value.SequenceEqual(owners)) {
+            return false;
+        }
+        var selectionChanging = SelectedOwner.Value.OwnerId != DispOwnerInfo.All.OwnerId && owners.Find(it => it.OwnerId == SelectedOwner.Value.OwnerId) == null;
+        _mainThreadService.Run(() => {
+            OwnerList.Value = owners;
+            if (selectionChanging) {
+                SelectedOwner.Value = owners[0];
+            }
+        });
+        return selectionChanging;
+    }
+
+    private bool UpdateSlotList() {
+        var slots =
+            new List<DispSlotInfo>() { DispSlotInfo.All }
+            .Concat(_dataBaseService.Entries.AvailableSlots()
+                .Select(it => new DispSlotInfo() { Slot = it, Name = it == 0 ? "Default" : $"Slot-{it}" }))
+            .ToList();
+        if (SlotList.Value.SequenceEqual(slots)) {
+            return false;
+        }
+        var selectionChanging = SelectedSlot.Value.Slot != DispSlotInfo.All.Slot && slots.Find(it => it.Slot == SelectedSlot.Value.Slot) == null;
+        _mainThreadService.Run(() => {
+            SlotList.Value = slots;
+            if (selectionChanging) {
+                SelectedSlot.Value = slots[0];
+            }
+        });
+        return selectionChanging;
+    }
+
 
     public async Task<bool> ExportFileTo(FileEntry entry, string outFile, ProgressProc progress) {
         try {
@@ -165,6 +237,9 @@ internal class ListPageViewModel : IListSource {
     }
 
     private void AddItem(FileEntry entry) {
+        if (SelectedSlot.Value.Slot != -1 && SelectedSlot.Value.Slot != entry.Slot) return; // Skip if not in the selected slot
+        if (SelectedOwner.Value.OwnerId != null && SelectedOwner.Value.OwnerId != entry.OwnerId) return; // Skip if not in the selected owner
+
         var list = FileList.Value;
         var next = list.FirstOrDefault((it) => it.LastModifiedDate > entry.LastModifiedDate);
         if(next==null) {
@@ -201,6 +276,19 @@ internal class ListPageViewModel : IListSource {
             }
         }
     }
+
+    private void ResetAllItems() {
+        var ownerId = SelectedOwner.Value.OwnerId;
+        var slot = SelectedSlot.Value.Slot;
+        if (ownerId == null) {
+            FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(slot, true));
+        }
+        else {
+            FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(slot, it => it.OwnerId == ownerId, true));
+        }
+    }
+
+
     //private void UpdateItems(FileEntry[] entries) {
     //    foreach (var entry in entries) {
     //        UpdateItem(entry);

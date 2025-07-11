@@ -4,7 +4,7 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:SecureArchive.Views"
-    xmlns:data="using:SecureArchive.Models.DB"
+    xmlns:data="using:SecureArchive.Views.ViewModels"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
     xmlns:animations="using:CommunityToolkit.WinUI.Animations"
@@ -50,6 +50,38 @@
                                 <TextBlock Text="Patch"  HorizontalAlignment="Center"/>
                             </StackPanel>
                         </Button>
+                        <TextBlock Text="Devices"/>
+                        <ComboBox
+                            x:Name="DeviceComboBox"
+                            ItemsSource="{x:Bind ViewModel.OwnerList.Value, Mode=OneWay}"
+                            SelectedItem="{x:Bind ViewModel.SelectedOwner.Value, Mode=TwoWay}"
+                            IsEditable="False"
+                            IsTextSearchEnabled="False"
+                            >
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="data:DispOwnerInfo">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <TextBlock Text="{x:Bind Name}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
+                        <TextBlock Text="Slot"/>
+                        <ComboBox
+                            x:Name="SlotComboBox"
+                            ItemsSource="{x:Bind ViewModel.SlotList.Value, Mode=OneWay}"
+                            SelectedItem="{x:Bind ViewModel.SelectedSlot.Value, Mode=TwoWay}"
+                            IsEditable="False"
+                            IsTextSearchEnabled="False"
+                            >
+                            <ComboBox.ItemTemplate>
+                                <DataTemplate x:DataType="data:DispSlotInfo">
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <TextBlock Text="{x:Bind Name}"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ComboBox.ItemTemplate>
+                        </ComboBox>
                     </StackPanel>
                     <Button Padding="15" Command="{x:Bind ViewModel.GoBackCommand}" VerticalAlignment="Bottom"  HorizontalAlignment="Stretch">
                         <StackPanel Orientation="Vertical" Spacing="5">

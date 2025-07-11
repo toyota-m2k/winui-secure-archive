@@ -107,6 +107,8 @@ public interface IFileEntryList {
     IList<T> List<T>(int slot, Func<FileEntry, T?> predicate) where T:class;
     FileEntry? GetById(long id);
     FileEntry? GetByOriginalId(string ownerId, int slot, string originalId);
+    List<int> AvailableSlots();
+    List<string> AvailableOwnerIds();
 }
 
 public interface IMutableFileEntryList : IFileEntryList {
@@ -320,6 +322,17 @@ public class FileEntryList : IMutableFileEntryList {
     public FileEntry? GetByOriginalId(string ownerId, int slot, string originalId) {
         lock (_connector) {
             return _entries.Where(it => it.OwnerId == ownerId && it.Slot == slot && it.OriginalId == originalId).FirstOrDefault();
+        }
+    }
+
+    public List<int> AvailableSlots() {
+        lock (_connector) {
+            return _entries.Select(it => it.Slot).Distinct().OrderBy(it => it).ToList();
+        }
+    }
+    public List<string> AvailableOwnerIds() {
+        lock (_connector) {
+            return _entries.Select(it => it.OwnerId).Distinct().OrderBy(it => it).ToList();
         }
     }
 }
