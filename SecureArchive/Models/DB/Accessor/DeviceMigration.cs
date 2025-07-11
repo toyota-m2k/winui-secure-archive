@@ -32,6 +32,7 @@ public class DeviceMigration : IMutableDeviceMigration {
             rec = new DeviceMigrationInfo() {
                 OldOwnerId = oldOwnerId,
                 OldOriginalId = oldOriginalId,
+                Slot = slot,
                 NewOwnerId = newOwnerId,
                 NewOriginalId = newOrignalId,
                 MigratedOn = migratedOn?.Ticks ?? DateTime.Now.Ticks

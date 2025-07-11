@@ -4,7 +4,8 @@
       "commandName": "MsixPackage"
     },
     "SecureArchive (Unpackaged)": {
-      "commandName": "Project"
+      "commandName": "Project",
+      "commandLineArgs": "c:\\temp\\sa-test"
     }
   }
 }
