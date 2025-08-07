@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using SecureArchive.Models.DB;
@@ -139,8 +140,12 @@ internal class HttpServerService : IHttpServreService {
             if (Parameters.TryGetValue("ExtAttr", out var extAttrJson)) {
                 extAttr = ItemExtAttributes.FromJson(extAttrJson);
             }
+            long size = multipartBody.ContentLength;
+            if (Parameters.TryGetValue("Size", out var sizeText)) {
+                size = Convert.ToInt64(sizeText);
+            }
 
-            _entryCreator?.Complete(name, multipartBody.ContentLength, Path.GetExtension(name), lastModifiedDate, creationDate, duration, metaInfo, extAttr);
+            _entryCreator?.Complete(name, size, Path.GetExtension(name), lastModifiedDate, creationDate, duration, metaInfo, extAttr);
             Dispose();
         }
 
@@ -153,7 +158,9 @@ internal class HttpServerService : IHttpServreService {
 
         public void Progress(long current, long total) {
             ReceivedLength = current;
-            ContentLength = total;
+            if (total > 0) {
+                ContentLength = total;
+            }
         }
     }
 
