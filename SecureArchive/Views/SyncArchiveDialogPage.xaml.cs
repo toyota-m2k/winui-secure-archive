@@ -41,6 +41,6 @@ public sealed partial class SyncArchiveDialogPage : Page, ICustomDialogPage<bool
 
 
     public void ShowDialog(XamlRoot parent) {
-        _ = CustomDialogBuilder<SyncArchiveDialogPage, bool>.Create(parent, this).SetTitle("Sync To Peer Archive").ShowAsync();
+        _ = CustomDialogBuilder<SyncArchiveDialogPage, bool>.Create(parent, this).SetTitle("Sync With Peer Archive").ShowAsync();
     }
 }

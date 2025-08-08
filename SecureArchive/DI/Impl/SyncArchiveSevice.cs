@@ -473,7 +473,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
 
                     // マイグレーション情報の同期
-                    syncTaskProc(SyncTask.SyncMigration);
+                    syncTaskProc(SyncTask.SyncMigrationFromPeer);
                     // Peer側のマイグレーション情報を取得
                     var history = await GetMigrationHistoryFromPeer();
                     if(history == null) {
@@ -481,8 +481,14 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                         return false;
                     }
                     // ローカルのマイグレーション情報を更新（ローカルにしか存在しないエントリを返してくる）
-                    var historyToUpdate = _deviceMigrationService.ApplyHistoryFromPeerServer(history);
+                    var historyToUpdate = _deviceMigrationService.ApplyHistoryFromPeerServer(history, countProgress);
+                    if (historyToUpdate == null) {
+                        errorProc("busy in migration.", false);
+                        return false;
+                    }
                     if (historyToUpdate.Count > 0) {
+                        syncTaskProc(SyncTask.SyncMigrationToPeer);
+                        _logger.Debug($"Migration history: {historyToUpdate.Count} entries to update peer.");
                         // ローカルにしかないエントリーをPeerに送信して、Peer側のマイグレーション情報を更新
                         if (!await PutMigrationHistoryToPeer(historyToUpdate)) {
                             errorProc("migration data update error.", false);

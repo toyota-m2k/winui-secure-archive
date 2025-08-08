@@ -105,6 +105,12 @@ internal class SyncArchiveDialogViewModel {
     private void SyncTaskProc(SyncTask task) {
         _mainThreadService.Run(() => {
             switch (task) {
+                case SyncTask.SyncMigrationFromPeer:
+                    ProgressMessage.Value = "Downloading Migration Table.";
+                    break;
+                case SyncTask.SyncMigrationToPeer:
+                    ProgressMessage.Value = "Uploading Migration Table.";
+                    break;
                 case SyncTask.UploadingNew:
                     ProgressMessage.Value = "Uploading New Files.";
                     break;
