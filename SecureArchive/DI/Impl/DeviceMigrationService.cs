@@ -206,7 +206,7 @@ internal class DeviceMigrationService : IDeviceMigrationService {
             }
             _migratingWithSync = true;
             try {
-                var common = new HashSet<string>();
+                var peerSet = new HashSet<string>();
                 var count = 0;
                 var updated = false;
                 _databaseService.Transaction((tables) => {
@@ -223,12 +223,13 @@ internal class DeviceMigrationService : IDeviceMigrationService {
                         }
                         else {
                             _logger.LogDebug($"Migrating: skipped {count}/{history.Count}: {peer.OldOriginalId}->{peer.NewOriginalId}");
-                            common.Add(mine.OldOwnerId + "/" + mine.OldOriginalId);
                         }
+                        peerSet.Add(peer.OldOwnerId + "/" + peer.OldOriginalId);
                     }
                     return updated;
                 });
-                return _databaseService.DeviceMigration.List().Where(x => !common.Contains(x.OldOwnerId + "/" + x.OldOriginalId)).ToList();
+                // My List の内、peerSet に含まれない（ = ローカルにしか存在しない）ものを抽出して返す。
+                return _databaseService.DeviceMigration.List().Where(x => !peerSet.Contains(x.OldOwnerId + "/" + x.OldOriginalId)).ToList();
             } finally {
                 _migratingWithSync = false;
             }
