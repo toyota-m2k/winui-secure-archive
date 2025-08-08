@@ -605,6 +605,11 @@ internal class HttpServerService : IHttpServreService {
                     if (content== null) {
                         return HttpErrorResponse.BadRequest(request);
                     }
+                    _databaseService.EditEntry(entries => {
+                        var del = entries.Sweep();
+                        _logger.Debug($"{del} records swept.");
+                        return del > 0;
+                    });
                     _databaseService.EditOwnerList(ownerList => {
                         return ownerList.SyncByJson(content);
                     });

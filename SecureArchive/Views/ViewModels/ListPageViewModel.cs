@@ -14,6 +14,7 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 
 namespace SecureArchive.Views.ViewModels;
 
@@ -89,6 +90,7 @@ internal class ListPageViewModel : IListSource {
         GoBackCommand.Subscribe(_pageService.ShowMenuPage);
         AddCommand.Subscribe(AddLocalFile);
         //PatchCommand.Subscribe(() => Task.Run(()=>_secureStorageService.ConvertFastStart(_statusNotificationService)));
+        PatchCommand.Subscribe(Sweep);
 
         FileList.Value = new ObservableCollection<FileEntry>();
         Task.Run(() => {
@@ -192,6 +194,17 @@ internal class ListPageViewModel : IListSource {
     }
 
     public async Task ExportFiles(List<FileEntry> list) {
+        //var slots = _dataBaseService.Entries.AvailableSlots();
+        //foreach (var slot in slots) {
+        //    var xxx = _dataBaseService.Entries.List(slot, true);
+        //    foreach (var x in xxx) {
+        //        if (!File.Exists(x.Path)) {
+        //            _logger.Error($"No Data: {x.Id} {x.Deleted} {x.Name}");
+        //        }
+        //    }
+        //}
+
+
         var folder = await FolderPickerBuilder.Create(App.MainWindow)
             .SetIdentifier("SA.ExportData")
             .SetViewMode(Windows.Storage.Pickers.PickerViewMode.List)
@@ -221,6 +234,23 @@ internal class ListPageViewModel : IListSource {
                     }
                 }
                 updateMessage($"Exported: {success}/{success+error} file(s).");
+            });
+        });
+    }
+
+    public void Sweep() {
+        Task.Run(() => {
+            _dataBaseService.EditEntry(entries => {
+                var count = entries.Sweep();
+                var message = count == 0 ? "DB is consistent." : $"{count} record(s) deleted.";
+                _mainThreadService.Run(async () => {
+                    await MessageBoxBuilder.Create(App.MainWindow)
+                        .SetTitle("Sweep")
+                        .SetMessage(message)
+                        .AddButton("OK")
+                        .ShowAsync();
+                });
+                return count != 0;
             });
         });
     }

@@ -56,6 +56,11 @@ internal class DeviceMigrationService : IDeviceMigrationService {
      */
     public (string MigrationHandle, IList<FileEntry> Targets)? BeginMigration(string srcDeviceId, string dstDeviceId) {
         lock (this) {
+            _databaseService.EditEntry(entries => {
+                var del = entries.Sweep();
+                _logger.LogDebug($"{del} records swept.");
+                return del > 0;
+            });
             if (_migratingWithSync || _migratingInfo!=null) {
                 _logger.LogError("sync is in progress.");
                 return null;

@@ -117,6 +117,8 @@ public interface IMutableFileEntryList : IFileEntryList {
     FileEntry AddOrUpdate(string ownerId, int slot, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null); 
     void Remove(FileEntry entry, bool deleteDbEntry = false);
     //void Remove(Func<FileEntry, bool> predicate);
+    // 実ファイルのないエントリーをDBから削除する
+    int Sweep();
 }
 
 public class DataChangeInfo {
@@ -302,6 +304,20 @@ public class FileEntryList : IMutableFileEntryList {
             }
         }
         _changes.OnNext(DataChangeInfo.Remove(entry));
+    }
+
+    public int Sweep() {
+        lock (_connector) {
+            // 削除されていない(Deleted==0)のに実ファイルがないエントリを列挙
+            int changed = 0;
+            var deletions = _entries.Where(entry => entry.Deleted==0 && !File.Exists(entry.Path)).ToList();
+            foreach(var entry in deletions) {
+                _entries.Remove(entry);
+                _changes.OnNext(DataChangeInfo.Remove(entry));
+                changed++;
+            }
+            return changed;
+        }
     }
 
     //public void Remove(Func<FileEntry, bool> predicate) {
