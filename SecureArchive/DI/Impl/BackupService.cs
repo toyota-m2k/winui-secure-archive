@@ -62,6 +62,7 @@ internal class BackupCompletion {
 
 internal class BackupService : IBackupService {
     private readonly UtLog _logger = UtLog.Instance(typeof(BackupService));
+    private IAppConfigService _appConfigService;
     private ISecureStorageService _secureStorageService;
     private IPageService _pageService;
     private IMainThreadService _mainThreadService;
@@ -121,6 +122,7 @@ internal class BackupService : IBackupService {
     }
 
     public BackupService(
+        IAppConfigService appConfigService,
         ISecureStorageService secureStorageService, 
         IPageService pageService, 
         IMainThreadService mainThreadSercice, 
@@ -129,6 +131,7 @@ internal class BackupService : IBackupService {
         ILoggerFactory loggerFactory,
         IDeviceMigrationService deviceMigrationService
         ) {
+        _appConfigService = appConfigService;
         _secureStorageService = secureStorageService;
         _pageService = pageService;
         _mainThreadService = mainThreadSercice;
@@ -504,4 +507,101 @@ internal class BackupService : IBackupService {
             return true;    // modified
         });
     }
+
+    public bool RequestDBBackup(string ownerId, string token, string address) {
+        lock (this) {
+            if (_isBusy) {
+                _logger.Warn("cannot accept new backup request, because it is busy.");
+                return false;
+            }
+            _isBusy = true;
+        }
+        OwnerId = ownerId;
+        Token = token;
+        Address = address;
+
+        async Task showError(string message) {
+            _logger.Error(message);
+            await MessageBoxBuilder.Create(App.MainWindow)
+                .SetTitle("Backup Failed")
+                .SetMessage(message)
+                .AddButton("OK")
+                .ShowAsync();
+        }
+
+        var ownerInfo = _databaseService.OwnerList.Get(ownerId);
+        var dbPath = _appConfigService.DBPath;
+        if (dbPath!=null) {
+            dbPath = Path.GetDirectoryName(dbPath);
+        }
+        
+
+        _ = _mainThreadService.Run(async () => {
+            var url = $"http://{Address}/db/backup?auth={Token}";
+            var date = DateTime.Now;
+            var timestamp = date.ToString("yyyyMMdd_HHmmss");
+            try {
+                if (ownerInfo == null) {
+                    await showError("Database path is not set.");
+                    return;
+                }
+                if (dbPath == null) {
+                    await showError("Database path is not set.");
+                    return;
+                }
+
+                var dstFolder = await FolderPickerBuilder.Create(App.MainWindow)
+                    .SetIdentifier("SA.BackupDB")
+                    .SetViewMode(Windows.Storage.Pickers.PickerViewMode.List)
+                    .PickAsync();
+                if (dstFolder == null) {
+                    // cancelled
+                    return;
+                }
+                if (FileUtils.IsSameDirectory(dstFolder.Path, dbPath)) {
+                    await showError("Backup destination folder is same as the database folder.");
+                    return;
+                }
+
+                try {
+                    await FileUtils.CopyItemsInFolder(dbPath, dstFolder.Path, true);
+                }
+                catch (Exception ex) {
+                    await showError("Failed to copy database files.");
+                    return;
+                }
+
+                using (var response = await httpClient.GetAsync(url)) {
+                    if (!response.IsSuccessStatusCode) {
+                        await showError($"Failed to download remote db files.\r\n Status code: {response.StatusCode} - {response.ReasonPhrase}.");
+                        return;
+                    }
+                    using (var content = response.Content)
+                    using (var inStream = await content.ReadAsStreamAsync())
+                    using(var outStream = new FileStream(Path.Combine(dstFolder.Path, $"remote_{ownerId}_{timestamp}.zip"), FileMode.Create, FileAccess.Write)) {
+                        var buff = new byte[BUFF_SIZE];
+                        int len;
+                        while ((len = inStream.Read(buff, 0, BUFF_SIZE)) > 0) {
+                            await outStream.WriteAsync(buff, 0, len);
+                        }
+                        await outStream.FlushAsync();
+                    }
+                }
+                _logger.Debug($"Downloaded remote db files to {dstFolder.Path}");
+                using (var writer = File.CreateText(Path.Combine(dstFolder.Path, $"log_{ownerId}_{timestamp}.txt"))) {
+                    writer.WriteLine($"Date = {date}");
+                    writer.WriteLine($"Device = {ownerInfo.Name} (id={ownerId})");
+                }
+            }
+            catch (Exception ex) {
+                await showError("Failed to download remote db files.");
+                return;
+            }
+            finally {
+                _isBusy = false;
+            }
+        });
+        return true;
+    }
+
 }

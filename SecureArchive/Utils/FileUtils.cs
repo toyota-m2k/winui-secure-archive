@@ -22,7 +22,7 @@ internal static class FileUtils {
             }
         });
     }
-    public static async Task CopyItemsInFolder(string src, string dst) {
+    public static async Task CopyItemsInFolder(string src, string dst, bool overrite=false) {
         await Task.Run(async () => {
             if (!Path.Exists(dst)) {
                 Directory.CreateDirectory(dst);
@@ -30,14 +30,36 @@ internal static class FileUtils {
             foreach (var file in Directory.GetFiles(src)) {
                 var name = Path.GetFileName(file);
                 var dstPath = Path.Combine(dst, name);
-                File.Copy(file, dstPath);
+                File.Copy(file, dstPath, overrite);
             }
             foreach (var dir in Directory.GetDirectories(src)) {
                 var name = Path.GetFileName(dir);
                 var dstPath = Path.Combine(dst, name);
-                await CopyItemsInFolder(dir, dstPath);
+                await CopyItemsInFolder(dir, dstPath, overrite);
             }
         });
+    }
+
+    public static bool IsSameFile(string path1, string path2) {
+        var fileInfo1 = new FileInfo(path1);
+        var fileInfo2 = new FileInfo(path2);
+
+        // フルパスで比較（Windowsは大文字小文字を区別しない）
+        return string.Equals(
+            fileInfo1.FullName,
+            fileInfo2.FullName,
+            StringComparison.OrdinalIgnoreCase
+        );
+    }
+
+    public static bool IsSameDirectory(string path1, string path2) {
+        var dir1 = new DirectoryInfo(path1);
+        var dir2 = new DirectoryInfo(path2);
+        return string.Equals(
+            dir1.FullName.TrimEnd(Path.DirectorySeparatorChar),
+            dir2.FullName.TrimEnd(Path.DirectorySeparatorChar),
+            StringComparison.OrdinalIgnoreCase
+        );
     }
 
     public static async Task DeleteFolder(string path) {

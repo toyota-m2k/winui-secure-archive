@@ -648,6 +648,30 @@ internal class HttpServerService : IHttpServreService {
                     }
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "backup" }, {"status", "accepted"} });
                 }),
+            Route.put(
+                name: "backup-db start",
+                regex: @"/backup-db/request",
+                process: (request) => {
+                    var content = request.Content?.TextContent;
+                    if (content== null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var dic = JsonConvert.DeserializeObject<Dictionary<string, string>>(content);
+                    if (dic == null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    var token = dic.GetValue("token");
+                    var address = dic.GetValue("address");
+                    var ownerId = dic.GetValue("id");
+                    if(token.IsEmpty() ||address.IsEmpty() ||ownerId.IsEmpty()) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    RegisterOwner(dic);
+                    if(!_backupService.RequestDBBackup(ownerId!, token!, address!)) {
+                        return HttpErrorResponse.Conflict(request);
+                    }
+                    return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "backup" }, {"status", "accepted"} });
+                }),
             Route.get(
                 // migration/devices/auth=<auth-token>&n=<new-clientId>
                 name: "retrieve migration target devices",

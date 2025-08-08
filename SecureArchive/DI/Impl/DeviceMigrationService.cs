@@ -74,6 +74,11 @@ internal class DeviceMigrationService : IDeviceMigrationService {
                 _logger.LogError("No target to migrate.");
                 return null;
             }
+
+            foreach(var entry in list) {
+                _logger.LogError($"Migrating: {entry.Name} - {entry.Slot}/{entry.OriginalId}");
+            }
+
             _migratingInfo = new MigratingInfo(srcDevice, dstDevice);
             return (_migratingInfo.MigrationHandle, list);
         }
@@ -140,6 +145,7 @@ internal class DeviceMigrationService : IDeviceMigrationService {
                 tables.DeviceMigration.Add(del.OwnerId, slot, del.OriginalId, newOwnerId, newOriginalId);
                 tables.Entries.Remove(del, deleteDbEntry: true);
                 newEntry = tables.Entries.Add(newOwnerId, del.Slot, del.Name, del.Size, del.Type, del.Path, del.LastModifiedDate, del.CreationDate, newOriginalId, del.Duration, del.MetaInfo, del);
+                _logger.LogInformation($"Migrated: {del.Name} from {del.OwnerId}/{del.OriginalId} to {newOwnerId}/{newOriginalId}");
                 return true;
             });
             return newEntry;
