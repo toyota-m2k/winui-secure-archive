@@ -5,7 +5,10 @@ using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using SecureArchive.Views;
 using System.Diagnostics;
+using System.Reactive;
 using System.Text;
+using System.Windows.Forms;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace SecureArchive.DI.Impl;
 
@@ -508,6 +511,66 @@ internal class BackupService : IBackupService {
         });
     }
 
+    private async Task showError(string message, string title="Backup") {
+        _logger.Error(message);
+        await MessageBoxBuilder.Create(App.MainWindow)
+            .SetTitle(title)
+            .SetMessage(message)
+            .AddButton("OK")
+            .ShowAsync();
+    }
+
+
+    private async Task<string?> InternalBackupLocalDB() {
+        var dbPath = _appConfigService.AppDataPath;
+        if (dbPath == null) {
+            await showError("Database path is not set.");
+            return null;
+        }
+        var dstFolder = await FolderPickerBuilder.Create(App.MainWindow)
+            .SetIdentifier("SA.BackupDB")
+            .SetViewMode(Windows.Storage.Pickers.PickerViewMode.List)
+            .PickAsync();
+        if (dstFolder == null) {
+            // cancelled
+            return null;
+        }
+        if (FileUtils.IsSameDirectory(dstFolder.Path, dbPath)) {
+            await showError("Backup destination folder is same as the database folder.");
+            return null;
+        }
+
+        try {
+            await FileUtils.CopyItemsInFolder(dbPath, dstFolder.Path, true);
+            return dstFolder.Path;
+        }
+        catch (Exception ex) {
+            await showError($"Failed to backup local db. \r\n{ex.Message ?? ex.ToString()}");
+            return null;
+        }
+    }
+    /**
+     * ローカルのデータベース/設定ファイルをバックアップする。
+     */
+    public async Task BackupLocalDB() {
+        await _mainThreadService.Run(async () => {
+            var path = await InternalBackupLocalDB();
+            if (path != null) {
+                var date = DateTime.Now;
+                var timestamp = date.ToString("yyyyMMdd_HHmmss");
+                using (var writer = File.CreateText(Path.Combine(path, $"log_{timestamp}.txt"))) {
+                    writer.WriteLine($"Date = {date}");
+                    writer.WriteLine($"Data Folder = {_appConfigService.AppDataPath}");
+                }
+                await MessageBoxBuilder.Create(App.MainWindow)
+                .SetTitle("Backup Settings")
+                    .SetMessage("Completed.")
+                    .AddButton("OK")
+                    .ShowAsync();
+            }
+        });
+    }
+
     public bool RequestDBBackup(string ownerId, string token, string address) {
         lock (this) {
             if (_isBusy) {
@@ -520,21 +583,8 @@ internal class BackupService : IBackupService {
         Token = token;
         Address = address;
 
-        async Task showError(string message) {
-            _logger.Error(message);
-            await MessageBoxBuilder.Create(App.MainWindow)
-                .SetTitle("Backup Failed")
-                .SetMessage(message)
-                .AddButton("OK")
-                .ShowAsync();
-        }
-
         var ownerInfo = _databaseService.OwnerList.Get(ownerId);
-        var dbPath = _appConfigService.DBPath;
-        if (dbPath!=null) {
-            dbPath = Path.GetDirectoryName(dbPath);
-        }
-        
+        //var dbPath = _appConfigService.AppDataPath;
 
         _ = _mainThreadService.Run(async () => {
             var url = $"http://{Address}/db/backup?auth={Token}";
@@ -545,32 +595,15 @@ internal class BackupService : IBackupService {
                     await showError("Database path is not set.");
                     return;
                 }
-                if (dbPath == null) {
-                    await showError("Database path is not set.");
-                    return;
-                }
 
-                var dstFolder = await FolderPickerBuilder.Create(App.MainWindow)
-                    .SetIdentifier("SA.BackupDB")
-                    .SetViewMode(Windows.Storage.Pickers.PickerViewMode.List)
-                    .PickAsync();
+                // ローカルDB・設定ファイルをバックアップする
+                var dstFolder = await InternalBackupLocalDB();
                 if (dstFolder == null) {
-                    // cancelled
-                    return;
-                }
-                if (FileUtils.IsSameDirectory(dstFolder.Path, dbPath)) {
-                    await showError("Backup destination folder is same as the database folder.");
+                    // error or cancelled
                     return;
                 }
 
-                try {
-                    await FileUtils.CopyItemsInFolder(dbPath, dstFolder.Path, true);
-                }
-                catch (Exception ex) {
-                    await showError("Failed to copy database files.");
-                    return;
-                }
-
+                // リモート（モバイル端末）側のDBファイルをダウンロードする
                 using (var response = await httpClient.GetAsync(url)) {
                     if (!response.IsSuccessStatusCode) {
                         await showError($"Failed to download remote db files.\r\n Status code: {response.StatusCode} - {response.ReasonPhrase}.");
@@ -578,7 +611,7 @@ internal class BackupService : IBackupService {
                     }
                     using (var content = response.Content)
                     using (var inStream = await content.ReadAsStreamAsync())
-                    using(var outStream = new FileStream(Path.Combine(dstFolder.Path, $"remote_{ownerId}_{timestamp}.zip"), FileMode.Create, FileAccess.Write)) {
+                    using(var outStream = new FileStream(Path.Combine(dstFolder, $"remote_{ownerId}_{timestamp}.zip"), FileMode.Create, FileAccess.Write)) {
                         var buff = new byte[BUFF_SIZE];
                         int len;
                         while ((len = inStream.Read(buff, 0, BUFF_SIZE)) > 0) {
@@ -587,14 +620,15 @@ internal class BackupService : IBackupService {
                         await outStream.FlushAsync();
                     }
                 }
-                _logger.Debug($"Downloaded remote db files to {dstFolder.Path}");
-                using (var writer = File.CreateText(Path.Combine(dstFolder.Path, $"log_{ownerId}_{timestamp}.txt"))) {
+                _logger.Debug($"Downloaded remote db files to {dstFolder}");
+                using (var writer = File.CreateText(Path.Combine(dstFolder, $"log_{ownerId}_{timestamp}.txt"))) {
                     writer.WriteLine($"Date = {date}");
+                    writer.WriteLine($"Data Folder = {_appConfigService.AppDataPath}");
                     writer.WriteLine($"Device = {ownerInfo.Name} (id={ownerId})");
                 }
             }
             catch (Exception ex) {
-                await showError("Failed to download remote db files.");
+                await showError($"Failed to download remote db files. \r\n{ex.Message ?? ex.ToString()}");
                 return;
             }
             finally {

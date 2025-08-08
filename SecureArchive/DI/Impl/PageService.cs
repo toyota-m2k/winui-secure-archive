@@ -56,7 +56,6 @@ internal class PageService : IPageService {
             }
             _rootFrame.Navigate(pageType);
         }
-
     }
 
     public void ShowMenuPage() {

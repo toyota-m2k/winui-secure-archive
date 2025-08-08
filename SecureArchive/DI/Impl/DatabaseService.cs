@@ -39,7 +39,7 @@ public class DatabaseService : IDatabaseService, IMutableTables {
             _kvs = new KVList(_connector);
             _deviceMigration = new DeviceMigration(_connector);
         }
-        Task.Run(async () => {
+        Task.Run(() => {
             //var trial = 0;
             //while(true) {
             //    try {
@@ -156,6 +156,14 @@ public class DatabaseService : IDatabaseService, IMutableTables {
     public void Update() {
         lock (_connector) {
             _connector.SaveChanges();
+        }
+    }
+
+    public void Dispose() {
+        _logger.Debug("Disposing DatabaseService");
+        lock(_connector) {
+            _connector.SaveChanges();
+            _connector.Dispose();
         }
     }
 }

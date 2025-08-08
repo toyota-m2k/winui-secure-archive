@@ -26,7 +26,13 @@ namespace SecureArchive.DI {
          */
         Version AppVersion { get; }
         string AppDataPath { get; }
+        string DBName{ get; }
         string DBPath { get; }
+        string SettingsName { get; }
+        string SettingsPath { get; }
         bool IsMSIX { get; }
+
+        bool NeedsConfirmOnExit { get; set; }
+        void Restart();
     }
 }
