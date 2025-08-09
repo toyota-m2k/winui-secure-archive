@@ -70,16 +70,21 @@ public class DatabaseService : IDatabaseService, IMutableTables {
 
     public bool EditEntry(Func<IMutableFileEntryList, bool> fn) {
         bool result = false;
-        lock (_connector) {
-            try {
-                result = fn(mutableTables.Entries);
-                return result;
-            }
-            finally {
-                if (result) {
-                    _connector.SaveChanges();
+        try {
+            lock (_connector) {
+                try {
+                    result = fn(mutableTables.Entries);
+                    return result;
+                }
+                finally {
+                    if (result) {
+                        _connector.SaveChanges();
+                    }
                 }
             }
+        }
+        finally {
+            mutableTables.Entries.ChangeEventSource.Submit();
         }
     }
 
@@ -130,27 +135,35 @@ public class DatabaseService : IDatabaseService, IMutableTables {
 
     public bool Transaction(Func<IMutableTables, bool> fn) {
         bool result = false;
-        lock (_connector) {
-            using (var txn = _connector.Database.BeginTransaction()) {
-                try {
-                    result = fn(mutableTables);
-                }
-                catch(Exception e) {
-                    _logger.Error(e);
-                    result = false;
-                }
-                finally {
-                    if (result) {
-                        _connector.SaveChanges();
-                        txn.Commit();
+        try {
+            lock (_connector) {
+                using (var txn = _connector.Database.BeginTransaction()) {
+                    try {
+                        result = fn(mutableTables);
                     }
-                    else {
-                        txn.Rollback();
+                    catch (Exception e) {
+                        _logger.Error(e);
+                        result = false;
+                    }
+                    finally {
+                        if (result) {
+                            _connector.SaveChanges();
+                            txn.Commit();
+                        }
+                        else {
+                            txn.Rollback();
+                        }
                     }
                 }
-                return result;
+            }
+        } finally {
+            if (result) {
+                mutableTables.Entries.ChangeEventSource.Submit();
+            } else {
+                mutableTables.Entries.ChangeEventSource.Reset();
             }
         }
+        return result;
     }
 
     public void Update() {

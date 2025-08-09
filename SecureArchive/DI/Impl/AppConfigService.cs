@@ -61,7 +61,6 @@ namespace SecureArchive.DI.Impl {
                 Directory.CreateDirectory(appPath);
             }
             Debug.WriteLine(AppName + " " + AppVersion);
-
             var exePath = Process.GetCurrentProcess().MainModule!.FileName;
             Debug.WriteLine(exePath);
         }
