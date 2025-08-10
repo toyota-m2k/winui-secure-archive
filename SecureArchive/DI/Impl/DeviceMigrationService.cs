@@ -1,4 +1,5 @@
-﻿using Microsoft.Extensions.Logging;
+﻿using io.github.toyota32k.toolkit.net;
+using Microsoft.Extensions.Logging;
 using SecureArchive.Models.DB;
 
 namespace SecureArchive.DI.Impl;
@@ -204,37 +205,40 @@ internal class DeviceMigrationService : IDeviceMigrationService {
      * @param progress: 進捗を報告するコールバック
      * @return: ローカルにしか存在しない（==peerにputする必要がある）エントリのリスト
      */
-    public IList<DeviceMigrationInfo>? ApplyHistoryFromPeerServer(IList<DeviceMigrationInfo> history, ProgressProc? progress) {
+    public IList<DeviceMigrationInfo>? ApplyHistoryFromPeerServer(IList<DeviceMigrationInfo> peerHistory, ProgressProc? progress) {
         lock (this) {
             if (_migratingWithSync || _migratingInfo != null) {
                 return null;    // 二重実行は禁止
             }
             _migratingWithSync = true;
             try {
-                var peerSet = new HashSet<string>();
-                var count = 0;
-                var updated = false;
-                _databaseService.Transaction((tables) => {
-                    foreach (var peer in history) {
-                        count++;
-                        progress?.Invoke(count, history.Count);
-                        var mine = _databaseService.DeviceMigration.Get(peer.OldOwnerId, peer.Slot, peer.OldOriginalId);
-                        if (mine == null) {
-                            // peerにのみ存在する
-                            _logger.LogDebug($"Migrating: sync from peer {count}/{history.Count}: {peer.OldOriginalId}->{peer.NewOriginalId}");
-                            if(MigrateCore(tables, peer.OldOwnerId, peer.Slot, peer.OldOriginalId, peer.NewOwnerId, peer.NewOriginalId)!=null) {
+                string key(DeviceMigrationInfo info) { return $"{info.OldOwnerId}/{info.OldOriginalId}"; }
+                var peerSet = new HashSet<string>(peerHistory.Select(it=>key(it))); // PeerのSet
+                
+                var myHistory = _databaseService.DeviceMigration.List();           // こちら側の履歴
+                var mySet = new HashSet<string>(myHistory.Select(it=>key(it)));    // こちらのセット
+                
+                var onlyPeerList = peerHistory.Where(it => !mySet.Contains(key(it))).ToList();  // ピア側にのみ存在する履歴
+                var onlyMyList = myHistory.Where(it => !peerSet.Contains(key(it))).ToList();    // こちら側にのみ存在する履歴
+
+                _logger.LogDebug($"Sync-Migrating: only in peer = {onlyPeerList.Count} / only in mine = {onlyMyList.Count}");
+
+                if (!onlyPeerList.IsEmpty()) {
+                    _databaseService.Transaction((tables) => {
+                        var count = 0;
+                        var updated = false;
+                        foreach (var peer in onlyPeerList) {
+                            count++;
+                            progress?.Invoke(count, onlyPeerList.Count);
+                            _logger.LogDebug($"Sync-Migrating ({count}/{onlyPeerList.Count}): {peer.OldOriginalId}->{peer.NewOriginalId}");
+                            if (MigrateCore(tables, peer.OldOwnerId, peer.Slot, peer.OldOriginalId, peer.NewOwnerId, peer.NewOriginalId) != null) {
                                 updated = true;
                             }
                         }
-                        else {
-                            _logger.LogDebug($"Migrating: skipped {count}/{history.Count}: {peer.OldOriginalId}->{peer.NewOriginalId}");
-                        }
-                        peerSet.Add(peer.OldOwnerId + "/" + peer.OldOriginalId);
-                    }
-                    return updated;
-                });
-                // My List の内、peerSet に含まれない（ = ローカルにしか存在しない）ものを抽出して返す。
-                return _databaseService.DeviceMigration.List().Where(x => !peerSet.Contains(x.OldOwnerId + "/" + x.OldOriginalId)).ToList();
+                        return updated;
+                    });
+                }
+                return onlyMyList;
             } finally {
                 _migratingWithSync = false;
             }
