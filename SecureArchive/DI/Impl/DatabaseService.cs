@@ -166,6 +166,37 @@ public class DatabaseService : IDatabaseService, IMutableTables {
         return result;
     }
 
+    // 実ファイルのないエントリーをDBから削除する
+
+    public (int fromEntries, int fromMigrations) Sweep() {
+        (int fromEntries, int fromMigrations) ret = (0, 0);
+        lock (_connector) {
+            EditEntry(entries => {
+                var dels = entries.List().Where(entry => entry.Deleted == 0 && !File.Exists(entry.Path));
+                foreach(var del in dels) {
+                    entries.Remove(del, deleteDbEntry: true);
+                    ret.fromEntries++;
+                }
+                _logger.Info($"Sweep: {ret.fromEntries} file entries removed.");
+                return ret.fromEntries > 0;
+            });
+            EditDeviceMigration(migrations => {
+                var dels = migrations.List().Where((it) => {
+                    var entry = Entries.GetByOriginalId(it.NewOwnerId, it.Slot, it.NewOriginalId);
+                    return entry == null || (entry.Deleted == 0 && !File.Exists(entry.Path));
+                });
+                foreach(var del in dels) {
+                    migrations.Remove(del);
+                    ret.fromMigrations++;
+                }
+                _logger.Info($"Sweep: {ret.fromMigrations} migration info removed.");
+                return ret.fromMigrations > 0;
+            });
+        }
+        return ret;
+    }
+
+
     public void Update() {
         lock (_connector) {
             _connector.SaveChanges();

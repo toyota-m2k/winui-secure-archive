@@ -101,6 +101,7 @@ public class ItemExtAttributes : IItemExtAttributes {
 
 public interface IFileEntryList {
     IObservable<DataChangeInfo> Changes { get; }
+    IList<FileEntry> List();
     IList<FileEntry> List(int slot, bool resolveOwnerInfo);
     IList<FileEntry> List(int slot, Func<FileEntry, bool> predicate, bool resolveOwnerInfo);
     IList<T> List<T>(int slot, Func<FileEntry, bool> predicate, Func<FileEntry, T>select);
@@ -122,8 +123,6 @@ public interface IMutableFileEntryList : IFileEntryList {
     FileEntry AddOrUpdate(string ownerId, int slot, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null); 
     void Remove(FileEntry entry, bool deleteDbEntry = false);
     //void Remove(Func<FileEntry, bool> predicate);
-    // 実ファイルのないエントリーをDBから削除する
-    int Sweep();
     IDataChangeEventSource ChangeEventSource { get; }
 }
 
@@ -239,6 +238,10 @@ public class FileEntryList : IMutableFileEntryList {
     // private IEnumerable<FileEntry> rawList => _entries.OrderBy(it => it.CreationDate);
     private IEnumerable<FileEntry> rawList(int slot) {
         return _entries.Where(it => slot < 0 || it.Slot == slot).OrderBy(it => it.CreationDate);
+    }
+
+    public IList<FileEntry> List() {
+        return _entries.ToList();
     }
 
     public IList<FileEntry> List(int slot, bool resolveOwnerInfo) {
@@ -378,28 +381,6 @@ public class FileEntryList : IMutableFileEntryList {
         }
         _changeInfoQueue.Enqueue(DataChangeInfo.Remove(entry));
     }
-
-    public int Sweep() {
-        int changed = 0;
-        lock (_connector) {
-            // 削除されていない(Deleted==0)のに実ファイルがないエントリを列挙
-            var deletions = _entries.ToList().Where(entry => entry.Deleted == 0 && !File.Exists(entry.Path));
-            foreach(var entry in deletions) {
-                _changeInfoQueue.Enqueue(DataChangeInfo.Remove(entry));
-                changed++;
-            }
-        }
-        return changed;
-    }
-
-    //public void Remove(Func<FileEntry, bool> predicate) {
-    //    FileEntry[] del;
-    //    lock (_connector) {
-    //        del = _entries.Where(predicate).ToArray();
-    //        _entries.RemoveRange(del);
-    //    }
-    //    _changes.OnNext(DataChangeInfo.Remove(del));
-    //}
 
     public FileEntry? GetById(long id) {
         lock (_connector) {

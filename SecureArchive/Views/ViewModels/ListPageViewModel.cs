@@ -268,17 +268,11 @@ internal class ListPageViewModel : IListSource {
 
     public void Sweep() {
         Task.Run(() => {
-            int count = 0;
-            string message = "";
-            _dataBaseService.EditEntry(entries => {
-                count = entries.Sweep();
-                message = count == 0 ? "DB is consistent." : $"{count} record(s) deleted.";
-                return count != 0;
-            });
+            var (entries, migrations) = _dataBaseService.Sweep();
             _mainThreadService.Run(async () => {
                 await MessageBoxBuilder.Create(App.MainWindow)
-                .SetTitle("Sweep")
-                    .SetMessage(message)
+                    .SetTitle("Swept")
+                    .SetMessage($"{entries} file entries removed.\r\n{migrations} migration records removed.")
                     .AddButton("OK")
                     .ShowAsync();
             });

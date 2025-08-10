@@ -469,11 +469,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     }
 
                     // 同期の前に無効レコード（実ファイルのないレコード）を削除しておく。
-                    _databaseService.EditEntry(entries => {
-                        var del = entries.Sweep();
-                        _logger.Info($"{del} records are swept.");
-                        return del > 0;
-                    });
+                    _databaseService.Sweep();
 
                     // OwnerInfoTableの同期
                     await SyncOwnerList();
