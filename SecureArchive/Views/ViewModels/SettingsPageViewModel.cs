@@ -1,18 +1,22 @@
-﻿using Reactive.Bindings;
+﻿using io.github.toyota32k.toolkit.net;
+using Reactive.Bindings;
 using SecureArchive.DI;
 using SecureArchive.DI.Impl;
 using SecureArchive.Utils;
+using System.Diagnostics;
 using System.Reactive.Linq;
 
 namespace SecureArchive.Views.ViewModels {
     internal class SettingsPageViewModel {
+        private IAppConfigService _appConfigService;
         private IUserSettingsService _userSettingsService;
         private IPasswordService _passwordService;
-        private IFileStoreService _fileStoreSercice;
+        private IFileStoreService _fileStoreService;
         private IPageService _pageService;
         private IHttpServreService _httpServreService;
         private ISecureStorageService _secureStorageService;
-        private IFileStoreService _fileStoreService;
+        private IBackupService _backupService;
+        private IDatabaseService _databaseService;
 
         //public ReactivePropertySlim<bool> DataFolderRegistered = new(false);
         public ReactivePropertySlim<string> DataFolder { get; } = new ("");
@@ -38,6 +42,8 @@ namespace SecureArchive.Views.ViewModels {
         public ReactiveCommandSlim CancelPasswordCommand { get; } = new();
         public ReactiveCommandSlim SelectFolderCommand { get; } = new();
         public ReactiveCommandSlim DoneCommand { get; } = new();
+        public ReactiveCommandSlim ExportCommand { get; } = new();
+        public ReactiveCommandSlim ImportCommand { get; } = new();
 
         private bool CheckPasswordRequired => _pageService.CheckPasswordRequired;
 
@@ -64,7 +70,7 @@ namespace SecureArchive.Views.ViewModels {
                     if (await _passwordService.GetPasswordStatusAsync() != PasswordStatus.Checked) {
                         return;
                     }
-                    if (await _fileStoreSercice.IsReady()) {
+                    if (await _fileStoreService.IsReady()) {
                         if (CheckPasswordRequired) {
                             Done();
                             return;
@@ -76,7 +82,7 @@ namespace SecureArchive.Views.ViewModels {
                     }
                     break;
                 case Status.NeedToSetDataFolder:
-                    if(!await _fileStoreSercice.IsReady()) {
+                    if(!await _fileStoreService.IsReady()) {
                         return;
                     }
                     PanelStatus.Value = Status.Ready;
@@ -87,21 +93,26 @@ namespace SecureArchive.Views.ViewModels {
         }
 
         public SettingsPageViewModel(
+            IAppConfigService appConfigService,
             IUserSettingsService userSettingsService, 
             IPasswordService passwordService,
             IFileStoreService fileStoreSercice,
             ISecureStorageService secureStorageService,
             IPageService pageService,
             IHttpServreService httpServreService,
-            IFileStoreService fileStoreService
+            IFileStoreService fileStoreService,
+            IBackupService backupService,
+            IDatabaseService databaseService
             ) {
+            _appConfigService = appConfigService;
             _userSettingsService = userSettingsService;
             _passwordService = passwordService;
-            _fileStoreSercice = fileStoreSercice;
+            _fileStoreService = fileStoreSercice;
             _pageService = pageService;
             _httpServreService = httpServreService;
             _secureStorageService = secureStorageService;
-            _fileStoreService = fileStoreService;
+            _backupService = backupService;
+            _databaseService = databaseService;
 
             //Initialized = CurrentPasswordStatus.Select((it) => it != null).ToReadOnlyReactivePropertySlim<bool>();
             //NeedToSetPassword = CurrentPasswordStatus.Select((it)=> it==PasswordStatus.NotSet).ToReadOnlyReactivePropertySlim<bool>();
@@ -123,6 +134,8 @@ namespace SecureArchive.Views.ViewModels {
             DoneCommand.Subscribe(Done);
             ChangePasswordCommand.Subscribe(ChangePassword);
             CancelPasswordCommand.Subscribe(CancelPassword);
+            ExportCommand.Subscribe(ExportSettings);
+            ImportCommand.Subscribe(ImportSettings);
             Initialize();
         }
 
@@ -140,6 +153,72 @@ namespace SecureArchive.Views.ViewModels {
             PanelStatus.Value = Status.NeedToSetPassword;
         }
 
+        private void ExportSettings() {
+            _ = _backupService.BackupLocalDB();
+        }
+
+        private void SafeDeleteFile(string filePath) {
+            if (File.Exists(filePath)) {
+                try {
+                    File.Delete(filePath);
+                }
+                catch (Exception e) {
+                    Debug.WriteLine($"Failed to delete file {filePath}: {e.Message}");
+                }
+            }
+        }
+
+        private async void ImportSettings() {
+            var dbPath = _appConfigService.DBPath;
+            var settingsPath = _appConfigService.SettingsPath;
+            if (File.Exists(dbPath) || File.Exists(settingsPath)) {
+                var decision = await MessageBoxBuilder.Create(App.MainWindow)
+                    .SetMessage("The current database or settings file already exists.\r\nDo you want to overwrite it?")
+                    .AddButton("OK", true)
+                    .AddButton("Cancel", false)
+                    .ShowAsync();
+                if (decision as bool? != true) {
+                    return;
+                }
+            }
+            var dstFolder = await FolderPickerBuilder.Create(App.MainWindow)
+                .SetIdentifier("SA.BackupDB")
+                .SetViewMode(Windows.Storage.Pickers.PickerViewMode.List)
+                .PickAsync();
+            if (dstFolder == null) {
+                // cancelled
+                return;
+            }
+            var srcDbFile = Path.Combine(dstFolder.Path, _appConfigService.DBName);
+            var srcSettingsFile = Path.Combine(dstFolder.Path, _appConfigService.SettingsName);
+            if (!File.Exists(srcDbFile) || !File.Exists(srcSettingsFile)) {
+                await MessageBoxBuilder.Create(App.MainWindow)
+                    .SetMessage("The selected folder does not contain the required files.")
+                    .AddButton("OK")
+                    .ShowAsync();
+                return;
+            }
+            try {
+                _databaseService.Dispose();
+                File.Copy(srcSettingsFile, settingsPath, true);
+                File.Copy(srcDbFile, dbPath, true);
+                await MessageBoxBuilder.Create(App.MainWindow)
+                    .SetMessage("All settings and databases have been imported.")
+                    .AddButton("Restart Now")
+                    .ShowAsync();
+            }
+            catch (Exception e) {
+                await MessageBoxBuilder.Create(App.MainWindow)
+                    .SetMessage($"Failed to import settings: {e.Message}")
+                    .AddButton("Restart Now")
+                    .ShowAsync();
+                SafeDeleteFile(dbPath);
+                SafeDeleteFile(settingsPath);
+            }
+
+            _appConfigService.Restart();
+        }
+
         private async void Done() {
             await _userSettingsService.EditAsync((editor) => {
                 var changed = false;
@@ -153,6 +232,7 @@ namespace SecureArchive.Views.ViewModels {
                 }
                 return changed;
             });
+            _appConfigService.NeedsConfirmOnExit = true;
             _pageService.ShowMenuPage();
         }
 
@@ -227,7 +307,7 @@ namespace SecureArchive.Views.ViewModels {
                 ServerAutoStart.Value = editor.ServerAutoStart;
                 return false;
             });
-            DataFolder.Value = (await _fileStoreSercice.GetFolder()) ?? "";
+            DataFolder.Value = (await _fileStoreService.GetFolder()) ?? "";
             await AdvanceStatus();
         }
 

@@ -57,4 +57,5 @@ internal interface IBackupService {
     Task<bool> DeleteBackupEntry(FileEntry entry);
     Task<bool> UpdateBackupEntry(FileEntry entry, CancellationToken ct);
     bool RequestDBBackup(string ownerId, string token, string url);
+    Task BackupLocalDB();
 }

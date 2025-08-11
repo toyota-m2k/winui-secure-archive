@@ -175,7 +175,8 @@ namespace SecureArchive {
         }
 
         private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args) {
-            if (!closeConfirmed) {
+            var appConfigService = GetService<IAppConfigService>();
+            if (appConfigService.NeedsConfirmOnExit && !closeConfirmed) {
                 args.Cancel = true;
                 ConfirmClose();
             }

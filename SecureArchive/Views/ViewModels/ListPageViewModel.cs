@@ -10,10 +10,13 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Forms;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 
 namespace SecureArchive.Views.ViewModels;
 
@@ -88,7 +91,6 @@ internal class ListPageViewModel : IListSource {
 
         GoBackCommand.Subscribe(_pageService.ShowMenuPage);
         AddCommand.Subscribe(AddLocalFile);
-        //PatchCommand.Subscribe(() => Task.Run(()=>_secureStorageService.ConvertFastStart(_statusNotificationService)));
 
         FileList.Value = new ObservableCollection<FileEntry>();
         Task.Run(() => {
@@ -110,31 +112,45 @@ internal class ListPageViewModel : IListSource {
         });
 
         _dataBaseService.Entries.Changes.Subscribe(change => {
-            var uo = UpdateOwnerList();
-            var us = UpdateSlotList();
-            _mainThreadService.Run(() => {
+            Task.Run(() => {
+                var uo = UpdateOwnerList();
+                var us = UpdateSlotList();
                 if (uo || us) {
-                    ResetAllItems();
                     return;
                 }
-                switch (change.Type) {
-                    case DataChangeInfo.Change.Add:
-                        AddItem(change.Item);
-                        break;
-                    case DataChangeInfo.Change.Remove:
-                        RemoveItem(change.Item);
-                        break;
-                    case DataChangeInfo.Change.Update:
-                        UpdateItem(change.Item);
-                        break;
-                    case DataChangeInfo.Change.ResetAll:
-                        ResetAllItems();
-                        break;
-                }
+                _mainThreadService.Run(() => {
+                    switch (change.Type) {
+                        case DataChangeInfo.Change.Add:
+                            AddItem(change.Item);
+                            break;
+                        case DataChangeInfo.Change.Remove:
+                            RemoveItem(change.Item);
+                            break;
+                        case DataChangeInfo.Change.Update:
+                            UpdateItem(change.Item);
+                            break;
+                        case DataChangeInfo.Change.ResetAll:
+                            ResetAllItems();
+                            break;
+                    }
+                });
             });
-
         });
     }
+
+    class OwnerComparer : IEqualityComparer<DispOwnerInfo> {
+        public bool Equals(DispOwnerInfo? x, DispOwnerInfo? y) {
+            if (x == null && y == null) return true;
+            if (x == null) return false;
+            if (y == null) return false;
+            return x.OwnerId == y.OwnerId;
+        }
+
+        public int GetHashCode([DisallowNull] DispOwnerInfo obj) {
+            return obj.OwnerId?.GetHashCode() ?? "null".GetHashCode();
+        }
+    }
+    static OwnerComparer _ownerComparer = new OwnerComparer();
 
     private bool UpdateOwnerList() {
         var availableOwners = _dataBaseService.Entries.AvailableOwnerIds();
@@ -148,7 +164,7 @@ internal class ListPageViewModel : IListSource {
             .Select((it) => new DispOwnerInfo() { OwnerId = it.OwnerId, Name = it.Name })
             ).ToList();
 
-        if (OwnerList.Value.SequenceEqual(owners)) {
+        if (OwnerList.Value.SequenceEqual(owners, _ownerComparer)) {
             return false;
         }
         var selectionChanging = SelectedOwner.Value.OwnerId != DispOwnerInfo.All.OwnerId && owners.Find(it => it.OwnerId == SelectedOwner.Value.OwnerId) == null;
@@ -161,13 +177,27 @@ internal class ListPageViewModel : IListSource {
         return selectionChanging;
     }
 
+    private class SlotComparer : IEqualityComparer<DispSlotInfo> {
+        public bool Equals(DispSlotInfo? x, DispSlotInfo? y) {
+            if (x == null && y == null) return true;
+            if (x == null) return false;
+            if (y == null) return false;
+            return x.Slot == y.Slot;
+        }
+
+        public int GetHashCode([DisallowNull] DispSlotInfo obj) {
+            return obj.Slot.GetHashCode();
+        }
+    }
+    private static SlotComparer _slotComparer = new SlotComparer();
+
     private bool UpdateSlotList() {
         var slots =
             new List<DispSlotInfo>() { DispSlotInfo.All }
             .Concat(_dataBaseService.Entries.AvailableSlots()
                 .Select(it => new DispSlotInfo() { Slot = it, Name = it == 0 ? "Default" : $"Slot-{it}" }))
             .ToList();
-        if (SlotList.Value.SequenceEqual(slots)) {
+        if (SlotList.Value.SequenceEqual(slots, _slotComparer)) {
             return false;
         }
         var selectionChanging = SelectedSlot.Value.Slot != DispSlotInfo.All.Slot && slots.Find(it => it.Slot == SelectedSlot.Value.Slot) == null;
@@ -192,6 +222,17 @@ internal class ListPageViewModel : IListSource {
     }
 
     public async Task ExportFiles(List<FileEntry> list) {
+        //var slots = _dataBaseService.Entries.AvailableSlots();
+        //foreach (var slot in slots) {
+        //    var xxx = _dataBaseService.Entries.List(slot, true);
+        //    foreach (var x in xxx) {
+        //        if (!File.Exists(x.Path)) {
+        //            _logger.Error($"No Data: {x.Id} {x.Deleted} {x.Name}");
+        //        }
+        //    }
+        //}
+
+
         var folder = await FolderPickerBuilder.Create(App.MainWindow)
             .SetIdentifier("SA.ExportData")
             .SetViewMode(Windows.Storage.Pickers.PickerViewMode.List)
@@ -221,6 +262,19 @@ internal class ListPageViewModel : IListSource {
                     }
                 }
                 updateMessage($"Exported: {success}/{success+error} file(s).");
+            });
+        });
+    }
+
+    public void Sweep() {
+        Task.Run(() => {
+            var (entries, migrations) = _dataBaseService.Sweep();
+            _mainThreadService.Run(async () => {
+                await MessageBoxBuilder.Create(App.MainWindow)
+                    .SetTitle("Swept")
+                    .SetMessage($"{entries} file entries removed.\r\n{migrations} migration records removed.")
+                    .AddButton("OK")
+                    .ShowAsync();
             });
         });
     }

@@ -2,23 +2,27 @@
 
 namespace SecureArchive.DI.Impl;
 internal class LocalSettingsService : ILocalSettingsService {
-    private const string USER_SETTINGS_FILE_NAME = "UserSettings.json";
     private ISettingsStore _userSettings;
-    //private IAppConfigService _appConfigService;
 
     public LocalSettingsService(IAppConfigService appConfig) {
         //_appConfigService = appConfig;
-        if (appConfig.IsMSIX) {
-            _userSettings = new MSIXSettingsStore();
+        var appPath = appConfig.AppDataPath;
+        if (!Directory.Exists(appPath)) {
+            Directory.CreateDirectory(appPath);
         }
-        else {
-            var localAppDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var appPath = appConfig.AppDataPath;
-            if (!Directory.Exists(appPath)) {
-                Directory.CreateDirectory(appPath);
-            }
-            _userSettings = new JSONSettngStore(Path.Combine(appPath, USER_SETTINGS_FILE_NAME));
-        }
+        _userSettings = new JSONSettngStore(appConfig.SettingsPath);
+
+        //if (appConfig.IsMSIX) {
+        //    _userSettings = new MSIXSettingsStore();
+        //}
+        //else {
+        //    var localAppDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        //    var appPath = appConfig.AppDataPath;
+        //    if (!Directory.Exists(appPath)) {
+        //        Directory.CreateDirectory(appPath);
+        //    }
+        //    _userSettings = new JSONSettngStore(Path.Combine(appPath, USER_SETTINGS_FILE_NAME));
+        //}
     }
 
     public async Task<T?> GetAsync<T>(string key) {

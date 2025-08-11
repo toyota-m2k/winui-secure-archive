@@ -23,5 +23,6 @@ public interface IDatabaseService : ITables {
     bool EditOwnerList(Func<IMutableOwnerInfoList, bool> fn);
     bool EditDeviceMigration(Func<IMutableDeviceMigration, bool> fn);
     void Update();
-
+    (int fromEntries, int fromMigrations) Sweep();
+    void Dispose();
 }

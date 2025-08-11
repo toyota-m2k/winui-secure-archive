@@ -9,7 +9,8 @@ using System.Threading.Tasks;
 namespace SecureArchive.DI; 
 
 public enum SyncTask {
-    SyncMigration,
+    SyncMigrationFromPeer,
+    SyncMigrationToPeer,
     UploadingNew,
     UploadingUpdate,
     DownloadNew,

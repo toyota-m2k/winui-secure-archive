@@ -101,6 +101,7 @@ public class ItemExtAttributes : IItemExtAttributes {
 
 public interface IFileEntryList {
     IObservable<DataChangeInfo> Changes { get; }
+    IList<FileEntry> List();
     IList<FileEntry> List(int slot, bool resolveOwnerInfo);
     IList<FileEntry> List(int slot, Func<FileEntry, bool> predicate, bool resolveOwnerInfo);
     IList<T> List<T>(int slot, Func<FileEntry, bool> predicate, Func<FileEntry, T>select);
@@ -111,12 +112,18 @@ public interface IFileEntryList {
     List<string> AvailableOwnerIds();
 }
 
+public interface IDataChangeEventSource {
+    void Submit();
+    void Reset();
+}
+
 public interface IMutableFileEntryList : IFileEntryList {
     FileEntry Add(string ownerId, int slot, string name, long size, string type, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr=null);
     FileEntry Update(string ownerId, int slot, string name, long size, string type_, string path, long lastModifiedDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null);
     FileEntry AddOrUpdate(string ownerId, int slot, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null); 
     void Remove(FileEntry entry, bool deleteDbEntry = false);
     //void Remove(Func<FileEntry, bool> predicate);
+    IDataChangeEventSource ChangeEventSource { get; }
 }
 
 public class DataChangeInfo {
@@ -147,23 +154,94 @@ public class DataChangeInfo {
     }
 }
 
+class ChangeInfoQueue : IDataChangeEventSource {
+    private DBConnector _connector; // DBConnectorは必要ないが、lockのために保持しておく
+    private Subject<DataChangeInfo> _changes = new();
+    private List<DataChangeInfo> _queue = new List<DataChangeInfo>();
+    bool resetAll = false;
+
+    public ChangeInfoQueue(DBConnector connector) {
+        _connector = connector;
+    }
+
+    public void Enqueue(DataChangeInfo info) {
+        lock (_connector) {
+            if (info.Type == DataChangeInfo.Change.ResetAll) {
+                resetAll = true;
+                _queue.Clear();
+                return;
+            }
+            else if (resetAll) {
+                // ResetAllが来た後は、Add/Update/Removeは無視する
+                return;
+            }
+            else if (info.Type == DataChangeInfo.Change.Remove) {
+                _queue.RemoveAll(it => it.Item.Id == info.Item.Id);
+            }
+            _queue.Add(info);
+        }
+    }
+    public IObservable<DataChangeInfo> Changes => _changes;
+
+    public void Submit() {
+        var all = false;
+        List<DataChangeInfo> queue;
+        lock (_connector) {
+            if (_queue.Count == 0 && !resetAll) {
+                return; // 変更がない場合は何もしない
+            }
+            all = resetAll;
+            queue = _queue.ToList(); // キューをコピーしてからクリアする
+            _queue.Clear(); // キューをクリア
+            resetAll = false; // ResetAllフラグをクリア
+        }
+        
+        // 実際の通知は lock外で行う
+        if (all) {
+            _changes.OnNext(DataChangeInfo.ResetAll());
+            resetAll = false;
+        }
+        else {
+            foreach (var info in queue) {
+                _changes.OnNext(info);
+            }
+        }
+    }
+
+    public void Reset() {
+        lock (_connector) {
+            _queue.Clear();
+            resetAll = false; // ResetAllフラグをクリア
+        }
+    }
+}
+
 
 
 public class FileEntryList : IMutableFileEntryList {
     private DBConnector _connector;
     private DbSet<FileEntry> _entries;
-    private Subject<DataChangeInfo> _changes = new ();
 
-    public IObservable<DataChangeInfo> Changes => _changes;
+    private ChangeInfoQueue _changeInfoQueue;
+    public IDataChangeEventSource ChangeEventSource => _changeInfoQueue;
+
+    public IObservable<DataChangeInfo> Changes => _changeInfoQueue.Changes;
+
+    //public IObservable<DataChangeInfo> Changes => _changes;
 
     public FileEntryList(DBConnector connector) {
         _connector = connector;
         _entries = connector.Entries;
+        _changeInfoQueue = new ChangeInfoQueue(_connector);
     }
 
     // private IEnumerable<FileEntry> rawList => _entries.OrderBy(it => it.CreationDate);
     private IEnumerable<FileEntry> rawList(int slot) {
         return _entries.Where(it => slot < 0 || it.Slot == slot).OrderBy(it => it.CreationDate);
+    }
+
+    public IList<FileEntry> List() {
+        return _entries.ToList();
     }
 
     public IList<FileEntry> List(int slot, bool resolveOwnerInfo) {
@@ -251,7 +329,7 @@ public class FileEntryList : IMutableFileEntryList {
             };
             _entries.Add(entry);
         }
-        _changes.OnNext(DataChangeInfo.Add(ResolveOwnerInfo(entry)));
+        _changeInfoQueue.Enqueue(DataChangeInfo.Add(ResolveOwnerInfo(entry)));
         return entry;
     }
 
@@ -286,7 +364,7 @@ public class FileEntryList : IMutableFileEntryList {
             }
             _entries.Update(entry);
         }
-        _changes.OnNext(DataChangeInfo.Update(ResolveOwnerInfo(entry)));
+        _changeInfoQueue.Enqueue(DataChangeInfo.Update(ResolveOwnerInfo(entry)));
         return entry;
     }
 
@@ -301,17 +379,8 @@ public class FileEntryList : IMutableFileEntryList {
                 }
             }
         }
-        _changes.OnNext(DataChangeInfo.Remove(entry));
+        _changeInfoQueue.Enqueue(DataChangeInfo.Remove(entry));
     }
-
-    //public void Remove(Func<FileEntry, bool> predicate) {
-    //    FileEntry[] del;
-    //    lock (_connector) {
-    //        del = _entries.Where(predicate).ToArray();
-    //        _entries.RemoveRange(del);
-    //    }
-    //    _changes.OnNext(DataChangeInfo.Remove(del));
-    //}
 
     public FileEntry? GetById(long id) {
         lock (_connector) {
@@ -335,4 +404,5 @@ public class FileEntryList : IMutableFileEntryList {
             return _entries.Select(it => it.OwnerId).Distinct().OrderBy(it => it).ToList();
         }
     }
+
 }

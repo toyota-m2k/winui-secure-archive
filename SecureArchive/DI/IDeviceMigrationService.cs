@@ -29,16 +29,26 @@ internal interface IDeviceMigrationService {
     bool EndMigration(string migrationHandle);
 
     /**
+     * HttpServerService から呼び出され、１件ずつ移行を実行する。
+     * BeginMigration -> Migrate - EndMigration の順に実行する。
+     * 
      * クライアントがターゲットのインポートに成功した後で、originalId, ownerId を書き換える。
      * - 移行元のFileEntryレコード(Id == srcId) を Migration Table（新規）に登録、Entries Tableからは削除する。
      * - 新しいid, originalId, ownerIdのレコードを作って追加する。
      * 
-     * 端末間同期時は、Migration Table の同期を最優先で実行すること。
      */
     FileEntry? Migrate(string migrationHandle, string oldOwnerId, int slot, string oldOriginalId, string newOwnerId, string newOriginalId);
 
     bool IsMigrated(string ownerId, int slot, string originalId);
 
 
-    IList<DeviceMigrationInfo> ApplyHistoryFromPeerServer(IList<DeviceMigrationInfo> history);
+    /**
+     * 端末間同期用メソッド（他の同期に優先して実行する）
+     * Peer Server からの移行履歴を受け取り、ローカルの履歴に追加する。
+     * 
+     * @param history: Peer Server からの移行履歴
+     * @param progress: 進捗を報告するコールバック
+     * @return: ローカルにしか存在しない（==peerにputする必要がある）エントリのリスト
+     */
+    IList<DeviceMigrationInfo>? ApplyHistoryFromPeerServer(IList<DeviceMigrationInfo> history, ProgressProc? progress);
 }

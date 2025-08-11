@@ -605,6 +605,7 @@ internal class HttpServerService : IHttpServreService {
                     if (content== null) {
                         return HttpErrorResponse.BadRequest(request);
                     }
+                    _databaseService.Sweep();
                     _databaseService.EditOwnerList(ownerList => {
                         return ownerList.SyncByJson(content);
                     });
@@ -806,7 +807,7 @@ internal class HttpServerService : IHttpServreService {
                     var history = list.Select(it => {
                             return DeviceMigrationInfo.FromDictionary((JObject)it);
                         }).ToList();
-                    _deviceMigrationService.ApplyHistoryFromPeerServer(history);
+                    _deviceMigrationService.ApplyHistoryFromPeerServer(history, null);
 
                     return TextHttpResponse.FromJson(request, new Dictionary<string, object> {
                         { "cmd", "migration/history(put)" },

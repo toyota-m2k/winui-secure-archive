@@ -23,6 +23,7 @@
                 <TextBlock Text="Password (Confirm)" Margin="0,10,0,0"/>
                 <PasswordBox x:Name="EditPasswordConf" Password="{x:Bind ViewModel.PasswordConfirmString.Value, Mode=TwoWay}" HorizontalAlignment="Stretch" KeyDown="HandleEnterKey"/>
                 <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="10" Margin="0,10,0,0" >
+                    <Button Content="Import" Visibility="{x:Bind ViewModel.ChangingPassword.Value, Converter={StaticResource NegBoolVisibilityConverter}}" Command="{x:Bind ViewModel.ImportCommand, Mode=OneTime}" HorizontalAlignment="Center" Width="80"/>
                     <Button Content="Cancel" Visibility="{x:Bind ViewModel.ChangingPassword.Value, Converter={StaticResource BoolVisibilityConverter}}" Command="{x:Bind ViewModel.CancelPasswordCommand, Mode=OneTime}" HorizontalAlignment="Center" Width="80"/>
                     <Button Content="Set" IsEnabled="{x:Bind ViewModel.PasswordReady.Value, Mode=OneWay}" Command="{x:Bind ViewModel.PasswordCommand, Mode=OneTime}" HorizontalAlignment="Center" Width="80"/>
                 </StackPanel>
@@ -73,7 +74,8 @@
                 <NumberBox Grid.Row="5" Grid.Column="0" Text="{x:Bind ViewModel.PortNo.Value, Mode=TwoWay}" Width="150" HorizontalAlignment="Left"/>
                 <CheckBox Grid.Row="6" Grid.Column="0" Content="Auto Start" IsChecked="{x:Bind ViewModel.ServerAutoStart.Value, Mode=TwoWay}"/>
 
-                <Button Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" x:Name="ButtonDone" Content="Done" Command="{x:Bind ViewModel.DoneCommand, Mode=OneTime}" HorizontalAlignment="Center" Style="{StaticResource AccentButtonStyle}" Margin="0,40,0,0" Width="80"/>
+                <Button Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" x:Name="ButtonExport" Content="Export" Command="{x:Bind ViewModel.ExportCommand, Mode=OneTime}" HorizontalAlignment="Left" Margin="0,40,0,0" Width="80"/>
+                <Button Grid.Row="7" Grid.Column="0" Grid.ColumnSpan="2" x:Name="ButtonDone" Content="Done" Command="{x:Bind ViewModel.DoneCommand, Mode=OneTime}" HorizontalAlignment="Right" Style="{StaticResource AccentButtonStyle}" Margin="0,40,0,0" Width="80"/>
             </Grid>
         </Grid>
     </Grid>

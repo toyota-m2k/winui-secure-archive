@@ -14,6 +14,7 @@ public interface IDeviceMigration {
 
 public interface IMutableDeviceMigration:IDeviceMigration {
     DeviceMigrationInfo? Add(string oldOwnerId, int slot, string oldOriginalId, string newOwnerId, string newOrignalId, DateTime? migratedOn = null);
+    void Remove(DeviceMigrationInfo del);
 }
 
 public class DeviceMigration : IMutableDeviceMigration {
@@ -50,6 +51,12 @@ public class DeviceMigration : IMutableDeviceMigration {
     public IList<DeviceMigrationInfo> List() {
         lock(_connector) {
             return _migrationInfos.OrderBy(it=>it.Key).ToList();
+        }
+    }
+
+    public void Remove(DeviceMigrationInfo del) {
+        lock (_connector) {
+            _migrationInfos.Remove(del);
         }
     }
 }
