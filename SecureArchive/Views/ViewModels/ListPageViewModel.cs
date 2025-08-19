@@ -11,9 +11,11 @@ using System.Collections.ObjectModel;
 using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
@@ -266,8 +268,74 @@ internal class ListPageViewModel : IListSource {
         });
     }
 
+    //private static Regex regDate = new Regex(@"(?<date>\d{4}\.\d{2}\.\d{2}-\d{2}:\d{2}:\d{2})");
+
+    //private static string Filename2DateString(string filename) {
+    //    var match = regDate.Match(filename);
+    //    if (match.Success) {
+    //        return match.Groups["date"].Value;
+    //    }
+    //    throw new ArgumentException("Filename does not contain a valid date string in the format 'yyyy.MM.dd-HH:mm:ss'.", nameof(filename));
+    //}
+
+    //private static long DateStringToUnixTime(string dateString) {
+    //    var format = "yyyy.MM.dd-HH:mm:ss";
+    //    var dt = DateTime.ParseExact(dateString, format, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
+    //    var unixTime = new DateTimeOffset(dt).ToUnixTimeSeconds();
+    //    return unixTime;
+    //}
+
+    //private static long Filename2UnixTime(string filename) {
+    //    try {
+    //        var dateString = Filename2DateString(filename);
+    //        return DateStringToUnixTime(dateString);
+    //    } catch(Exception e) {
+    //        return -1;
+    //    }
+    //}
+
+    /**
+     * CreationDate が不正なエントリが見つかったので、是正するためのメンテナンスメソッド
+     */
+    private void PatchCreationDate() {
+        _dataBaseService.EditEntry(entries => {
+            var count = 0;
+            foreach (var entry in entries.List()) {
+                var creationDateString = FileEntry.Filename2DateString(entry.Name);
+                var creationDateFromFilename = FileEntry.Filename2UnixTime(creationDateString);
+                var dbDateRaw = TimeUtils.javaTime2dateTime(entry.CreationDate).ToString("yyyy.MM.dd-HH:mm:ss");
+                var dbDateUtc= TimeUtils.javaTime2dateTime(entry.CreationDate).ToUniversalTime().ToString("yyyy.MM.dd-HH:mm:ss");
+                var dbDateLocal = TimeUtils.javaTime2dateTime(entry.CreationDate).ToLocalTime().ToString("yyyy.MM.dd-HH:mm:ss");
+                if (creationDateString == dbDateRaw) {
+                    Debug.WriteLine($"DB:{dbDateRaw} -- Raw");
+                }
+                else if (creationDateString == dbDateUtc) {
+                    Debug.WriteLine($"DB:{dbDateUtc} -- UTC");
+                } 
+                else if (creationDateString == dbDateLocal) {
+                    Debug.WriteLine($"DB:{dbDateLocal} -- Local");
+                    entry.CreationDate = creationDateFromFilename;
+                    count++;
+                }
+                else /*if (creationDateString != dbDateUtc && creationDateString != dbDateLocal)*/ {
+                    Debug.WriteLine($"DB: {dbDateLocal} - File:{creationDateString}");
+                    entry.CreationDate = creationDateFromFilename;
+                    count++;
+                }
+            }
+            if (count > 0) {
+                _logger.Info($"Patching CreationDate: {count} entries updated.");
+            }
+            else {
+                _logger.Info("No entries to patch.");
+            }
+            return count > 0;
+        });
+    }
+
     public void Sweep() {
         Task.Run(() => {
+            //PatchCreationDate();
             var (entries, migrations) = _dataBaseService.Sweep();
             _mainThreadService.Run(async () => {
                 await MessageBoxBuilder.Create(App.MainWindow)

@@ -317,6 +317,11 @@ public class FileEntryList : IMutableFileEntryList {
         if(GetByOriginalId(ownerId, slot, originalId) != null) {
             throw new ArgumentException($"already exists: {ownerId}/{slot}/{originalId}");
         }
+        // ファイル名から得られる日時が真の creationDate とする（ルール）
+        var dateFromName = FileEntry.Filename2UnixTime(name);
+        if (dateFromName > 0) {
+            creationDate = dateFromName;
+        }
         var type = type_;
         if(type_.StartsWith(".")) {
             type = type_.Substring(1);

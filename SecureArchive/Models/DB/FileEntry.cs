@@ -4,6 +4,8 @@ using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Globalization;
+using System.Text.RegularExpressions;
 
 namespace SecureArchive.Models.DB;
 
@@ -178,6 +180,46 @@ public class FileEntry : IItemExtAttributes {
             Duration = dict.GetLongValue("duration"),
             Slot = dict.GetIntValue("slot"),
         };
+    }
+
+
+    private static Regex regDate = new Regex(@"(?<date>\d{4}\.\d{2}\.\d{2}-\d{2}:\d{2}:\d{2})");
+
+    public static string Filename2DateString(string filename) {
+        var match = regDate.Match(filename);
+        if (match.Success) {
+            return match.Groups["date"].Value;
+        }
+        throw new ArgumentException("Filename does not contain a valid date string in the format 'yyyy.MM.dd-HH:mm:ss'.", nameof(filename));
+    }
+
+    private static DateTime DateStringToDateTime(string dateString) {
+        var format = "yyyy.MM.dd-HH:mm:ss";
+        var dt = DateTime.ParseExact(dateString, format, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal | DateTimeStyles.AdjustToUniversal);
+        return dt;
+    }
+    private static long DateStringToUnixTime(string dateString) {
+        var unixTime = new DateTimeOffset(DateStringToDateTime(dateString)).ToUnixTimeMilliseconds();
+        return unixTime;
+    }
+
+    public static long Filename2UnixTime(string filename) {
+        try {
+            var dateString = Filename2DateString(filename);
+            return DateStringToUnixTime(dateString);
+        }
+        catch (Exception e) {
+            return -1;
+        }
+    }
+    public static DateTime Filename2DateTime(string filename) {
+        try {
+            var dateString = Filename2DateString(filename);
+            return DateStringToDateTime(dateString);
+        }
+        catch (Exception e) {
+            return DateTime.MinValue;
+        }
     }
 
 }
