@@ -6,12 +6,15 @@ using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using SecureArchive.Utils.Crypto;
+using SecureArchive.Utils.Server;
 using SecureArchive.Utils.Server.lib;
 using SecureArchive.Utils.Server.lib.model;
 using SecureArchive.Utils.Server.lib.response;
 using SecureArchive.Views.ViewModels;
+using System.Reactive.Linq;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.RegularExpressions;
 using Windows.Security.Cryptography;
 using static SecureArchive.Utils.Server.lib.model.HttpContent;
@@ -21,17 +24,19 @@ namespace SecureArchive.DI.Impl;
 
 internal class HttpServerService : IHttpServreService {
     private UtLog _logger;
-    private HttpServer _server;
+    private readonly List<HttpServer> _servers = new List<HttpServer>();
+    private MdnsAdvertiser? _mdns;
+    private readonly System.Reactive.Subjects.BehaviorSubject<bool> _running = new(false);
     private ISecureStorageService _secureStorageService;
     private IDatabaseService _databaseService;
     private IPasswordService _passwordService;
     private IBackupService _backupService;
     private IDeviceMigrationService _deviceMigrationService;
     private ICryptoStreamHandler _cryptoStreamHandler;
+    private IUserSettingsService _userSettingsService;
     private OneTimePasscode oneTimePasscode;
 
 
-    //private IUserSettingsService _userSettingsService;
     public HttpServerService(
         ISecureStorageService secureStorageService,
         IDatabaseService databaseService,
@@ -39,6 +44,7 @@ internal class HttpServerService : IHttpServreService {
         IBackupService backupService,
         IDeviceMigrationService deviceMigrationService,
         ICryptoStreamHandler cryptoStreamHandler,
+        IUserSettingsService userSettingsService,
         ListPageViewModel listPageViewModel
         ) {
         _logger = UtLog.Instance(typeof(HttpServerService));
@@ -48,10 +54,9 @@ internal class HttpServerService : IHttpServreService {
         _backupService = backupService;
         _deviceMigrationService = deviceMigrationService;
         _cryptoStreamHandler = cryptoStreamHandler;
+        _userSettingsService = userSettingsService;
         ListSource = listPageViewModel;
-        _server = new HttpServer(Routes(), _logger);
 
-        //ListSource = _databaseService.Entries.List(false);
         oneTimePasscode = new OneTimePasscode(_passwordService);
     }
 
@@ -837,16 +842,114 @@ internal class HttpServerService : IHttpServreService {
     #endregion
     #region Server
 
-    public IObservable<bool> Running => _server.Running;
-    
+    public IObservable<bool> Running => _running;
+
+    /// <summary>
+    /// 旧シグネチャ。引数の <paramref name="port"/> は HTTP リスナーのポートとして扱う。
+    /// HTTPS / mDNS 関連は <see cref="IUserSettingsService"/> から動的に読み出す。
+    /// </summary>
     public bool Start(int port) {
-        //var port = await _userSettingsService.GetAsync<int>(SettingsKey.PortNo);
-        oneTimePasscode.Reset();        // for Debug
-        return _server.Start(port);
+        if (_running.Value) return false;
+        oneTimePasscode.Reset(); // for Debug
+
+        var settings = _userSettingsService.GetAsync().GetAwaiter().GetResult();
+        var routes = Routes();
+        bool startHttp = !(settings.EnableHttps && settings.HttpsOnly);
+        bool startHttps = settings.EnableHttps;
+
+        if (startHttp) {
+            StartOne(routes, port, certificate: null, label: "HTTP");
+        }
+
+        if (startHttps) {
+            X509Certificate2? cert = null;
+            try {
+                if (!string.IsNullOrEmpty(settings.PfxPath)) {
+                    // UserKeySet | PersistKeySet:
+                    //   - SslStream (= Windows SChannel SSP) は CAPI ベースの鍵コンテナを要求するため、
+                    //     EphemeralKeySet (CNG メモリ鍵) は "the platform does not support ephemeral keys"
+                    //     で蹴られる。
+                    //   - 一方 MachineKeySet は MSIX サンドボックスで Access denied になる。
+                    //   - その中間として CurrentUser スコープの CAPI 鍵コンテナ
+                    //     (%APPDATA%\Microsoft\Crypto\RSA\<sid>\) に書き込む UserKeySet が
+                    //     管理者権限なしでも動き、SChannel にも受け入れられる。
+                    //   - PersistKeySet は SslStream のハンドシェイク中に GC で鍵が消える事故を避けるため。
+                    cert = new X509Certificate2(
+                        settings.PfxPath!,
+                        settings.PfxPassword,
+                        X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.PersistKeySet);
+                }
+            }
+            catch (Exception e) {
+                _logger.Error(e, $"HTTPS: cannot load PFX ({settings.PfxPath})");
+            }
+            if (cert != null) {
+                if (!StartOne(routes, settings.HttpsPort, certificate: cert, label: "HTTPS")) {
+                    cert.Dispose();
+                }
+            }
+        }
+
+        bool anyRunning = _servers.Count > 0;
+        _running.OnNext(anyRunning);
+
+        if (anyRunning) {
+            StartMdns(settings);
+        }
+        return anyRunning;
+    }
+
+    private bool StartOne(List<Route> routes, int port, X509Certificate2? certificate, string label) {
+        var server = new HttpServer(routes, _logger, certificate);
+        if (server.Start(port)) {
+            _servers.Add(server);
+            _logger.Info($"{label} listener started on port {port}");
+            return true;
+        }
+        _logger.Error($"{label} listener failed to start on port {port}");
+        return false;
+    }
+
+    private void StartMdns(IReadonlyUserSettingsAccessor settings) {
+        int port = settings.EnableHttps ? settings.HttpsPort : settings.PortNo;
+        bool isHttps = settings.EnableHttps;
+        string? fp = null;
+        if (isHttps && !string.IsNullOrEmpty(settings.PfxPath)) {
+            try {
+                // fingerprint 計算のみなので秘密鍵は不要だが、X509Certificate2 のコンストラクタは
+                // PFX ロード時に常に鍵もパースする。EphemeralKeySet で OS ストアを汚染しない。
+                using var cert = new X509Certificate2(
+                    settings.PfxPath!, settings.PfxPassword,
+                    X509KeyStorageFlags.EphemeralKeySet);
+                fp = CertificateGenerator.ComputeSha256Fingerprint(cert);
+            }
+            catch (Exception e) {
+                _logger.Error(e, "mDNS: failed to compute fingerprint");
+            }
+        }
+
+        _mdns = new MdnsAdvertiser();
+        try {
+            _mdns.Start(settings.EnsureServerName, port, isHttps, fp);
+            _logger.Info($"mDNS advertised: _booapi._tcp / {settings.EnsureServerName} (port={port}, https={isHttps})");
+        }
+        catch (Exception e) {
+            _logger.Error(e, "mDNS advertise failed");
+            _mdns.Dispose();
+            _mdns = null;
+        }
     }
 
     public void Stop() {
-        _server.Stop();
+        if (_mdns != null) {
+            try { _mdns.Dispose(); } catch (Exception e) { _logger.Error(e, "mDNS stop"); }
+            _mdns = null;
+        }
+        foreach (var s in _servers) {
+            try { s.Stop(); } catch (Exception e) { _logger.Error(e, "Server stop"); }
+        }
+        _servers.Clear();
+        _running.OnNext(false);
     }
 
     //public IList<FileEntry> ListSource { get; set; }

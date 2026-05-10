@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ContentDialog
+    x:Class="SecureArchive.Views.GenerateCertDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Generate Self-Signed Certificate"
+    PrimaryButtonText="Generate"
+    CloseButtonText="Cancel"
+    DefaultButton="Primary">
+    <Grid Width="500" RowSpacing="8" Padding="0,8,0,0">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <TextBlock Grid.Row="0" Text="Subject CN"/>
+        <TextBox Grid.Row="1" x:Name="SubjectBox"/>
+
+        <TextBlock Grid.Row="2" Text="DNS names (comma-separated)" Margin="0,8,0,0"/>
+        <TextBox Grid.Row="3" x:Name="DnsBox"/>
+
+        <TextBlock Grid.Row="4" Text="IP addresses (comma-separated)" Margin="0,8,0,0"/>
+        <TextBox Grid.Row="5" x:Name="IpBox"/>
+
+        <TextBlock Grid.Row="6" Text="Output PFX path" Margin="0,8,0,0"/>
+        <Grid Grid.Row="7" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0" x:Name="PfxPathBox"/>
+            <Button Grid.Column="1" Content="..." Click="OnBrowseClicked" Width="40"/>
+        </Grid>
+
+        <TextBlock Grid.Row="8" Text="Password" Margin="0,8,0,0"/>
+        <Grid Grid.Row="9" ColumnSpacing="8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <TextBox Grid.Column="0" x:Name="PasswordBox"/>
+            <Button Grid.Column="1" Content="Random" Click="OnRandomPasswordClicked"/>
+        </Grid>
+
+        <TextBlock Grid.Row="10" Text="Validity (years)" Margin="0,8,0,0"/>
+        <NumberBox Grid.Row="11" x:Name="ValidityBox" Value="10" Minimum="1" Maximum="100" SpinButtonPlacementMode="Inline"/>
+
+        <TextBlock Grid.Row="12" x:Name="ErrorText" Foreground="Red" TextWrapping="Wrap" Margin="0,8,0,0"/>
+    </Grid>
+</ContentDialog>

@@ -22,6 +22,14 @@ namespace SecureArchive.Views.ViewModels {
         public ReactivePropertySlim<string> DataFolder { get; } = new ("");
         public ReactivePropertySlim<int> PortNo { get; } = new(0);
         public ReactivePropertySlim<bool> ServerAutoStart { get; } = new(false);
+
+        // ---- mDNS / HTTPS 関連 ----
+        public ReactivePropertySlim<string> ServerName { get; } = new("");
+        public ReactivePropertySlim<bool> EnableHttps { get; } = new(false);
+        public ReactivePropertySlim<int> HttpsPort { get; } = new(3801);
+        public ReactivePropertySlim<bool> HttpsOnly { get; } = new(false);
+        public ReactivePropertySlim<string> PfxPath { get; } = new("");
+        public ReactivePropertySlim<string> PfxPassword { get; } = new("");
         //private ReactivePropertySlim<PasswordStatus?> CurrentPasswordStatus { get; } = new(null);
 
         //public ReadOnlyReactivePropertySlim<bool> Initialized { get; }
@@ -44,6 +52,9 @@ namespace SecureArchive.Views.ViewModels {
         public ReactiveCommandSlim DoneCommand { get; } = new();
         public ReactiveCommandSlim ExportCommand { get; } = new();
         public ReactiveCommandSlim ImportCommand { get; } = new();
+        public ReactiveCommandSlim BrowsePfxCommand { get; } = new();
+        public ReactiveCommandSlim GenerateCertCommand { get; } = new();
+        public ReactiveCommandSlim PairingQrCommand { get; } = new();
 
         private bool CheckPasswordRequired => _pageService.CheckPasswordRequired;
 
@@ -136,6 +147,9 @@ namespace SecureArchive.Views.ViewModels {
             CancelPasswordCommand.Subscribe(CancelPassword);
             ExportCommand.Subscribe(ExportSettings);
             ImportCommand.Subscribe(ImportSettings);
+            BrowsePfxCommand.Subscribe(BrowsePfx);
+            GenerateCertCommand.Subscribe(GenerateCert);
+            PairingQrCommand.Subscribe(ShowPairingQr);
             Initialize();
         }
 
@@ -220,20 +234,29 @@ namespace SecureArchive.Views.ViewModels {
         }
 
         private async void Done() {
-            await _userSettingsService.EditAsync((editor) => {
-                var changed = false;
-                if (editor.PortNo != PortNo.Value) {
-                    editor.PortNo = PortNo.Value;
-                    changed = true;
-                }
-                if(editor.ServerAutoStart != ServerAutoStart.Value) { 
-                    editor.ServerAutoStart = ServerAutoStart.Value;
-                    changed = true;
-                }
-                return changed;
-            });
+            await PersistAsync();
             _appConfigService.NeedsConfirmOnExit = true;
             _pageService.ShowMenuPage();
+        }
+
+        /// <summary>UI 入力値を一通り IUserSettingsService に書き戻す (Done 以外でも使えるように切り出し)。</summary>
+        private async Task<bool> PersistAsync() {
+            bool persistedAny = false;
+            await _userSettingsService.EditAsync((editor) => {
+                var changed = false;
+                if (editor.PortNo != PortNo.Value) { editor.PortNo = PortNo.Value; changed = true; }
+                if (editor.ServerAutoStart != ServerAutoStart.Value) { editor.ServerAutoStart = ServerAutoStart.Value; changed = true; }
+                if ((editor.ServerName ?? "") != ServerName.Value) { editor.ServerName = ServerName.Value; changed = true; }
+                if (editor.EnableHttps != EnableHttps.Value) { editor.EnableHttps = EnableHttps.Value; changed = true; }
+                if (editor.HttpsPort != HttpsPort.Value) { editor.HttpsPort = HttpsPort.Value; changed = true; }
+                if (editor.HttpsOnly != HttpsOnly.Value) { editor.HttpsOnly = HttpsOnly.Value; changed = true; }
+                if ((editor.PfxPath ?? "") != PfxPath.Value) { editor.PfxPath = PfxPath.Value; changed = true; }
+                // PFX パスワードは DPAPI 経由で永続化される
+                if (editor.PfxPassword != PfxPassword.Value) { editor.PfxPassword = PfxPassword.Value; changed = true; }
+                persistedAny = changed;
+                return changed;
+            });
+            return persistedAny;
         }
 
         private async void SelectFolder() {
@@ -305,10 +328,76 @@ namespace SecureArchive.Views.ViewModels {
                 //DataFolder.Value = editor.DataFolder ?? "";
                 PortNo.Value = editor.PortNo;
                 ServerAutoStart.Value = editor.ServerAutoStart;
+                ServerName.Value = editor.ServerName ?? "";
+                EnableHttps.Value = editor.EnableHttps;
+                HttpsPort.Value = editor.HttpsPort;
+                HttpsOnly.Value = editor.HttpsOnly;
+                PfxPath.Value = editor.PfxPath ?? "";
+                PfxPassword.Value = editor.PfxPassword;
                 return false;
             });
             DataFolder.Value = (await _fileStoreService.GetFolder()) ?? "";
             await AdvanceStatus();
+        }
+
+        // ---- HTTPS / Pairing Commands ----
+
+        private async void BrowsePfx() {
+            var picker = new Windows.Storage.Pickers.FileOpenPicker();
+            picker.FileTypeFilter.Add(".pfx");
+            // WinUI 3: HWND を picker に紐付ける必要がある
+            var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(App.MainWindow);
+            WinRT.Interop.InitializeWithWindow.Initialize(picker, hwnd);
+            var file = await picker.PickSingleFileAsync();
+            if (file != null) {
+                PfxPath.Value = file.Path;
+            }
+        }
+
+        private async void GenerateCert() {
+            var dlg = new Views.GenerateCertDialog {
+                XamlRoot = App.MainWindow.Content.XamlRoot,
+                InitialPfxPath = PfxPath.Value,
+                InitialPassword = PfxPassword.Value,
+                InitialSubject = string.IsNullOrWhiteSpace(ServerName.Value)
+                    ? $"SecureArchive-{Environment.MachineName}"
+                    : ServerName.Value,
+            };
+            var result = await dlg.ShowAsync();
+            if (result == Microsoft.UI.Xaml.Controls.ContentDialogResult.Primary && dlg.Result != null) {
+                PfxPath.Value = dlg.Result.PfxPath;
+                PfxPassword.Value = dlg.Result.Password;
+            }
+        }
+
+        private async void ShowPairingQr() {
+            // Persist current edits so the QR reflects the latest settings
+            await PersistAsync();
+            var settings = await _userSettingsService.GetAsync();
+            var dlg = new Views.PairingQrDialog {
+                XamlRoot = App.MainWindow.Content.XamlRoot,
+                ServerName = settings.EnsureServerName,
+                Port = settings.EnableHttps ? settings.HttpsPort : settings.PortNo,
+                IsHttps = settings.EnableHttps,
+                Fingerprint = ComputeFingerprintIfPossible(settings),
+            };
+            await dlg.ShowAsync();
+        }
+
+        private static string ComputeFingerprintIfPossible(IReadonlyUserSettingsAccessor settings) {
+            if (!settings.EnableHttps) return "";
+            if (string.IsNullOrEmpty(settings.PfxPath) || !File.Exists(settings.PfxPath)) return "";
+            try {
+                // EphemeralKeySet: MSIX サンドボックス下でも OS ストアアクセスを発生させない
+                using var cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(
+                    settings.PfxPath!, settings.PfxPassword,
+                    System.Security.Cryptography.X509Certificates.X509KeyStorageFlags.EphemeralKeySet);
+                return Utils.CertificateGenerator.ComputeSha256Fingerprint(cert);
+            }
+            catch (Exception e) {
+                Debug.WriteLine(e);
+                return "";
+            }
         }
 
 

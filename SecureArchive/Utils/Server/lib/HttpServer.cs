@@ -5,6 +5,7 @@ using SecureArchive.Utils.Server.lib.model;
 using System.Net;
 using System.Net.Sockets;
 using System.Reactive.Subjects;
+using System.Security.Cryptography.X509Certificates;
 
 namespace SecureArchive.Utils.Server.lib;
 
@@ -18,9 +19,11 @@ public class HttpServer
 
     #endregion
 
-    //private static readonly ILog log = LogManager.GetLogger(typeof(HttpServer));    
+    //private static readonly ILog log = LogManager.GetLogger(typeof(HttpServer));
     private bool Alive = true;
     public UtLog Logger;
+    /// <summary>true なら HTTPS リスナーとして起動 (cert 必須)。</summary>
+    public bool IsSecure { get; }
 
     private BehaviorSubject<bool> _running = new BehaviorSubject<bool>(false);
     public IObservable<bool> Running => _running;
@@ -36,9 +39,15 @@ public class HttpServer
 
     #region Public Methods
     public HttpServer(List<Route> routes, UtLog logger)
+        : this(routes, logger, null) {
+    }
+
+    public HttpServer(List<Route> routes, UtLog logger, X509Certificate2? certificate)
     {
-        Processor = new HttpProcessor(); ;
-        //mReportOutput = new WeakReference<IReportOutput>(reportOutput);
+        Processor = (certificate != null)
+            ? new SslHttpProcessor(certificate)
+            : new HttpProcessor();
+        IsSecure = certificate != null;
         Logger = logger;
 
         foreach (var route in routes)
@@ -74,7 +83,7 @@ public class HttpServer
             _running.OnNext(true);
             Listener = new TcpListener(IPAddress.Any, port);
             Listener.Start();
-            Logger.Info($"HTTP Server Running... Port={port}");
+            Logger.Info($"{(IsSecure ? "HTTPS" : "HTTP")} Server Running... Port={port}");
         }
         catch (Exception e)
         {

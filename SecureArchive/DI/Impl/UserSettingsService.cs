@@ -1,5 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace SecureArchive.DI.Impl;
 
@@ -33,6 +35,68 @@ internal class UserSettingsService : IUserSettingsService {
         public bool ShowLog {
             get => _userSettings.GetBool(callerName(), false);
             set => _userSettings.Put(callerName(), value);
+        }
+
+        // ---- mDNS / HTTPS 関連 ----
+        public string? ServerName {
+            get => _userSettings.GetString(callerName());
+            set => _userSettings.Put(callerName(), value);
+        }
+        public string EnsureServerName =>
+            string.IsNullOrWhiteSpace(ServerName) ? Environment.MachineName : ServerName!;
+        public bool EnableHttps {
+            get => _userSettings.GetBool(callerName(), false);
+            set => _userSettings.Put(callerName(), value);
+        }
+        public int HttpsPort {
+            get => _userSettings.GetInt(callerName(), 3801);
+            set => _userSettings.Put(callerName(), value);
+        }
+        public bool HttpsOnly {
+            get => _userSettings.GetBool(callerName(), false);
+            set => _userSettings.Put(callerName(), value);
+        }
+        public string? PfxPath {
+            get => _userSettings.GetString(callerName());
+            set => _userSettings.Put(callerName(), value);
+        }
+        public string? PfxPasswordEncrypted {
+            get => _userSettings.GetString(callerName());
+            set => _userSettings.Put(callerName(), value);
+        }
+        /// <summary>
+        /// PFX パスワードの「平文表現」アクセサ。getter は [PfxPasswordEncrypted] を DPAPI で復号、
+        /// setter は DPAPI で暗号化してから [PfxPasswordEncrypted] に保存する。
+        /// プレーン値はファイルに書き出されない。
+        /// </summary>
+        public string PfxPassword {
+            get {
+                var enc = PfxPasswordEncrypted;
+                if (string.IsNullOrEmpty(enc)) return "";
+                try {
+                    var bytes = Convert.FromBase64String(enc);
+                    var plain = ProtectedData.Unprotect(bytes, null, DataProtectionScope.CurrentUser);
+                    return Encoding.UTF8.GetString(plain);
+                }
+                catch (Exception e) {
+                    Debug.WriteLine(e);
+                    return "";
+                }
+            }
+            set {
+                if (string.IsNullOrEmpty(value)) {
+                    PfxPasswordEncrypted = "";
+                    return;
+                }
+                try {
+                    var bytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser);
+                    PfxPasswordEncrypted = Convert.ToBase64String(bytes);
+                }
+                catch (Exception e) {
+                    Debug.WriteLine(e);
+                    PfxPasswordEncrypted = "";
+                }
+            }
         }
     }
 
