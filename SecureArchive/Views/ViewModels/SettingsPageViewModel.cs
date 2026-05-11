@@ -20,14 +20,18 @@ namespace SecureArchive.Views.ViewModels {
 
         //public ReactivePropertySlim<bool> DataFolderRegistered = new(false);
         public ReactivePropertySlim<string> DataFolder { get; } = new ("");
-        public ReactivePropertySlim<int> PortNo { get; } = new(0);
         public ReactivePropertySlim<bool> ServerAutoStart { get; } = new(false);
 
         // ---- mDNS / HTTPS 関連 ----
         public ReactivePropertySlim<string> ServerName { get; } = new("");
+        public ReactivePropertySlim<bool> EnableMdnsAdvertisement { get; } = new(true);
+        public ReactivePropertySlim<bool> EnableHttp { get; } = new(false);
         public ReactivePropertySlim<bool> EnableHttps { get; } = new(false);
-        public ReactivePropertySlim<int> HttpsPort { get; } = new(3801);
-        public ReactivePropertySlim<bool> HttpsOnly { get; } = new(false);
+        public ReactivePropertySlim<int> PortHttp { get; } = new(0);
+        public ReactivePropertySlim<int> PortHttps { get; } = new(3801);
+        public ReadOnlyReactivePropertySlim<bool> ServerEnabled;
+
+        //public ReactivePropertySlim<bool> HttpsOnly { get; } = new(false);
         public ReactivePropertySlim<string> PfxPath { get; } = new("");
         public ReactivePropertySlim<string> PfxPassword { get; } = new("");
         //private ReactivePropertySlim<PasswordStatus?> CurrentPasswordStatus { get; } = new(null);
@@ -140,6 +144,7 @@ namespace SecureArchive.Views.ViewModels {
                     return false;
                 }
             }).ToReadOnlyReactivePropertySlim<bool>();
+            ServerEnabled = Observable.CombineLatest(EnableHttp, EnableHttps, (http, https) => http || https).ToReadOnlyReactivePropertySlim();
             PasswordCommand.Subscribe(HandlePassword);
             SelectFolderCommand.Subscribe(SelectFolder);
             DoneCommand.Subscribe(Done);
@@ -244,12 +249,13 @@ namespace SecureArchive.Views.ViewModels {
             bool persistedAny = false;
             await _userSettingsService.EditAsync((editor) => {
                 var changed = false;
-                if (editor.PortNo != PortNo.Value) { editor.PortNo = PortNo.Value; changed = true; }
                 if (editor.ServerAutoStart != ServerAutoStart.Value) { editor.ServerAutoStart = ServerAutoStart.Value; changed = true; }
                 if ((editor.ServerName ?? "") != ServerName.Value) { editor.ServerName = ServerName.Value; changed = true; }
+                if (editor.EnableMdnsAdvertisement != EnableMdnsAdvertisement.Value) { editor.EnableMdnsAdvertisement = EnableMdnsAdvertisement.Value; changed = true; }
+                if (editor.EnableHttp != EnableHttp.Value) { editor.EnableHttp = EnableHttp.Value; changed = true; }
                 if (editor.EnableHttps != EnableHttps.Value) { editor.EnableHttps = EnableHttps.Value; changed = true; }
-                if (editor.HttpsPort != HttpsPort.Value) { editor.HttpsPort = HttpsPort.Value; changed = true; }
-                if (editor.HttpsOnly != HttpsOnly.Value) { editor.HttpsOnly = HttpsOnly.Value; changed = true; }
+                if (editor.PortHttp != PortHttp.Value) { editor.PortHttp = PortHttp.Value; changed = true; }
+                if (editor.PortHttps!= PortHttps.Value) { editor.PortHttps = PortHttps.Value; changed = true; }
                 if ((editor.PfxPath ?? "") != PfxPath.Value) { editor.PfxPath = PfxPath.Value; changed = true; }
                 // PFX パスワードは DPAPI 経由で永続化される
                 if (editor.PfxPassword != PfxPassword.Value) { editor.PfxPassword = PfxPassword.Value; changed = true; }
@@ -326,12 +332,13 @@ namespace SecureArchive.Views.ViewModels {
             _httpServreService.Stop();
             await _userSettingsService.EditAsync((editor) => {
                 //DataFolder.Value = editor.DataFolder ?? "";
-                PortNo.Value = editor.PortNo;
                 ServerAutoStart.Value = editor.ServerAutoStart;
                 ServerName.Value = editor.ServerName ?? "";
+                EnableMdnsAdvertisement.Value = editor.EnableMdnsAdvertisement;
+                EnableHttp.Value = editor.EnableHttp;
                 EnableHttps.Value = editor.EnableHttps;
-                HttpsPort.Value = editor.HttpsPort;
-                HttpsOnly.Value = editor.HttpsOnly;
+                PortHttp.Value = editor.PortHttp;
+                PortHttps.Value = editor.PortHttps;
                 PfxPath.Value = editor.PfxPath ?? "";
                 PfxPassword.Value = editor.PfxPassword;
                 return false;
@@ -377,7 +384,7 @@ namespace SecureArchive.Views.ViewModels {
             var dlg = new Views.PairingQrDialog {
                 XamlRoot = App.MainWindow.Content.XamlRoot,
                 ServerName = settings.EnsureServerName,
-                Port = settings.EnableHttps ? settings.HttpsPort : settings.PortNo,
+                Port = settings.EnableHttps ? settings.PortHttps : settings.PortHttp,
                 IsHttps = settings.EnableHttps,
                 Fingerprint = ComputeFingerprintIfPossible(settings),
             };

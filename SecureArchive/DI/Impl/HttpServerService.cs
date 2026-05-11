@@ -848,17 +848,17 @@ internal class HttpServerService : IHttpServreService {
     /// 旧シグネチャ。引数の <paramref name="port"/> は HTTP リスナーのポートとして扱う。
     /// HTTPS / mDNS 関連は <see cref="IUserSettingsService"/> から動的に読み出す。
     /// </summary>
-    public bool Start(int port) {
+    public bool Start() {
         if (_running.Value) return false;
         oneTimePasscode.Reset(); // for Debug
 
         var settings = _userSettingsService.GetAsync().GetAwaiter().GetResult();
         var routes = Routes();
-        bool startHttp = !(settings.EnableHttps && settings.HttpsOnly);
+        bool startHttp = settings.EnableHttp;
         bool startHttps = settings.EnableHttps;
 
         if (startHttp) {
-            StartOne(routes, port, certificate: null, label: "HTTP");
+            StartOne(routes, settings.PortHttp, certificate: null, label: "HTTP");
         }
 
         if (startHttps) {
@@ -884,7 +884,7 @@ internal class HttpServerService : IHttpServreService {
                 _logger.Error(e, $"HTTPS: cannot load PFX ({settings.PfxPath})");
             }
             if (cert != null) {
-                if (!StartOne(routes, settings.HttpsPort, certificate: cert, label: "HTTPS")) {
+                if (!StartOne(routes, settings.PortHttps, certificate: cert, label: "HTTPS")) {
                     cert.Dispose();
                 }
             }
@@ -911,7 +911,8 @@ internal class HttpServerService : IHttpServreService {
     }
 
     private void StartMdns(IReadonlyUserSettingsAccessor settings) {
-        int port = settings.EnableHttps ? settings.HttpsPort : settings.PortNo;
+        if (!settings.EnableMdnsAdvertisement) return;
+        int port = settings.EnableHttps ? settings.PortHttps : settings.PortHttp;
         bool isHttps = settings.EnableHttps;
         string? fp = null;
         if (isHttps && !string.IsNullOrEmpty(settings.PfxPath)) {

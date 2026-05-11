@@ -51,10 +51,7 @@
                 Margin="0,20,0,0"
                 >
                 <ToggleSwitch OffContent="Server Stopped." OnContent="Server Running." IsOn="{x:Bind ViewModel.IsServerRunning.Value, Mode=TwoWay}"/>
-                <TextBlock VerticalAlignment="Center" Margin="20,0,0,0">
-                    <Run Text="Port ="/>
-                    <Run Text="{x:Bind ViewModel.PortNo.Value}"/>
-                </TextBlock>
+                <TextBlock VerticalAlignment="Center" Margin="20,0,0,0" Text="{x:Bind ViewModel.ServerParams.Value}"/>
             </StackPanel>
             <ToggleSwitch Grid.Row="2" OffContent="Show Log" OnContent="Show Log" IsOn="{x:Bind ViewModel.ShowLog.Value, Mode=TwoWay}"/>
         </Grid>

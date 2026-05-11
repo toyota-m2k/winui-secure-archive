@@ -20,10 +20,6 @@ internal class UserSettingsService : IUserSettingsService {
             get => _userSettings.GetString(callerName());
             set => _userSettings.Put(callerName(), value);
         }
-        public int PortNo { 
-            get => _userSettings.GetInt(callerName(), 3800);
-            set => _userSettings.Put(callerName(), value);
-        }
         public bool ServerAutoStart {
             get => _userSettings.GetBool(callerName(), false);
             set => _userSettings.Put(callerName(), value);
@@ -44,18 +40,32 @@ internal class UserSettingsService : IUserSettingsService {
         }
         public string EnsureServerName =>
             string.IsNullOrWhiteSpace(ServerName) ? Environment.MachineName : ServerName!;
+        public bool EnableMdnsAdvertisement {
+            get => _userSettings.GetBool(callerName(), false);
+            set => _userSettings.Put(callerName(), value);
+        }
+        public bool EnableHttp {
+            get => _userSettings.GetBool(callerName(), false);
+            set => _userSettings.Put(callerName(), value);
+        }
         public bool EnableHttps {
             get => _userSettings.GetBool(callerName(), false);
             set => _userSettings.Put(callerName(), value);
         }
-        public int HttpsPort {
+        public int PortHttp {
+            get => _userSettings.GetInt(callerName(), 3800);
+            set => _userSettings.Put(callerName(), value);
+        }
+        public int PortHttps {
             get => _userSettings.GetInt(callerName(), 3801);
             set => _userSettings.Put(callerName(), value);
         }
-        public bool HttpsOnly {
-            get => _userSettings.GetBool(callerName(), false);
-            set => _userSettings.Put(callerName(), value);
-        }
+        public bool ServerEnabled => EnableHttp || EnableHttps;
+
+        //public bool HttpsOnly {
+        //    get => _userSettings.GetBool(callerName(), false);
+        //    set => _userSettings.Put(callerName(), value);
+        //}
         public string? PfxPath {
             get => _userSettings.GetString(callerName());
             set => _userSettings.Put(callerName(), value);
@@ -239,32 +249,32 @@ internal class UserSettingsService : IUserSettingsService {
             _dirty = true;
         }
     }
-    private void Put<T>(SettingsKey key, T value) {
-        Put(key.ToString(), value);
-    }
+    //private void Put<T>(SettingsKey key, T value) {
+    //    Put(key.ToString(), value);
+    //}
 
-    public async Task<string?> GetStringAsync(SettingsKey key) {
-        await InitializeAsync();
-        return GetString(key.ToString());
-    }
-    public async Task<int> GetIntAsync(SettingsKey key, int defaultValue=0) {
-        await InitializeAsync();
-        return GetInt(key.ToString(),defaultValue);
-    }
-    public async Task<long> GetLongAsync(SettingsKey key, long defaultValue = 0) {
-        await InitializeAsync();
-        return GetLong(key.ToString(), defaultValue);
-    }
-    public async Task<bool> GetBoolAsync(SettingsKey key, bool defaultValue = false) {
-        await InitializeAsync();
-        return GetBool(key.ToString(), defaultValue);
-    }
+    //public async Task<string?> GetStringAsync(SettingsKey key) {
+    //    await InitializeAsync();
+    //    return GetString(key.ToString());
+    //}
+    //public async Task<int> GetIntAsync(SettingsKey key, int defaultValue=0) {
+    //    await InitializeAsync();
+    //    return GetInt(key.ToString(),defaultValue);
+    //}
+    //public async Task<long> GetLongAsync(SettingsKey key, long defaultValue = 0) {
+    //    await InitializeAsync();
+    //    return GetLong(key.ToString(), defaultValue);
+    //}
+    //public async Task<bool> GetBoolAsync(SettingsKey key, bool defaultValue = false) {
+    //    await InitializeAsync();
+    //    return GetBool(key.ToString(), defaultValue);
+    //}
 
-    public async Task PutAsync<T>(SettingsKey key, T value) {
-        await InitializeAsync();
-        Put(key, value);
-        await CommitAsync();
-    }
+    //public async Task PutAsync<T>(SettingsKey key, T value) {
+    //    await InitializeAsync();
+    //    Put(key, value);
+    //    await CommitAsync();
+    //}
 
     public async Task EditAsync(Func<IUserSettingsAccessor, bool> fn) {
         await InitializeAsync();

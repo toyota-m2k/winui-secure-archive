@@ -19,7 +19,7 @@ namespace SecureArchive.Views.ViewModels {
         public ReactivePropertySlim<bool> IsServerRunning { get; } = new ReactivePropertySlim<bool>(false, ReactivePropertyMode.DistinctUntilChanged);
         public ReactivePropertySlim<bool> ShowLog { get; } = new ReactivePropertySlim<bool>(false, ReactivePropertyMode.DistinctUntilChanged);
         public ReadOnlyReactivePropertySlim<VerticalAlignment> PanelVerticalAlignment { get; }
-        public ReactivePropertySlim<int> PortNo { get; } = new ReactivePropertySlim<int>(0);
+        public ReactivePropertySlim<string> ServerParams { get; } = new ReactivePropertySlim<string>("");
 
         public MenuPageViewModel(
             //ILoggerFactory loggerFactory,
@@ -66,15 +66,25 @@ namespace SecureArchive.Views.ViewModels {
         private async void InitServer() {
             var us = await _userSettingsService.GetAsync();
             ShowLog.Value = us.ShowLog;
-            PortNo.Value = us.PortNo;
+            if (us.EnableHttp && us.EnableHttps) {
+                ServerParams.Value = $"HTTP: {us.PortHttp} / HTTPS: {us.PortHttps}";
+            }
+            else if (us.EnableHttps) {
+                ServerParams.Value = $"HTTPS: {us.PortHttps}";
+            }
+            else if (us.EnableHttp) {
+                ServerParams.Value = $"HTTP: {us.PortHttp}";
+            }
+            else {
+                ServerParams.Value = "Server is disabled";
+            }
             if (us.ServerAutoStart) {
                 StartServer();
             }
         }
 
         private async void StartServer() {
-            PortNo.Value = (await _userSettingsService.GetAsync()).PortNo;
-            _httpServreService.Start(PortNo.Value);
+            _httpServreService.Start();
         }
         private void StopServer() {
             _httpServreService.Stop();

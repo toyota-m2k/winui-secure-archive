@@ -6,31 +6,35 @@ using System.Threading.Tasks;
 
 namespace SecureArchive.DI;
 
-internal enum SettingsKey {
-    DataFolder,
-    PortNo,
-    ServerAutoStart,
-    ServerName,
-    EnableHttps,
-    HttpsPort,
-    HttpsOnly,
-    PfxPath,
-    PfxPasswordEncrypted,
-}
+//internal enum SettingsKey {
+//    DataFolder,
+//    PortNo,
+//    ServerAutoStart,
+//    ServerName,
+//    EnableHttps,
+//    HttpsPort,
+//    PfxPath,
+//    PfxPasswordEncrypted,
+//}
 
 internal interface IReadonlyUserSettingsAccessor {
     string? DataFolder { get; }
-    int PortNo { get; }
+    // int PortNo { get; }
     bool ServerAutoStart { get; }
     string? PreviousPeerAddress { get; }
     bool ShowLog { get; }
     /// <summary>mDNS Service Instance 名 / ペアリング QR の表示名。空ならマシン名を使う。</summary>
     string? ServerName { get; }
+    bool EnableMdnsAdvertisement { get; set; }
+
     /// <summary>EnsureServerName: ServerName が空ならマシン名を返す。</summary>
     string EnsureServerName { get; }
+    bool EnableHttp { get; }
     bool EnableHttps { get; }
-    int HttpsPort { get; }
-    bool HttpsOnly { get; }
+    int PortHttp { get; }
+    int PortHttps { get; }
+    bool ServerEnabled { get; }
+    //bool HttpsOnly { get; }
     string? PfxPath { get; }
     /// <summary>DPAPI で暗号化された PFX パスワード (Base64)。生のパスワードは [PfxPassword] 経由で取得。</summary>
     string? PfxPasswordEncrypted { get; }
@@ -39,14 +43,18 @@ internal interface IReadonlyUserSettingsAccessor {
 }
 internal interface IUserSettingsAccessor : IReadonlyUserSettingsAccessor {
     new string? DataFolder { get; set; }
-    new int PortNo { get; set; }
+    //new int PortNo { get; set; }
     new bool ServerAutoStart { get; set; }
     new string? PreviousPeerAddress { get; set; }
     new bool ShowLog { get; set; }
     new string? ServerName { get; set; }
+    new bool EnableMdnsAdvertisement { get; set; }
+    new bool EnableHttp { get; set; }
     new bool EnableHttps { get; set; }
-    new int HttpsPort { get; set; }
-    new bool HttpsOnly { get; set; }
+    new int PortHttp { get; set; }
+    new int PortHttps { get; set; }
+
+    //new bool HttpsOnly { get; set; }
     new string? PfxPath { get; set; }
     new string? PfxPasswordEncrypted { get; set; }
     /// <summary>PFX パスワードを設定する。DPAPI で暗号化されて [PfxPasswordEncrypted] に保存される。</summary>
