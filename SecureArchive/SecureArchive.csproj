@@ -58,7 +58,7 @@
     <PackageReference Include="Microsoft.Xaml.Behaviors.WinUI.Managed" Version="3.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="QRCoder" Version="1.6.0" />
-    <PackageReference Include="ReactiveProperty.Core" Version="9.7.0" />
+    <PackageReference Include="ReactiveProperty" Version="9.8.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="9.0.4" />
     <PackageReference Include="System.Data.SQLite.Core" Version="1.0.119" />
     <PackageReference Include="System.Net.Http" Version="4.3.4" />

@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 using Reactive.Bindings;
 using SecureArchive.DI;
 using SecureArchive.Utils;
+using SecureArchive.Utils.Server.mdns;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -12,14 +13,47 @@ using System.Text;
 using System.Threading.Tasks;
 
 namespace SecureArchive.Views.ViewModels; 
-internal class SyncArchiveDialogViewModel {
+internal class SyncArchiveDialogViewModel:IDisposable {
     ISyncArchiveService _syncArchiveService;
     IMainThreadService _mainThreadService;
     IUserSettingsService _userSettingsService;
+    DiscoverPeerDialogViewModel _discoverModel;
+
     UtLog _logger;
 
     public ReactivePropertySlim<bool> Running { get; } = new(false);
     public ReactivePropertySlim<string> PeerAddress { get; } = new("");
+    private DiscoveredPeer? _discoveredPeer = null;
+    public DiscoveredPeer? DiscoveredPeer {
+        get => (_discoveredPeer != null && _discoveredPeer.HostAddress == PeerAddress.Value && _discoveredPeer.IsHttps == IsHttps.Value) ? _discoveredPeer : null;
+        set {
+            _discoveredPeer = value;
+            if (value != null) {
+                PeerAddress.Value = value.HostAddress;
+                IsHttps.Value = value.IsHttps;
+            }
+        }
+    }
+    public void Dispose() {
+        _discoverModel.Release();
+    }
+
+    public DiscoverPeerDialogViewModel DiscoveringModel => _discoverModel;
+
+    public async void DiscoverPeer() {
+        Discovering.Value = true;
+        try {
+            var r = await _discoverModel.Discover();
+            if (r != null) {
+                DiscoveredPeer = r;
+            }
+        } finally {
+            Discovering.Value = false;
+        }
+    }
+
+    public ReactivePropertySlim<bool> Discovering { get; } = new(false);
+    public ReactivePropertySlim<bool> IsHttps { get; } = new();
     public ReactivePropertySlim<string> Password { get; } = new("");
     public ReactivePropertySlim<bool> PeerToLocalOnly { get; } = new(true);
     public ReactivePropertySlim<string> ErrorMessage { get; } = new("");
@@ -36,11 +70,13 @@ internal class SyncArchiveDialogViewModel {
     public ReactiveCommandSlim StartCommand { get; } = new();
     public ReactiveCommandSlim CancelCommand { get; } = new();
     public ReactiveCommandSlim CloseCommand { get; } = new();
+    public ReactiveCommandSlim DiscoverCommand { get; } = new();
 
-    public SyncArchiveDialogViewModel(ISyncArchiveService syncArchiveService, IMainThreadService mainThreadService, IUserSettingsService userSettingsService) { 
+    public SyncArchiveDialogViewModel(ISyncArchiveService syncArchiveService, IMainThreadService mainThreadService, IUserSettingsService userSettingsService, DiscoverPeerDialogViewModel discoverModel) { 
         _syncArchiveService = syncArchiveService;
         _mainThreadService = mainThreadService;
         _userSettingsService = userSettingsService;
+        _discoverModel = discoverModel;
         _logger = UtLog.Instance(typeof(SyncArchiveDialogViewModel));
 
         CanStart = PeerAddress.Select(it => it.IsNotEmpty()).ToReadOnlyReactivePropertySlim();

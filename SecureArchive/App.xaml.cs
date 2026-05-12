@@ -126,6 +126,7 @@ namespace SecureArchive {
                     .AddTransient<RemotePasswordDialogPage>()
                     .AddTransient<SyncArchiveDialogViewModel>()
                     .AddTransient<SyncArchiveDialogPage>()
+                    .AddTransient<DiscoverPeerDialogViewModel>()
                     ;
                 })
                 .Build();

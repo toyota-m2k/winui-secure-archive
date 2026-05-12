@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Navigation;
 using SecureArchive.Utils;
+using SecureArchive.Utils.Server.mdns;
 using SecureArchive.Views.ViewModels;
 using System;
 using System.Collections.Generic;
@@ -37,7 +38,12 @@ public sealed partial class SyncArchiveDialogPage : Page, ICustomDialogPage<bool
         ViewModel.CloseCommand.Subscribe(() => {
             Complete?.Invoke(true);
         });
+        ViewModel.DiscoverCommand.Subscribe(async () => {
+            ViewModel.DiscoverPeer();
+        });
     }
+
+
 
 
     public void ShowDialog(XamlRoot parent) {

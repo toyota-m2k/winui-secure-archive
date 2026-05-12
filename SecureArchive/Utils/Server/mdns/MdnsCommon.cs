@@ -6,7 +6,7 @@ using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text;
 
-namespace SecureArchive.Utils.Server {
+namespace SecureArchive.Utils.Server.mdns {
     /// <summary>
     /// MdnsAdvertiser / MdnsBrowser 共通の定数と DNS パケット読み書きプリミティブ。
     /// </summary>

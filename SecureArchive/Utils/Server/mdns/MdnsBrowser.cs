@@ -10,7 +10,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Threading;
 
-namespace SecureArchive.Utils.Server {
+namespace SecureArchive.Utils.Server.mdns {
     /// <summary>
     /// mDNS-SD クライアント (Discovery 側)。
     /// _booapi._tcp.local の PTR クエリを送信し、応答パケットから PTR / SRV / TXT / A を集約して
@@ -26,9 +26,10 @@ namespace SecureArchive.Utils.Server {
         private readonly UtLog logger = UtLog.Instance("MDNS.Brs");
         private readonly object _lock = new object();
         private readonly List<UdpClient> _sockets = new List<UdpClient>();
-        private CancellationTokenSource _cts;
-        private string _excludeFingerprint;
-        private readonly Dispatcher _ui;
+        private CancellationTokenSource? _cts = null;
+        private string? _excludeFingerprint = null;
+        //private readonly Dispatcher _ui;
+        public event Action<UpdateInfo>? OnUpdate = null;
 
         // InstanceFqdn → 構築中ピア
         private readonly Dictionary<string, PeerBuilder> _building =
@@ -38,11 +39,24 @@ namespace SecureArchive.Utils.Server {
         /// UI バインド可能なピアコレクション。Dispatcher で更新される。
         /// 外部から渡すと、ViewModel 既存の ObservableCollection を再利用できる (XAML バインドが切れない)。
         /// </summary>
-        public ObservableCollection<DiscoveredPeer> Peers { get; }
+        private Dictionary<string,DiscoveredPeer> Peers { get; } = new();
+        public class UpdateInfo {
+            public enum UpdateType {
+                AddOrUpdate,
+                Remove,
+            }
+            public UpdateType Type;
+            public DiscoveredPeer Peer;
+            UpdateInfo(UpdateType type, DiscoveredPeer peer) {
+                Type = type;
+                Peer = peer;
+            }
+            public static UpdateInfo AddOrUpdate(DiscoveredPeer peer) => new UpdateInfo(UpdateType.AddOrUpdate, peer);
+            public static UpdateInfo Remove(DiscoveredPeer peer) => new UpdateInfo(UpdateType.Remove, peer);
+        }
 
-        public MdnsBrowser(Dispatcher uiDispatcher, ObservableCollection<DiscoveredPeer> peers = null) {
-            _ui = uiDispatcher ?? throw new ArgumentNullException(nameof(uiDispatcher));
-            Peers = peers ?? new ObservableCollection<DiscoveredPeer>();
+        public MdnsBrowser(Action<UpdateInfo>? onUpdate = null) {
+            OnUpdate += onUpdate;
         }
 
         /// <summary>
@@ -76,7 +90,8 @@ namespace SecureArchive.Utils.Server {
         }
 
         public void Dispose() {
-            CancellationTokenSource cts;
+            OnUpdate = null;
+            CancellationTokenSource? cts;
             List<UdpClient> sockets;
             lock (_lock) {
                 cts = _cts;
@@ -286,10 +301,10 @@ namespace SecureArchive.Utils.Server {
         // ---- Aggregation ------------------------------------------------------------------
 
         private sealed class PeerBuilder {
-            public string InstanceFqdn;
-            public string SrvTarget;        // 例: "MachineA-BooTube.local."
+            public string? InstanceFqdn;
+            public string? SrvTarget;        // 例: "MachineA-BooTube.local."
             public ushort SrvPort;
-            public Dictionary<string, string> Txt;
+            public Dictionary<string, string>? Txt;
             public HashSet<IPAddress> Ips = new HashSet<IPAddress>();
 
             public bool IsComplete =>
@@ -337,7 +352,7 @@ namespace SecureArchive.Utils.Server {
         private void TryPublish(PeerBuilder b) {
             if (!b.IsComplete) return;
             var txt = b.Txt;
-            string app = txt.TryGetValue("app", out var a) ? a : null;
+            string? app = txt.TryGetValue("app", out var a) ? a : null;
             if (app != null && !string.Equals(app, MdnsCommon.AppId, StringComparison.OrdinalIgnoreCase)) {
                 // BooTube 以外 (winui-secure-archive 等) は除外
                 return;
@@ -362,16 +377,8 @@ namespace SecureArchive.Utils.Server {
                 app ?? "", ver,
                 new Dictionary<string, string>(txt, StringComparer.OrdinalIgnoreCase),
                 DateTime.UtcNow);
-
-            DispatchToUi(() => {
-                for (int i = 0; i < Peers.Count; i++) {
-                    if (string.Equals(Peers[i].InstanceName, peer.InstanceName, StringComparison.OrdinalIgnoreCase)) {
-                        Peers[i] = peer;
-                        return;
-                    }
-                }
-                Peers.Add(peer);
-            });
+            Peers[peer.InstanceName.ToLower()] = peer;
+            OnUpdate?.Invoke(UpdateInfo.AddOrUpdate(peer));
         }
 
         private void RemovePeer(string instanceFqdn) {
@@ -379,23 +386,21 @@ namespace SecureArchive.Utils.Server {
                 _building.Remove(instanceFqdn);
             }
             var label = InstanceLabelFromFqdn(instanceFqdn);
-            DispatchToUi(() => {
-                for (int i = 0; i < Peers.Count; i++) {
-                    if (string.Equals(Peers[i].InstanceName, label, StringComparison.OrdinalIgnoreCase)) {
-                        Peers.RemoveAt(i);
-                        return;
-                    }
-                }
-            });
-        }
+            if (label==null) return;
 
-        private void DispatchToUi(Action action) {
-            if (_ui.CheckAccess()) {
-                action();
-            } else {
-                _ui.BeginInvoke(action);
+            var removed = Peers.GetValue(label.ToLower());
+            if (removed != null) {
+                OnUpdate?.Invoke(UpdateInfo.Remove(removed));
             }
         }
+
+        //private void DispatchToUi(Action action) {
+        //    if (_ui.CheckAccess()) {
+        //        action();
+        //    } else {
+        //        _ui.BeginInvoke(action);
+        //    }
+        //}
 
         private static string InstanceLabelFromFqdn(string fqdn) {
             // "MachineA-BooTube._booapi._tcp.local." → "MachineA-BooTube"

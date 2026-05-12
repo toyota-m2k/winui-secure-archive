@@ -2,7 +2,7 @@ using System;
 using System.Linq;
 using System.Text;
 
-namespace SecureArchive.Utils.Server {
+namespace SecureArchive.Utils.Server.mdns {
     /// <summary>
     /// 同期相手 (別 BooTube インスタンス) の接続情報をひとまとめにする不変オブジェクト。
     /// </summary>

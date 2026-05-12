@@ -9,7 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace SecureArchive.Utils.Server;
+namespace SecureArchive.Utils.Server.mdns;
 
 /// <summary>
 /// 最小限の mDNS-SD レスポンダ。

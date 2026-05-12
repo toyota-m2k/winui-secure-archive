@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 
-namespace SecureArchive.Utils.Server {
+namespace SecureArchive.Utils.Server.mdns {
     /// <summary>
     /// mDNS-SD で検出したピアの情報。SyncDialog で表示しユーザに選ばせる。
     /// </summary>
@@ -19,6 +19,13 @@ namespace SecureArchive.Utils.Server {
         public IReadOnlyDictionary<string, string> RawTxt { get; }
         public DateTime LastSeen { get; }
 
+        public string HostAddress {
+            get {
+                string host = Addresses.Count > 0 ? Addresses[0].ToString() : (Hostname ?? "").TrimEnd('.');
+                return $"{host}:{Port}";
+            }
+        }
+            
         public DiscoveredPeer(
                 string instanceName, string hostname,
                 IReadOnlyList<IPAddress> addresses, int port,

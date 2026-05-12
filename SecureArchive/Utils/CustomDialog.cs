@@ -83,31 +83,45 @@ public class CustomDialogBuilder<T,R> where T: Page, IDialogPage<R> {
         return this;
     }
 
+    private Action? mCloseAction = null;
+    public CustomDialogBuilder<T, R> OnClose(Action onClose) {
+        mCloseAction = onClose;
+        return this;
+    }
 
     public async Task<R?> ShowAsync() {
-        Dialog.Content = Page;
-        R? completionResult = default;
-        bool completedByHandler = false;
+        try {
+            Dialog.Content = Page;
+            R? completionResult = default;
+            bool completedByHandler = false;
 
-        if (Page is ICustomDialogPage<R> customPage) {
-            customPage.Complete += (r) => {
-                completedByHandler = true;
-                completionResult = r;
-                Dialog.Hide();
-            };
+            if (Page is ICustomDialogPage<R> customPage) {
+                customPage.Complete += (r) => {
+                    completedByHandler = true;
+                    completionResult = r;
+                    Dialog.Hide();
+                };
+            }
+
+            var result = await Dialog.ShowAsync();
+            if (completedByHandler) {
+                return completionResult;
+            }
+            else if (Page is IStandardDialogPage<R> standardPage) {
+                return standardPage.GetResult(result);
+            }
+            else if (result == ContentDialogResult.Primary) {
+                return primaryValue;
+            }
+            else if (result == ContentDialogResult.Secondary) {
+                return secondaryValue;
+            }
+            else {
+                return defaultValue;
+            }
         }
-
-        var result = await Dialog.ShowAsync();
-        if (completedByHandler) {
-            return completionResult;
-        } else if (Page is IStandardDialogPage<R> standardPage) {
-            return standardPage.GetResult(result);
-        } else if(result == ContentDialogResult.Primary) {
-            return primaryValue;
-        } else if(result == ContentDialogResult.Secondary) {
-            return secondaryValue;
-        } else { 
-            return defaultValue;
+        finally {
+            mCloseAction?.Invoke();
         }
     }
 }
