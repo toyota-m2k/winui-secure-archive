@@ -21,7 +21,7 @@ internal interface IReadonlyUserSettingsAccessor {
     string? DataFolder { get; }
     // int PortNo { get; }
     bool ServerAutoStart { get; }
-    string? PreviousPeerAddress { get; }
+    string? PreviousPeerHost { get; }
     bool ShowLog { get; }
     /// <summary>mDNS Service Instance 名 / ペアリング QR の表示名。空ならマシン名を使う。</summary>
     string? ServerName { get; }
@@ -45,7 +45,7 @@ internal interface IUserSettingsAccessor : IReadonlyUserSettingsAccessor {
     new string? DataFolder { get; set; }
     //new int PortNo { get; set; }
     new bool ServerAutoStart { get; set; }
-    new string? PreviousPeerAddress { get; set; }
+    new string? PreviousPeerHost { get; set; }
     new bool ShowLog { get; set; }
     new string? ServerName { get; set; }
     new bool EnableMdnsAdvertisement { get; set; }

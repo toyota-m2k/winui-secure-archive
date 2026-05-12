@@ -23,13 +23,13 @@ internal class SyncArchiveDialogViewModel:IDisposable {
 
     public ReactivePropertySlim<bool> Running { get; } = new(false);
     public ReactivePropertySlim<string> PeerAddress { get; } = new("");
-    private DiscoveredPeer? _discoveredPeer = null;
-    public DiscoveredPeer? DiscoveredPeer {
-        get => (_discoveredPeer != null && _discoveredPeer.HostAddress == PeerAddress.Value && _discoveredPeer.IsHttps == IsHttps.Value) ? _discoveredPeer : null;
+    private PeerHost? _discoveredPeer = null;
+    public PeerHost? DiscoveredPeer {
+        get => (_discoveredPeer != null && _discoveredPeer.Address == PeerAddress.Value && _discoveredPeer.IsHttps == IsHttps.Value) ? _discoveredPeer : PeerHost.DirectHost(PeerAddress.Value, IsHttps.Value);
         set {
             _discoveredPeer = value;
             if (value != null) {
-                PeerAddress.Value = value.HostAddress;
+                PeerAddress.Value = value.Address;
                 IsHttps.Value = value.IsHttps;
             }
         }
@@ -89,17 +89,17 @@ internal class SyncArchiveDialogViewModel:IDisposable {
 
     private async void initPeerAddress() {
         var s = await _userSettingsService.GetAsync();
-        var addr = s.PreviousPeerAddress;
-        if (!string.IsNullOrEmpty(addr)) {
-            PeerAddress.Value = addr;
+        var host = s.PreviousPeerHost;
+        if (!string.IsNullOrEmpty(host)) {
+            DiscoveredPeer = PeerHost.FromJson(host);
         }
     }
     private async void updatePeerAddress() {
-        var addr = PeerAddress.Value;
-        if (string.IsNullOrEmpty(addr)) return;
+        var host = DiscoveredPeer;
         await _userSettingsService.EditAsync(edit => {
-            if (edit.PreviousPeerAddress != addr) {
-                edit.PreviousPeerAddress = addr;
+            var prev = PeerHost.FromJson(edit.PreviousPeerHost);
+            if (prev != host) {
+                edit.PreviousPeerHost = host?.ToJson();
                 return true;
             } else { return false; }
         });

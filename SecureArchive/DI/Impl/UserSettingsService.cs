@@ -24,7 +24,7 @@ internal class UserSettingsService : IUserSettingsService {
             get => _userSettings.GetBool(callerName(), false);
             set => _userSettings.Put(callerName(), value);
         }
-        public string? PreviousPeerAddress {
+        public string? PreviousPeerHost {
             get => _userSettings.GetString(callerName());
             set => _userSettings.Put(callerName(), value);
         }
