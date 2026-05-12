@@ -73,10 +73,10 @@ public sealed partial class PairingQrDialog : ContentDialog {
         sb.Append(host);
         sb.Append(":").Append(Port);
         sb.Append("?fp=").Append(Uri.EscapeDataString(Fingerprint ?? ""));
-        sb.Append("&name=").Append(Uri.EscapeDataString(ServerName ?? "SecureArchive"));
+        sb.Append("&name=").Append(Uri.EscapeDataString(Environment.MachineName));
         sb.Append("&svc=").Append(Uri.EscapeDataString(ServerName ?? "SecureArchive"));
         sb.Append("&https=").Append(IsHttps ? "1" : "0");
-        sb.Append("&app=archive");
+        sb.Append("&app=SA");
         var uri = sb.ToString();
 
         UriBox.Text = uri;

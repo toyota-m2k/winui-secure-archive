@@ -28,7 +28,7 @@ namespace SecureArchive.Utils.Server;
 public class MdnsAdvertiser : IDisposable {
     public const string ServiceType = "_booapi._tcp";
     /// <summary>このアプリ識別子 (TXT app=...)。</summary>
-    public const string AppId = "archive";
+    public const string AppId = "SA";
     private const int MdnsPort = 5353;
     private const uint TtlAnnouncement = 120;
     private const uint TtlHostAddress = 120;
@@ -51,18 +51,21 @@ public class MdnsAdvertiser : IDisposable {
         get { lock (_lock) return _cts != null; }
     }
 
+    /**
+     * @param instanceName 「設定」で登録された Server Name
+     */
     public void Start(string instanceName, int port, bool isHttps, string? fingerprint) {
         lock (_lock) {
             if (_cts != null) return;
 
-            _instance = SanitizeInstanceName(instanceName);
+            _instance = SanitizeInstanceName(instanceName);        // Settings.ServiceName
             _hostLocal = SanitizeHostname(Environment.MachineName) + ".local";
             _port = (ushort)port;
             _txt = new List<string> {
                 "version=2",
                 isHttps ? "https=1" : "https=0",
-                "app=" + AppId,
-                "hostname=" + _hostLocal,
+                "app=" + AppId,                     // "SA"
+                "hostname=" + _hostLocal,           // "machine-name.local"
             };
             if (!string.IsNullOrEmpty(fingerprint)) {
                 _txt.Add("fp=" + fingerprint);

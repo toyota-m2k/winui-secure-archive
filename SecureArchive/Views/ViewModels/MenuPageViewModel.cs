@@ -3,6 +3,7 @@ using Microsoft.UI.Xaml;
 using Reactive.Bindings;
 using SecureArchive.DI;
 using SecureArchive.Utils;
+using System.Diagnostics;
 using System.Reactive.Linq;
 
 namespace SecureArchive.Views.ViewModels {
@@ -15,6 +16,7 @@ namespace SecureArchive.Views.ViewModels {
         public ReactiveCommandSlim ListCommand { get; } = new ReactiveCommandSlim();
         public ReactiveCommandSlim SettingsCommand { get; } = new ReactiveCommandSlim();
         public ReactiveCommandSlim MirrorCommand { get; } = new ReactiveCommandSlim();
+        public ReactiveCommandSlim QRCodeCommand { get; } = new ReactiveCommandSlim();
         //public ReactiveCommandSlim RepairCommand { get; } = new ReactiveCommandSlim();
         public ReactivePropertySlim<bool> IsServerRunning { get; } = new ReactivePropertySlim<bool>(false, ReactivePropertyMode.DistinctUntilChanged);
         public ReactivePropertySlim<bool> ShowLog { get; } = new ReactivePropertySlim<bool>(false, ReactivePropertyMode.DistinctUntilChanged);
@@ -39,6 +41,7 @@ namespace SecureArchive.Views.ViewModels {
             MirrorCommand.Subscribe(() => {
                 App.GetService<SyncArchiveDialogPage>().ShowDialog(_pageService.CurrentPage!.XamlRoot);
             });
+            QRCodeCommand.Subscribe(ShowPairingQr);
             //RepairCommand.Subscribe(() => {
             //    Repair();
             //});
@@ -103,5 +106,35 @@ namespace SecureArchive.Views.ViewModels {
         //    //}
 
         //}
+
+        private async void ShowPairingQr() {
+            // Persist current edits so the QR reflects the latest settings
+            var settings = await _userSettingsService.GetAsync();
+            var dlg = new Views.PairingQrDialog {
+                XamlRoot = App.MainWindow.Content.XamlRoot,
+                ServerName = settings.EnsureServerName,
+                Port = settings.EnableHttps ? settings.PortHttps : settings.PortHttp,
+                IsHttps = settings.EnableHttps,
+                Fingerprint = ComputeFingerprintIfPossible(settings),
+            };
+            await dlg.ShowAsync();
+        }
+
+        private static string ComputeFingerprintIfPossible(IReadonlyUserSettingsAccessor settings) {
+            if (!settings.EnableHttps) return "";
+            if (string.IsNullOrEmpty(settings.PfxPath) || !File.Exists(settings.PfxPath)) return "";
+            try {
+                // EphemeralKeySet: MSIX サンドボックス下でも OS ストアアクセスを発生させない
+                using var cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(
+                    settings.PfxPath!, settings.PfxPassword,
+                    System.Security.Cryptography.X509Certificates.X509KeyStorageFlags.EphemeralKeySet);
+                return Utils.CertificateGenerator.ComputeSha256Fingerprint(cert);
+            }
+            catch (Exception e) {
+                Debug.WriteLine(e);
+                return "";
+            }
+        }
+
     }
 }

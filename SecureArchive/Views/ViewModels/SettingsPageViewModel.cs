@@ -58,7 +58,7 @@ namespace SecureArchive.Views.ViewModels {
         public ReactiveCommandSlim ImportCommand { get; } = new();
         public ReactiveCommandSlim BrowsePfxCommand { get; } = new();
         public ReactiveCommandSlim GenerateCertCommand { get; } = new();
-        public ReactiveCommandSlim PairingQrCommand { get; } = new();
+        //public ReactiveCommandSlim PairingQrCommand { get; } = new();
 
         private bool CheckPasswordRequired => _pageService.CheckPasswordRequired;
 
@@ -154,7 +154,6 @@ namespace SecureArchive.Views.ViewModels {
             ImportCommand.Subscribe(ImportSettings);
             BrowsePfxCommand.Subscribe(BrowsePfx);
             GenerateCertCommand.Subscribe(GenerateCert);
-            PairingQrCommand.Subscribe(ShowPairingQr);
             Initialize();
         }
 
@@ -376,37 +375,5 @@ namespace SecureArchive.Views.ViewModels {
                 PfxPassword.Value = dlg.Result.Password;
             }
         }
-
-        private async void ShowPairingQr() {
-            // Persist current edits so the QR reflects the latest settings
-            await PersistAsync();
-            var settings = await _userSettingsService.GetAsync();
-            var dlg = new Views.PairingQrDialog {
-                XamlRoot = App.MainWindow.Content.XamlRoot,
-                ServerName = settings.EnsureServerName,
-                Port = settings.EnableHttps ? settings.PortHttps : settings.PortHttp,
-                IsHttps = settings.EnableHttps,
-                Fingerprint = ComputeFingerprintIfPossible(settings),
-            };
-            await dlg.ShowAsync();
-        }
-
-        private static string ComputeFingerprintIfPossible(IReadonlyUserSettingsAccessor settings) {
-            if (!settings.EnableHttps) return "";
-            if (string.IsNullOrEmpty(settings.PfxPath) || !File.Exists(settings.PfxPath)) return "";
-            try {
-                // EphemeralKeySet: MSIX サンドボックス下でも OS ストアアクセスを発生させない
-                using var cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(
-                    settings.PfxPath!, settings.PfxPassword,
-                    System.Security.Cryptography.X509Certificates.X509KeyStorageFlags.EphemeralKeySet);
-                return Utils.CertificateGenerator.ComputeSha256Fingerprint(cert);
-            }
-            catch (Exception e) {
-                Debug.WriteLine(e);
-                return "";
-            }
-        }
-
-
     }
 }

@@ -13,10 +13,11 @@
         <ResourceDictionary Source="./Converters.xaml"/>
     </Page.Resources>
 
-    <Grid>
+    <Grid Padding="8">
         <StackPanel Orientation="Vertical" HorizontalAlignment="Stretch" Spacing="10">
             <TextBlock Text="Peer Address"/>
             <TextBox Text="{x:Bind ViewModel.PeerAddress.Value, Mode=TwoWay}"/>
+            <CheckBox Content="Use HTTPS" IsChecked="{Binding ViewModel.IsHTTPS.Value, Mode=TwoWay}"/>
             <TextBlock Text="Peer Password"/>
             <PasswordBox Password="{x:Bind ViewModel.Password.Value, Mode=TwoWay}"/>
             <CheckBox Content="Peer to Local Only" IsChecked="{x:Bind ViewModel.PeerToLocalOnly.Value, Mode=TwoWay}"/>

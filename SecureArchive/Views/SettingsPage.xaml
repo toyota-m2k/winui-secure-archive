@@ -66,6 +66,7 @@
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*"/>
@@ -81,36 +82,36 @@
                 <Button Grid.Row="3" Grid.Column="1" Content="Select" Command="{x:Bind ViewModel.SelectFolderCommand, Mode=OneTime}" Width="80"/>
 
                 <TextBlock Grid.Row="4" Grid.Column="0" Text="Server" Margin="0,16,0,0"/>
+                <CheckBox Grid.Row="5" Grid.Column="0" Content="Auto Start" IsChecked="{x:Bind ViewModel.ServerAutoStart.Value, Mode=TwoWay}"/>
 
-                <CheckBox Grid.Row="5" Grid.Column="0" Content="HTTP" IsChecked="{x:Bind ViewModel.EnableHttp.Value, Mode=TwoWay}"/>
-                <StackPanel Grid.Row="5" Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="5">
+                <CheckBox Grid.Row="6" Grid.Column="0" Content="HTTP" IsChecked="{x:Bind ViewModel.EnableHttp.Value, Mode=TwoWay}"/>
+                <StackPanel Grid.Row="6" Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="5">
                     <TextBlock Text="Port" VerticalAlignment="Center"/>
                     <NumberBox Text="{x:Bind ViewModel.PortHttp.Value, Mode=TwoWay}" IsEnabled="{x:Bind ViewModel.EnableHttp.Value, Mode=OneWay}" Width="80" HorizontalAlignment="Left"/>
                 </StackPanel>
 
-                <CheckBox Grid.Row="6" Grid.Column="0" Content="HTTPS" IsChecked="{x:Bind ViewModel.EnableHttps.Value, Mode=TwoWay}"/>
-                <StackPanel Grid.Row="6" Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="5">
+                <CheckBox Grid.Row="7" Grid.Column="0" Content="HTTPS" IsChecked="{x:Bind ViewModel.EnableHttps.Value, Mode=TwoWay}"/>
+                <StackPanel Grid.Row="7" Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="5">
                     <TextBlock Text="Port" VerticalAlignment="Center"/>
                     <NumberBox Text="{x:Bind ViewModel.PortHttps.Value, Mode=TwoWay}" IsEnabled="{x:Bind ViewModel.EnableHttps.Value, Mode=OneWay}" Width="80" HorizontalAlignment="Left"/>
                 </StackPanel>
                 
                 
-                <TextBlock Grid.Row="7" Grid.Column="0" Text="Server Name" Margin="0,16,0,0"/>
-                <TextBox Grid.Row="8" Grid.Column="0" Text="{x:Bind ViewModel.ServerName.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Stretch"/>
-                <CheckBox Grid.Row="9" Grid.Column="0" Content="Auto Start" IsChecked="{x:Bind ViewModel.ServerAutoStart.Value, Mode=TwoWay}"/>
+                <TextBlock Grid.Row="8" Grid.Column="0" Text="Server Name" Margin="0,16,0,0"/>
+                <TextBox Grid.Row="9" Grid.Column="0" Text="{x:Bind ViewModel.ServerName.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" HorizontalAlignment="Stretch"/>
+                <CheckBox Grid.Row="10" Grid.Column="0" Content="mDNS Advertise" IsChecked="{x:Bind ViewModel.EnableMdnsAdvertisement.Value, Mode=TwoWay}"/>
 
 
-                <TextBlock Grid.Row="10" Grid.Column="0" Text="PFX file" Margin="0,8,0,0"/>
-                <Button Grid.Row="11" Grid.Column="0" Content="Generate..." Command="{x:Bind ViewModel.GenerateCertCommand, Mode=OneTime}" IsEnabled="{x:Bind ViewModel.EnableHttps.Value, Mode=OneWay}"/>
-                <TextBox Grid.Row="12" Grid.Column="0" Text="{x:Bind ViewModel.PfxPath.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{x:Bind ViewModel.EnableHttps.Value, Mode=OneWay}"/>
-                <Button Grid.Row="12" Grid.Column="1" Content="..." Width="40" Command="{x:Bind ViewModel.BrowsePfxCommand, Mode=OneTime}" IsEnabled="{x:Bind ViewModel.EnableHttps.Value, Mode=OneWay}"/>
+                <TextBlock Grid.Row="11" Grid.Column="0" Text="PFX file" Margin="0,8,0,0"/>
+                <Button Grid.Row="12" Grid.Column="0" Content="Generate..." Command="{x:Bind ViewModel.GenerateCertCommand, Mode=OneTime}" IsEnabled="{x:Bind ViewModel.EnableHttps.Value, Mode=OneWay}"/>
+                <TextBox Grid.Row="13" Grid.Column="0" Text="{x:Bind ViewModel.PfxPath.Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" IsEnabled="{x:Bind ViewModel.EnableHttps.Value, Mode=OneWay}"/>
+                <Button Grid.Row="13" Grid.Column="1" Content="..." Width="40" Command="{x:Bind ViewModel.BrowsePfxCommand, Mode=OneTime}" IsEnabled="{x:Bind ViewModel.EnableHttps.Value, Mode=OneWay}"/>
 
-                <TextBlock Grid.Row="13" Grid.Column="0" Text="PFX password" Margin="0,4,0,0"/>
-                <PasswordBox Grid.Row="14" Grid.Column="0" Password="{x:Bind ViewModel.PfxPassword.Value, Mode=TwoWay}" IsEnabled="{x:Bind ViewModel.EnableHttps.Value, Mode=OneWay}"/>
-                <Button Grid.Row="14" Grid.Column="1" Content="Pairing QR..." Command="{x:Bind ViewModel.PairingQrCommand, Mode=OneTime}"/>
+                <TextBlock Grid.Row="14" Grid.Column="0" Text="PFX password" Margin="0,4,0,0"/>
+                <PasswordBox Grid.Row="15" Grid.Column="0" Password="{x:Bind ViewModel.PfxPassword.Value, Mode=TwoWay}" IsEnabled="{x:Bind ViewModel.EnableHttps.Value, Mode=OneWay}"/>
 
-                <Button Grid.Row="15" Grid.Column="0" Grid.ColumnSpan="2" x:Name="ButtonExport" Content="Export" Command="{x:Bind ViewModel.ExportCommand, Mode=OneTime}" HorizontalAlignment="Left" Margin="0,40,0,0" Width="80"/>
-                <Button Grid.Row="15" Grid.Column="0" Grid.ColumnSpan="2" x:Name="ButtonDone" Content="Done" Command="{x:Bind ViewModel.DoneCommand, Mode=OneTime}" HorizontalAlignment="Right" Style="{StaticResource AccentButtonStyle}" Margin="0,40,0,0" Width="80"/>
+                <Button Grid.Row="16" Grid.Column="0" Grid.ColumnSpan="2" x:Name="ButtonExport" Content="Export" Command="{x:Bind ViewModel.ExportCommand, Mode=OneTime}" HorizontalAlignment="Left" Margin="0,10,0,0" Width="80"/>
+                <Button Grid.Row="16" Grid.Column="0" Grid.ColumnSpan="2" x:Name="ButtonDone" Content="Done" Command="{x:Bind ViewModel.DoneCommand, Mode=OneTime}" HorizontalAlignment="Right" Style="{StaticResource AccentButtonStyle}" Margin="0,10,0,0" Width="80"/>
             </Grid>
             </ScrollViewer>
         </Grid>
