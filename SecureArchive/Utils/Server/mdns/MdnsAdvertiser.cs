@@ -26,14 +26,11 @@ namespace SecureArchive.Utils.Server;
 /// アプリ識別は TXT app=archive で行う (BooTube は app=bootube)。
 /// </summary>
 public class MdnsAdvertiser : IDisposable {
-    public const string ServiceType = "_booapi._tcp";
-    /// <summary>このアプリ識別子 (TXT app=...)。</summary>
-    public const string AppId = "SA";
-    private const int MdnsPort = 5353;
+    public const string ServiceType = MdnsCommon.ServiceType;
+    public const string AppId = MdnsCommon.AppId;
     private const uint TtlAnnouncement = 120;
     private const uint TtlHostAddress = 120;
     private const int AnnounceIntervalMs = 30000;
-    private static readonly IPAddress MulticastV4 = IPAddress.Parse("224.0.0.251");
 
     private readonly UtLog _logger = UtLog.Instance(typeof(MdnsAdvertiser));
 
@@ -108,31 +105,23 @@ public class MdnsAdvertiser : IDisposable {
     // ---- Sockets ----------------------------------------------------------------------
 
     private void BindSockets() {
-        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces()) {
-            if (nic.OperationalStatus != OperationalStatus.Up) continue;
-            if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
-            if (!nic.SupportsMulticast) continue;
-            var ipProps = nic.GetIPProperties();
-            foreach (var ua in ipProps.UnicastAddresses) {
-                if (ua.Address.AddressFamily != AddressFamily.InterNetwork) continue;
-                if (IPAddress.IsLoopback(ua.Address)) continue;
-                UdpClient? sock = null;
-                try {
-                    sock = new UdpClient(AddressFamily.InterNetwork);
-                    sock.ExclusiveAddressUse = false;
-                    sock.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-                    sock.Client.Bind(new IPEndPoint(ua.Address, MdnsPort));
-                    sock.JoinMulticastGroup(MulticastV4, ua.Address);
-                    sock.MulticastLoopback = false;
-                    _sockets.Add(sock);
-                    _logger.Debug($"mDNS bound on {ua.Address}");
-                    var s = sock;
-                    Task.Run(() => ListenLoop(s, _cts!.Token));
-                }
-                catch (Exception e) {
-                    _logger.Error($"mDNS bind on {ua.Address} failed: {e.Message}");
-                    try { sock?.Close(); } catch { }
-                }
+        foreach (var addr in MdnsCommon.EnumerateMulticastV4Addresses()) {
+            UdpClient sock = null;
+            try {
+                sock = new UdpClient(AddressFamily.InterNetwork);
+                sock.ExclusiveAddressUse = false;
+                sock.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
+                sock.Client.Bind(new IPEndPoint(addr, MdnsCommon.MdnsPort));
+                sock.JoinMulticastGroup(MdnsCommon.MulticastV4, addr);
+                sock.MulticastLoopback = false;
+                _sockets.Add(sock);
+                _logger.Debug($"mDNS bound on {addr}");
+                var s = sock;
+                Task.Run(() => ListenLoop(s, _cts!.Token));
+            }
+            catch (Exception e) {
+                _logger.Error(e, $"mDNS bind on {addr} failed: {e.Message}");
+                try { sock?.Close(); } catch { }
             }
         }
     }
@@ -182,7 +171,7 @@ public class MdnsAdvertiser : IDisposable {
         bool needRespond = false;
         for (int i = 0; i < qdcount; i++) {
             string? qname;
-            if (!TryReadName(buffer, ref offset, out qname)) return;
+            if (!MdnsCommon.TryReadName(buffer, ref offset, out qname)) return;
             if (offset + 4 > buffer.Length) return;
             int qtype = (buffer[offset] << 8) | buffer[offset + 1];
             offset += 4; // type + class
@@ -216,7 +205,7 @@ public class MdnsAdvertiser : IDisposable {
 
     private void SendOnSocket(UdpClient sock, byte[] packet) {
         try {
-            sock.Send(packet, packet.Length, new IPEndPoint(MulticastV4, MdnsPort));
+            sock.Send(packet, packet.Length, new IPEndPoint(MdnsCommon.MulticastV4, MdnsCommon.MdnsPort));
         }
         catch (ObjectDisposedException) { }
         catch (Exception e) {
@@ -232,26 +221,26 @@ public class MdnsAdvertiser : IDisposable {
 
     private byte[] BuildResponsePacket(bool includePTR, uint? ttlOverride) {
         var ms = new MemoryStream();
-        WriteUInt16(ms, 0);
-        WriteUInt16(ms, 0x8400); // QR=1, AA=1
-        WriteUInt16(ms, 0);      // QDCOUNT
+        MdnsCommon.WriteUInt16(ms, 0);
+        MdnsCommon.WriteUInt16(ms, 0x8400); // QR=1, AA=1
+        MdnsCommon.WriteUInt16(ms, 0);      // QDCOUNT
         int answerCount = (includePTR ? 1 : 0) + 1 /*SRV*/ + 1 /*TXT*/ + _addresses.Count;
-        WriteUInt16(ms, (ushort)answerCount);
-        WriteUInt16(ms, 0); // NSCOUNT
-        WriteUInt16(ms, 0); // ARCOUNT
+        MdnsCommon.WriteUInt16(ms, (ushort)answerCount);
+        MdnsCommon.WriteUInt16(ms, 0); // NSCOUNT
+        MdnsCommon.WriteUInt16(ms, 0); // ARCOUNT
 
         uint ttl = ttlOverride ?? TtlAnnouncement;
 
         if (includePTR) {
             WriteRecord(ms, ServiceType + ".local", 12 /*PTR*/, 0x0001, ttl, () => {
-                WriteName(ms, InstanceFqdn());
+                MdnsCommon.WriteName(ms, InstanceFqdn());
             });
         }
         WriteRecord(ms, InstanceFqdn(), 33 /*SRV*/, 0x8001, ttl, () => {
-            WriteUInt16(ms, 0);
-            WriteUInt16(ms, 0);
-            WriteUInt16(ms, _port);
-            WriteName(ms, HostFqdn());
+            MdnsCommon.WriteUInt16(ms, 0);
+            MdnsCommon.WriteUInt16(ms, 0);
+            MdnsCommon.WriteUInt16(ms, _port);
+            MdnsCommon.WriteName(ms, HostFqdn());
         });
         WriteRecord(ms, InstanceFqdn(), 16 /*TXT*/, 0x8001, ttl, () => {
             if (_txt.Count == 0) {
@@ -277,76 +266,19 @@ public class MdnsAdvertiser : IDisposable {
     }
 
     private static void WriteRecord(MemoryStream ms, string name, ushort type, ushort cls, uint ttl, Action writeData) {
-        WriteName(ms, name);
-        WriteUInt16(ms, type);
-        WriteUInt16(ms, cls);
-        WriteUInt32(ms, ttl);
+        MdnsCommon.WriteName(ms, name);
+        MdnsCommon.WriteUInt16(ms, type);
+        MdnsCommon.WriteUInt16(ms, cls);
+        MdnsCommon.WriteUInt32(ms, ttl);
         long lenPos = ms.Position;
-        WriteUInt16(ms, 0);
+        MdnsCommon.WriteUInt16(ms, 0);
         long startPos = ms.Position;
         writeData();
         long endPos = ms.Position;
         int rdlen = (int)(endPos - startPos);
         ms.Position = lenPos;
-        WriteUInt16(ms, (ushort)rdlen);
+        MdnsCommon.WriteUInt16(ms, (ushort)rdlen);
         ms.Position = endPos;
-    }
-
-    private static void WriteName(MemoryStream ms, string fqdn) {
-        foreach (var label in fqdn.Split('.')) {
-            if (string.IsNullOrEmpty(label)) continue;
-            var bytes = Encoding.UTF8.GetBytes(label);
-            if (bytes.Length > 63) {
-                Array.Resize(ref bytes, 63);
-            }
-            ms.WriteByte((byte)bytes.Length);
-            ms.Write(bytes, 0, bytes.Length);
-        }
-        ms.WriteByte(0);
-    }
-
-    private static void WriteUInt16(MemoryStream ms, ushort v) {
-        ms.WriteByte((byte)(v >> 8));
-        ms.WriteByte((byte)(v & 0xFF));
-    }
-
-    private static void WriteUInt32(MemoryStream ms, uint v) {
-        ms.WriteByte((byte)((v >> 24) & 0xFF));
-        ms.WriteByte((byte)((v >> 16) & 0xFF));
-        ms.WriteByte((byte)((v >> 8) & 0xFF));
-        ms.WriteByte((byte)(v & 0xFF));
-    }
-
-    // ---- DNS name parsing -------------------------------------------------------------
-
-    private static bool TryReadName(byte[] buffer, ref int offset, out string? name) {
-        var sb = new StringBuilder();
-        int cursor = offset;
-        int? returnOffset = null;
-        int hops = 0;
-        while (true) {
-            if (cursor >= buffer.Length) { name = null; return false; }
-            int len = buffer[cursor];
-            if (len == 0) {
-                cursor++;
-                if (returnOffset.HasValue) offset = returnOffset.Value;
-                else offset = cursor;
-                name = sb.ToString() + (sb.Length > 0 ? "." : "");
-                return true;
-            }
-            if ((len & 0xC0) == 0xC0) {
-                if (cursor + 1 >= buffer.Length) { name = null; return false; }
-                if (++hops > 32) { name = null; return false; }
-                int pointer = ((len & 0x3F) << 8) | buffer[cursor + 1];
-                if (!returnOffset.HasValue) returnOffset = cursor + 2;
-                cursor = pointer;
-                continue;
-            }
-            if (cursor + 1 + len > buffer.Length) { name = null; return false; }
-            if (sb.Length > 0) sb.Append('.');
-            sb.Append(Encoding.UTF8.GetString(buffer, cursor + 1, len));
-            cursor += 1 + len;
-        }
     }
 
     // ---- Name helpers -----------------------------------------------------------------
