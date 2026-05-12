@@ -106,9 +106,7 @@ namespace SecureArchive.Views.ViewModels {
         public async Task<PeerHost?> Discover() {
             if (_tcs != null) return await _tcs.Task;
 
-            var tcs = new TaskCompletionSource<PeerHost?>();
-            _tcs = tcs;
-            using (new MdnsBrowser(info => {
+            var browser = new MdnsBrowser(info => {
                 _mainThreadService.Run(() => {
                     var i = findPeerIndex(info.Peer);
                     if (info.Type == MdnsBrowser.UpdateInfo.UpdateType.AddOrUpdate) {
@@ -126,7 +124,10 @@ namespace SecureArchive.Views.ViewModels {
                     }
                     NoPeer.Value = DiscoveredPeers.IsEmpty();
                 });
-            }))
+            });
+            var tcs = new TaskCompletionSource<PeerHost?>();
+            _tcs = tcs;
+            using (browser)
             using (SelectedPeer.Subscribe(peer => {
                 if (peer != null) {
                     tcs.TrySetResult(peer);
@@ -135,6 +136,7 @@ namespace SecureArchive.Views.ViewModels {
             using (CancelDiscoveringCommand.Subscribe(() => {
                 tcs.TrySetResult(null);
             })) {
+                browser.Start();
                 return await tcs.Task;
             }
         }
