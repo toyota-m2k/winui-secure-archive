@@ -51,18 +51,19 @@ public class MdnsAdvertiser : IDisposable {
     /**
      * @param instanceName 「設定」で登録された Server Name
      */
-    public void Start(string instanceName, int port, bool isHttps, string? fingerprint) {
+    public void Start(string serviceName, int port, bool isHttps, string? fingerprint) {
         lock (_lock) {
             if (_cts != null) return;
 
-            _instance = SanitizeInstanceName(instanceName);        // Settings.ServiceName
-            _hostLocal = SanitizeHostname(Environment.MachineName) + ".local";
+            var machineName = Environment.MachineName;
+            _instance = SanitizeInstanceName($"{serviceName}@{machineName}");        // Settings.ServiceName
+            _hostLocal = SanitizeHostname(machineName) + ".local";
             _port = (ushort)port;
             _txt = new List<string> {
                 "version=2",
                 isHttps ? "https=1" : "https=0",
-                "app=" + AppId,                     // "SA"
-                "hostname=" + _hostLocal,           // "machine-name.local"
+                "app=" + AppId,                         // "SA"
+                "hostname=" + machineName,  // 表示用
             };
             if (!string.IsNullOrEmpty(fingerprint)) {
                 _txt.Add("fp=" + fingerprint);
@@ -106,7 +107,7 @@ public class MdnsAdvertiser : IDisposable {
 
     private void BindSockets() {
         foreach (var addr in MdnsCommon.EnumerateMulticastV4Addresses()) {
-            UdpClient sock = null;
+            UdpClient sock = null!;
             try {
                 sock = new UdpClient(AddressFamily.InterNetwork);
                 sock.ExclusiveAddressUse = false;

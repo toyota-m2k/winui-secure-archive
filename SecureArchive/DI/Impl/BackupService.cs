@@ -4,6 +4,7 @@ using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using SecureArchive.Views;
+using SecureArchive.Views.ViewModels;
 using System.Diagnostics;
 using System.Reactive;
 using System.Text;
@@ -145,10 +146,10 @@ internal class BackupService : IBackupService {
 
     private string OwnerId = null!;
     private string Token = null!;
-    private string Address = null!;
+    private PeerHost Peer = null!;
 
 
-    public bool Request(string ownerId, string token, string address) {
+    public bool Request(string ownerId, string token, PeerHost peer) {
         lock(this) {
             if(_isBusy) { 
                 _logger.Warn("cannot accept new backup request, because it is busy.");
@@ -158,7 +159,7 @@ internal class BackupService : IBackupService {
         }
         OwnerId = ownerId;
         Token = token;
-        Address = address;
+        Peer = peer;
         _ = ListProc();
         return true;
     }
@@ -204,7 +205,7 @@ internal class BackupService : IBackupService {
                 // リモート（モバイル端末）側のファイルリストを取得
                 // 移行済みのアイテムは除外する（リモート上に存在しないものとして扱う）
                 // SecureArchive 側では、移行済みアイテムのOwnerIdは、すでに別のデバイスのものになっているので、辻褄は合うはず。
-                var rawList = (await GetList($"http://{Address}/list?auth={Token}&type=all&backup"))
+                var rawList = (await GetList(Peer.MakeUrl($"list?auth={Token}&type=all&backup")))
                     .Where(it => !_deviceMigrationService.IsMigrated(OwnerId, it.Slot, it.Id));
 
                 // Id (OriginalId) --> RemoteItem のマップを作成
@@ -406,7 +407,7 @@ internal class BackupService : IBackupService {
         } else {
             bc = new BackupCompletion() { AuthToken = Token, Ids = items.Select(it=>it.Id).ToList(), Slots=items.Select(it=>it.Slot).ToList(), OwnerId = OwnerId, Status = true };
         }
-        var url = $"http://{Address}/backup/done";
+        var url = Peer.MakeUrl("backup/done");
         var json = JsonConvert.SerializeObject(bc);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         try {
@@ -425,7 +426,7 @@ internal class BackupService : IBackupService {
 
     private const int BUFF_SIZE = 1 * 1024 * 1024;
     public async Task<bool> DownloadTarget(RemoteItem item, ProgressProc progress, CancellationToken ct) {
-        var url = $"http://{Address}/{GetSlotId(item.Slot)}{item.UrlType}?id={item.Id}&auth={Token}";
+        var url = Peer.MakeUrl($"{GetSlotId(item.Slot)}{item.UrlType}?id={item.Id}&auth={Token}");
         try {
             await Task.Delay(500);          // これを入れないと、Pixel3 でエラーになる。
             var extAttr = await GetExtAttributes(item.Slot, item.Id, ct);
@@ -477,7 +478,7 @@ internal class BackupService : IBackupService {
 
 
     private async Task<IItemExtAttributes?> GetExtAttributes(int slot, string originalId, CancellationToken ct) {
-        var url = $"http://{Address}/{GetSlotId(slot)}extension?id={originalId}&auth={Token}";
+        var url = Peer.MakeUrl($"{GetSlotId(slot)}extension?id={originalId}&auth={Token}");
         try {
             using (var response = await httpClient.GetAsync(url, ct)) {
                 if (!response.IsSuccessStatusCode) return null;
@@ -571,7 +572,7 @@ internal class BackupService : IBackupService {
         });
     }
 
-    public bool RequestDBBackup(string ownerId, string token, string address) {
+    public bool RequestDBBackup(string ownerId, string token, PeerHost peer) {
         lock (this) {
             if (_isBusy) {
                 _logger.Warn("cannot accept new backup request, because it is busy.");
@@ -581,13 +582,13 @@ internal class BackupService : IBackupService {
         }
         OwnerId = ownerId;
         Token = token;
-        Address = address;
+        Peer = peer;
 
         var ownerInfo = _databaseService.OwnerList.Get(ownerId);
         //var dbPath = _appConfigService.AppDataPath;
 
         _ = _mainThreadService.Run(async () => {
-            var url = $"http://{Address}/db/backup?auth={Token}";
+            var url = Peer.MakeUrl($"db/backup?auth={Token}");
             var date = DateTime.Now;
             var timestamp = date.ToString("yyyyMMdd_HHmmss");
             try {

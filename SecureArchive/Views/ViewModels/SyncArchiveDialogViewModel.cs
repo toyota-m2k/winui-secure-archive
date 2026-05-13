@@ -11,6 +11,7 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Navigation;
 
 namespace SecureArchive.Views.ViewModels; 
 internal class SyncArchiveDialogViewModel:IDisposable {
@@ -94,8 +95,9 @@ internal class SyncArchiveDialogViewModel:IDisposable {
             DiscoveredPeer = PeerHost.FromJson(host);
         }
     }
-    private async void updatePeerAddress() {
+    private async Task<bool> updatePeerAddress() {
         var host = DiscoveredPeer;
+        if (host == null) return false;
         await _userSettingsService.EditAsync(edit => {
             var prev = PeerHost.FromJson(edit.PreviousPeerHost);
             if (prev != host) {
@@ -103,6 +105,7 @@ internal class SyncArchiveDialogViewModel:IDisposable {
                 return true;
             } else { return false; }
         });
+        return true;
     }
 
     private WeakReference<XamlRoot> Parent { get; set; } = null!;
@@ -112,7 +115,7 @@ internal class SyncArchiveDialogViewModel:IDisposable {
     }
 
     public async void StartSync(Page page) {
-        updatePeerAddress();
+        if (!await updatePeerAddress()) return;
         if (CanStart.Value && !Running.Value) {
             ErrorMessage.Value = string.Empty;
             ProgressMessage.Value = string.Empty;
@@ -121,7 +124,7 @@ internal class SyncArchiveDialogViewModel:IDisposable {
             CurrentIndex.Value = 0;
             TotalCount.Value = 0;
             Running.Value = true;
-            var result = await _syncArchiveService.Start(PeerAddress.Value, Password.Value, PeerToLocalOnly.Value, page.XamlRoot, ErrorMessageProc, SyncTaskProc, CountProgressProc, SizeProgressProc);
+            var result = await _syncArchiveService.Start(DiscoveredPeer!, Password.Value, PeerToLocalOnly.Value, page.XamlRoot, ErrorMessageProc, SyncTaskProc, CountProgressProc, SizeProgressProc);
             if (result) {
                 CloseCommand.Execute();
             }
@@ -129,7 +132,7 @@ internal class SyncArchiveDialogViewModel:IDisposable {
         }
     }
     private void CancelSync() {
-        updatePeerAddress();
+        _ = updatePeerAddress();
         _syncArchiveService.Cancel();
         CloseCommand.Execute();
     }

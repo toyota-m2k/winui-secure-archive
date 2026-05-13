@@ -14,7 +14,7 @@ namespace SecureArchive.Utils.Server.mdns {
 
         public string Scheme => UseHttps ? "https" : "http";
         public string Authority => $"{Host}:{Port}";
-        public string BaseUrl => $"{Scheme}://{Authority}/ytplayer";
+        public string BaseUrl => $"{Scheme}://{Authority}/";
 
         public PeerEndpoint(string host, int port, bool useHttps, string expectedFingerprint) {
             Host = host?.Trim() ?? "";

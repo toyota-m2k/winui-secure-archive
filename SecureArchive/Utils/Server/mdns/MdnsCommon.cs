@@ -65,7 +65,7 @@ namespace SecureArchive.Utils.Server.mdns {
         /// バッファ中の DNS 形式の名前を読み取る。コンプレッションポインタ (0xC0xx) も追従する。
         /// 末尾に "." を付けた fqdn を返す。失敗時 false。
         /// </summary>
-        public static bool TryReadName(byte[] buffer, ref int offset, out string name) {
+        public static bool TryReadName(byte[] buffer, ref int offset, out string? name) {
             var sb = new StringBuilder();
             int cursor = offset;
             int? returnOffset = null; // 圧縮ポインタを辿った場合の元の位置

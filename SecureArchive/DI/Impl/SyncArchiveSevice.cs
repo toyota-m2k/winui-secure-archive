@@ -5,6 +5,7 @@ using Newtonsoft.Json.Linq;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
+using SecureArchive.Views.ViewModels;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -47,7 +48,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
         return _infiniteClient;
     }
 
-    private string peerAddress = "";
+    private PeerHost peerHost = null!;
     private string challenge = "";
     private string authToken = "";
     private string rawPassword = "";
@@ -87,7 +88,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
 
     private async Task<bool> AuthWithToken(string token) {
-        var url = $"http://{peerAddress}/auth/{token}";
+        var url = peerHost.MakeUrl($"auth/{token}");
         using (var response = await getDefaultHttpClient().GetAsync(url)) {
             if (response.StatusCode == HttpStatusCode.OK) {
                 return true;
@@ -102,7 +103,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
     private async Task<string> AuthWithPassPhrase(string passPhrase) {
         var content = new StringContent(passPhrase, Encoding.UTF8, "text/plain");
-        var url = $"http://{peerAddress}/auth";
+        var url = peerHost.MakeUrl("auth");
         using (var response = await getDefaultHttpClient().PutAsync(url, content)) {
             if(response.StatusCode == HttpStatusCode.OK) {
                 var jsonString = await response.Content.ReadAsStringAsync();
@@ -174,7 +175,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     }
 
     private async Task<List<FileEntry>?> GetPeerList(bool retry=false) {
-        var url = $"http://{peerAddress}/list?auth={authToken}&type=all&sync";
+        var url = peerHost.MakeUrl($"list?auth={authToken}&type=all&sync");
         bool needRetry = false;
         using (var response = await getDefaultHttpClient().GetAsync(url)) {
             if (response.IsSuccessStatusCode) {
@@ -222,7 +223,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                     { new StringContent($"{entry.Duration}"), "Duration" },
                     { body, "File", entry.Name }
                 };
-                var url = $"http://{peerAddress}/{GetSlotId(entry.Slot)}/upload";
+                var url = peerHost.MakeUrl($"{GetSlotId(entry.Slot)}/upload");
                 using (var response = await getInfiniteHttpClient().PostAsync(url, content, ct)) {
                     return response.IsSuccessStatusCode;
                 }
@@ -241,7 +242,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
     private async Task<bool> DownloadEntry(FileEntry entry, ProgressProc progress, CancellationToken ct) {
         string type = entry.Type == "mp4" ? "video" : "photo";
-        string url = $"http://{peerAddress}/{type}?id={entry.Id}&auth={authToken}";
+        string url = peerHost.MakeUrl($"{type}?id={entry.Id}&auth={authToken}");
         progress(0, entry.Size);
         try {
             using (var response = await getInfiniteHttpClient().GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
@@ -277,7 +278,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     }
 
     private async Task<bool> GetExtAttributes(FileEntry fromPeerEntry, FileEntry toMyEntry) {
-        string url = $"http://{peerAddress}/extension?id={fromPeerEntry.Id}&auth={authToken}";
+        string url = peerHost.MakeUrl($"extension?id={fromPeerEntry.Id}&auth={authToken}");
         try {
             using (var response = await getDefaultHttpClient().GetAsync(url)) {
                 if (!response.IsSuccessStatusCode) return false;
@@ -306,7 +307,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     }
 
     private async Task<bool> PutExtAttributes(FileEntry fromMyEntry, FileEntry toPeerEntry) {
-        string url = $"http://{peerAddress}/extension?id={toPeerEntry.Id}&auth={authToken}";
+        string url = peerHost.MakeUrl($"extension?id={toPeerEntry.Id}&auth={authToken}");
         try {
             var json = JsonConvert.SerializeObject(new Dictionary<string, object> {
                 { "cmd", "extension" },
@@ -332,7 +333,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
 
     private async Task<bool> SyncOwnerList() {
         try {
-            var url = $"http://{peerAddress}/sync/owners";
+            var url = peerHost.MakeUrl("sync/owners");
             using (var response = await getDefaultHttpClient().PutAsync(url, new StringContent(_databaseService.OwnerList.JsonForSync(), Encoding.UTF8, "application/json"))) {
                 if(!response.IsSuccessStatusCode) {
                     return false;
@@ -352,7 +353,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     }
 
     private async Task<IList<DeviceMigrationInfo>?> GetMigrationHistoryFromPeer() {
-        string url = $"http://{peerAddress}/migration/history";
+        string url = peerHost.MakeUrl("migration/history");
         try {
             using (var response = await getDefaultHttpClient().GetAsync(url)) {
                 if (!response.IsSuccessStatusCode) return null;
@@ -381,7 +382,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
             return true;
         }
 
-        string url = $"http://{peerAddress}/migration/history";
+        string url = peerHost.MakeUrl("migration/history");
         try {
             var json = JsonConvert.SerializeObject(new Dictionary<string, object> {
                 { "cmd", "put/migration/history" },
@@ -411,7 +412,7 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     Regex regAddress = new Regex(@"(?:(?<ip>\d+\.\d+\.\d+\.\d+)|(?<name>[a-zA-Z]+\w*))(?::(?<port>\d+))?");
 
     public async Task<bool> Start(
-        string peerAddress, 
+        PeerHost peerHost, 
         string peerPassword, 
         bool peerToLocalOnly,
         XamlRoot? parent, 
@@ -432,35 +433,9 @@ internal class SyncArchiveSevice : ISyncArchiveService {
                 });
             }
 
-            var reg = regAddress.Match(peerAddress);
-            if(!reg.Success) {
-                errorProc("Wrong Peer Address.", true);
-                return false;
-            }
-            var ip = reg.Groups["ip"];
-            var name = reg.Groups["name"];
-            var port = reg.Groups["port"];
-            if(ip.Success) {
-                this.peerAddress = peerAddress;
-            } else if (name.Success) {
-                var ips = Dns.GetHostAddresses(name.Value);
-                if (ips == null) {
-                    errorProc("Cannot resolve IP address.", true);
-                    return false;
-                }
-                var ipv4addr = ips.Where(it=>it.AddressFamily==System.Net.Sockets.AddressFamily.InterNetwork).FirstOrDefault();
-                if (ipv4addr == null) {
-                    errorProc("Bad peer address.", true);
-                    return false;
-                }
-                this.peerAddress = $"{ipv4addr}:{port}";
-            } else {
-                errorProc("Invalid peer address.", true);
-                return false;
-            }
-
-
+            this.peerHost = peerHost;
             this.rawPassword = peerPassword;
+
             return await Task.Run(async () => {
                 try {
                     if (!await RemoteAuth()) {

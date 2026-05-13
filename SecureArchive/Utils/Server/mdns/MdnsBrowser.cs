@@ -66,7 +66,7 @@ namespace SecureArchive.Utils.Server.mdns {
         /// 自インスタンスの証明書 SHA-256 指紋。HTTPS で同じ指紋を持つピアは <see cref="Peers"/> に出さない。
         /// HTTP のみ動作中、もしくは自身が listener でない場合は null。
         /// </param>
-        public void Start(string excludeSelfFingerprint = null) {
+        public void Start(string? excludeSelfFingerprint = null) {
             lock (_lock) {
                 if (_cts != null) return;
                 _excludeFingerprint = NormalizeFp(excludeSelfFingerprint);
@@ -123,7 +123,7 @@ namespace SecureArchive.Utils.Server.mdns {
                     _sockets.Add(sock);
                     logger.Debug($"mDNS-B bound on {addr}");
                     var s = sock;
-                    Task.Run(() => ListenLoop(s, _cts.Token));
+                    Task.Run(() => ListenLoop(s, _cts!.Token));
                 } catch (Exception e) {
                     logger.Error(e, $"mDNS-B bind on {addr} failed: {e.Message}");
                     try { sock?.Close(); } catch { }
@@ -197,13 +197,13 @@ namespace SecureArchive.Utils.Server.mdns {
                 off += 4;
             }
 
-            string ptrInstance = null;
-            string srvTarget = null;
+            string? ptrInstance = null;
+            string? srvTarget = null;
             ushort srvPort = 0;
             uint srvTtl = 0;
-            string srvOwner = null;     // SRV を所有するインスタンス名 (= InstanceFqdn)
-            Dictionary<string, string> txt = null;
-            string txtOwner = null;
+            string? srvOwner = null;     // SRV を所有するインスタンス名 (= InstanceFqdn)
+            Dictionary<string, string>? txt = null;
+            string? txtOwner = null;
             uint txtTtl = 0;
             // A レコードは hostname → IP のマップ
             var aMap = new Dictionary<string, List<IPAddress>>(StringComparer.OrdinalIgnoreCase);
@@ -219,7 +219,7 @@ namespace SecureArchive.Utils.Server.mdns {
                 int rdEnd = off + rdlen;
                 if (rdEnd > buf.Length) return;
 
-                string lower = name.ToLowerInvariant();
+                string? lower = name?.ToLowerInvariant() ?? "";
                 switch (type) {
                     case 12: { // PTR
                         if (lower == MdnsCommon.ServiceType + ".local.") {
@@ -257,9 +257,9 @@ namespace SecureArchive.Utils.Server.mdns {
                         if (rdlen == 4) {
                             var ipBytes = new byte[4];
                             Array.Copy(buf, off, ipBytes, 0, 4);
-                            if (!aMap.TryGetValue(name, out var list)) {
+                            if (!aMap.TryGetValue(name!, out var list)) {
                                 list = new List<IPAddress>();
-                                aMap[name] = list;
+                                aMap[name!] = list;
                             }
                             list.Add(new IPAddress(ipBytes));
                         }
@@ -271,7 +271,7 @@ namespace SecureArchive.Utils.Server.mdns {
             }
 
             // 集約キー: 持っているうち最初に見つかった InstanceFqdn
-            string instanceKey = srvOwner ?? txtOwner ?? ptrInstance;
+            string? instanceKey = srvOwner ?? txtOwner ?? ptrInstance;
             if (instanceKey == null) return;
 
             // SRV/TXT どちらかが TTL=0 (goodbye) なら Peers から消す
@@ -322,9 +322,9 @@ namespace SecureArchive.Utils.Server.mdns {
             }
         }
 
-        private void UpdatePeer(string instanceFqdn, string srvTarget, ushort srvPort,
-                                Dictionary<string, string> txt, Dictionary<string, List<IPAddress>> aMap) {
-            PeerBuilder b;
+        private void UpdatePeer(string instanceFqdn, string? srvTarget, ushort srvPort,
+                                Dictionary<string, string>? txt, Dictionary<string, List<IPAddress>> aMap) {
+            PeerBuilder? b = null;
             lock (_lock) {
                 if (!_building.TryGetValue(instanceFqdn, out b)) {
                     b = new PeerBuilder { InstanceFqdn = instanceFqdn };
@@ -352,14 +352,14 @@ namespace SecureArchive.Utils.Server.mdns {
         private void TryPublish(PeerBuilder b) {
             if (!b.IsComplete) return;
             var txt = b.Txt;
-            string? app = txt.TryGetValue("app", out var a) ? a : null;
-            if (app != null && !string.Equals(app, MdnsCommon.AppId, StringComparison.OrdinalIgnoreCase)) {
+            string? app = txt?.GetValue("app");
+            if (app == null || !string.Equals(app, MdnsCommon.AppId, StringComparison.OrdinalIgnoreCase)) {
                 // BooTube 以外 (winui-secure-archive 等) は除外
                 return;
             }
-            bool isHttps = txt.TryGetValue("https", out var h) && h == "1";
-            string fp = txt.TryGetValue("fp", out var f) ? f : "";
-            int ver = txt.TryGetValue("version", out var v) && int.TryParse(v, out var iv) ? iv : 1;
+            bool isHttps = txt?.GetValue("https") == "1";
+            string fp = txt?.GetValue("fp") ?? "";
+            int ver = txt?.GetValue("version") != null && int.TryParse(txt.GetValue("version"), out var iv) ? iv : 1;
 
             // 自インスタンス除外 (指紋一致のみ。HTTP 動作中は除外不能だがそれは想定通り)
             if (!string.IsNullOrEmpty(_excludeFingerprint) &&
@@ -367,7 +367,7 @@ namespace SecureArchive.Utils.Server.mdns {
                 return;
             }
 
-            var label = InstanceLabelFromFqdn(b.InstanceFqdn);
+            var label = InstanceLabelFromFqdn(b.InstanceFqdn!);
             var addrList = b.Ips.ToList();
             var peer = new DiscoveredPeer(
                 label,
@@ -375,7 +375,7 @@ namespace SecureArchive.Utils.Server.mdns {
                 addrList,
                 b.SrvPort, isHttps, fp,
                 app ?? "", ver,
-                new Dictionary<string, string>(txt, StringComparer.OrdinalIgnoreCase),
+                (txt != null) ? new Dictionary<string, string>(txt, StringComparer.OrdinalIgnoreCase) : new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase),
                 DateTime.UtcNow);
             Peers[peer.InstanceName.ToLower()] = peer;
             OnUpdate?.Invoke(UpdateInfo.AddOrUpdate(peer));
@@ -409,7 +409,7 @@ namespace SecureArchive.Utils.Server.mdns {
             return dot > 0 ? fqdn.Substring(0, dot) : fqdn;
         }
 
-        private static string NormalizeFp(string fp) {
+        private static string NormalizeFp(string? fp) {
             if (string.IsNullOrWhiteSpace(fp)) return "";
             var sb = new StringBuilder(fp.Length);
             foreach (var c in fp) {

@@ -5,6 +5,7 @@ using SecureArchive.DI;
 using SecureArchive.Utils;
 using System.Diagnostics;
 using System.Reactive.Linq;
+using System.Security.Cryptography.X509Certificates;
 
 namespace SecureArchive.Views.ViewModels {
     internal class MenuPageViewModel {
@@ -125,9 +126,12 @@ namespace SecureArchive.Views.ViewModels {
             if (string.IsNullOrEmpty(settings.PfxPath) || !File.Exists(settings.PfxPath)) return "";
             try {
                 // EphemeralKeySet: MSIX サンドボックス下でも OS ストアアクセスを発生させない
-                using var cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(
-                    settings.PfxPath!, settings.PfxPassword,
-                    System.Security.Cryptography.X509Certificates.X509KeyStorageFlags.EphemeralKeySet);
+                using var cert = X509CertificateLoader.LoadPkcs12FromFile(
+                    settings.PfxPath!, settings.PfxPassword, 
+                    X509KeyStorageFlags.EphemeralKeySet);
+                //using var cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(
+                //    settings.PfxPath!, settings.PfxPassword,
+                //    System.Security.Cryptography.X509Certificates.X509KeyStorageFlags.EphemeralKeySet);
                 return Utils.CertificateGenerator.ComputeSha256Fingerprint(cert);
             }
             catch (Exception e) {

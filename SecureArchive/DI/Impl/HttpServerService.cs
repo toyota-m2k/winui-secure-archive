@@ -645,11 +645,15 @@ internal class HttpServerService : IHttpServreService {
                     var token = dic.GetValue("token");
                     var address = dic.GetValue("address");
                     var ownerId = dic.GetValue("id");
+                    var ssl = dic.GetValue("ssl")?.ToLower() == "true";
+                    var fp = dic.GetValue("fp");
+
                     if(token.IsEmpty() ||address.IsEmpty() ||ownerId.IsEmpty()) {
                         return HttpErrorResponse.BadRequest(request);
                     }
+                    var peer = new PeerHost(address, null, null, ssl, fp);
                     RegisterOwner(dic);
-                    if(!_backupService.Request(ownerId!, token!, address!)) {
+                    if(!_backupService.Request(ownerId!, token!, peer)) {
                         return HttpErrorResponse.Conflict(request);
                     }
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "backup" }, {"status", "accepted"} });
@@ -669,11 +673,14 @@ internal class HttpServerService : IHttpServreService {
                     var token = dic.GetValue("token");
                     var address = dic.GetValue("address");
                     var ownerId = dic.GetValue("id");
+                    var ssl = dic.GetValue("ssl")?.ToLower() == "true";
+                    var fp = dic.GetValue("fp");
                     if(token.IsEmpty() ||address.IsEmpty() ||ownerId.IsEmpty()) {
                         return HttpErrorResponse.BadRequest(request);
                     }
                     RegisterOwner(dic);
-                    if(!_backupService.RequestDBBackup(ownerId!, token!, address!)) {
+                    var peer = new PeerHost(address, null, null, ssl, fp);
+                    if(!_backupService.RequestDBBackup(ownerId!, token!, peer)) {
                         return HttpErrorResponse.Conflict(request);
                     }
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "backup" }, {"status", "accepted"} });
