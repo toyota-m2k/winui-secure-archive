@@ -44,7 +44,12 @@ public class HttpProcessor {
                     //   - 古い TLS バージョンのクライアント
                     // 本物のサーバ側不具合ではないので Info レベルに落とす。
                     string peer = tcpClient.Client.RemoteEndPoint?.ToString() ?? "?";
-                    Logger.Info($"[{id}] TLS handshake failed from {peer}: {authEx.GetBaseException().Message}");
+                    // HRESULT も出す。Win32Exception なら NativeErrorCode が SChannel SSPI のエラーコード
+                    // (SEC_E_CERT_UNKNOWN=0x80090327, SEC_E_NO_CREDENTIALS=0x8009030E 等) になるので
+                    // 不具合解析時に直接 SChannel 側へ当たれる。
+                    var baseEx = authEx.GetBaseException();
+                    int hr = baseEx is System.ComponentModel.Win32Exception w32 ? w32.NativeErrorCode : authEx.HResult;
+                    Logger.Info($"[{id}] TLS handshake failed from {peer}: {baseEx.Message} (HRESULT=0x{hr:X8})");
                     return;
                 }
                 catch (System.IO.IOException ioEx) {

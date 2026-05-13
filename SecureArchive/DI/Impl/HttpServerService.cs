@@ -881,7 +881,7 @@ internal class HttpServerService : IHttpServreService {
                     //     (%APPDATA%\Microsoft\Crypto\RSA\<sid>\) に書き込む UserKeySet が
                     //     管理者権限なしでも動き、SChannel にも受け入れられる。
                     //   - PersistKeySet は SslStream のハンドシェイク中に GC で鍵が消える事故を避けるため。
-                    cert = new X509Certificate2(
+                    cert = X509CertificateLoader.LoadPkcs12FromFile(
                         settings.PfxPath!,
                         settings.PfxPassword,
                         X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.PersistKeySet);
@@ -926,7 +926,7 @@ internal class HttpServerService : IHttpServreService {
             try {
                 // fingerprint 計算のみなので秘密鍵は不要だが、X509Certificate2 のコンストラクタは
                 // PFX ロード時に常に鍵もパースする。EphemeralKeySet で OS ストアを汚染しない。
-                using var cert = new X509Certificate2(
+                using var cert = X509CertificateLoader.LoadPkcs12FromFile(
                     settings.PfxPath!, settings.PfxPassword,
                     X509KeyStorageFlags.EphemeralKeySet);
                 fp = CertificateGenerator.ComputeSha256Fingerprint(cert);
