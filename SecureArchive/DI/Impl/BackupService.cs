@@ -88,7 +88,7 @@ internal class BackupService : IBackupService {
 
     //private HttpClient? _httpClient;
 
-    private HttpClient httpClient => _httpClientFactory.CreateClient();
+    //private HttpClient httpClient => _httpClientFactory.CreateClient();
 
     //public Status GetStatus() {
     //    lock(this) {
@@ -371,8 +371,14 @@ internal class BackupService : IBackupService {
     //    });
     //}
 
+    private IHttpClient CreateHttpClient() {
+        Debug.Assert(Peer!= null);
+        return Peer.CreateHttpClient(_httpClientFactory);
+    }
+
     private async Task<List<RemoteItem>> GetList(string url) {
-        using (var response = (await httpClient.GetAsync(url)).EnsureSuccessStatusCode()) {
+        using (var client = CreateHttpClient())
+        using (var response = (await client.GetAsync(url)).EnsureSuccessStatusCode()) {
             var json = await response.Content.ReadAsStringAsync();
             var dic = JsonConvert.DeserializeObject<RemoteItemResponse?>(json);
             if (dic == null) {
@@ -411,7 +417,8 @@ internal class BackupService : IBackupService {
         var json = JsonConvert.SerializeObject(bc);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         try {
-            using (var response = await httpClient.PutAsync(url, content)) {
+            using (var client = CreateHttpClient())
+            using (var response = await client.PutAsync(url, content)) {
                 if (!response.IsSuccessStatusCode) {
                     return false;
                 }
@@ -432,7 +439,8 @@ internal class BackupService : IBackupService {
             var extAttr = await GetExtAttributes(item.Slot, item.Id, ct);
             //if (extAttr == null) return false;
 
-            using (var response = await httpClient.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
+            using (var client = CreateHttpClient())
+            using (var response = await client.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct)) {
                 if (!response.IsSuccessStatusCode) return false;
                 using (var content = response.Content)
                 using (var inStream = await content.ReadAsStreamAsync())
@@ -480,7 +488,8 @@ internal class BackupService : IBackupService {
     private async Task<IItemExtAttributes?> GetExtAttributes(int slot, string originalId, CancellationToken ct) {
         var url = Peer.MakeUrl($"{GetSlotId(slot)}extension?id={originalId}&auth={Token}");
         try {
-            using (var response = await httpClient.GetAsync(url, ct)) {
+            using (var client = CreateHttpClient())
+            using (var response = await client.GetAsync(url, cancellationToken:ct)) {
                 if (!response.IsSuccessStatusCode) return null;
                 var json = await response.Content.ReadAsStringAsync();
                 var dic = ItemExtAttributes.FromJson(json);
@@ -605,7 +614,8 @@ internal class BackupService : IBackupService {
                 }
 
                 // リモート（モバイル端末）側のDBファイルをダウンロードする
-                using (var response = await httpClient.GetAsync(url)) {
+                using (var client = CreateHttpClient())
+                using (var response = await client.GetAsync(url)) {
                     if (!response.IsSuccessStatusCode) {
                         await showError($"Failed to download remote db files.\r\n Status code: {response.StatusCode} - {response.ReasonPhrase}.");
                         return;

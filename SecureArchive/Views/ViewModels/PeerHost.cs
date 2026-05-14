@@ -1,12 +1,17 @@
 ﻿using Newtonsoft.Json;
 using SecureArchive.Utils.Server.mdns;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace SecureArchive.Views.ViewModels {
+    interface IHttpClient : IDisposable {
+        TimeSpan Timeout { get; set; }
+        Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken? cancellationToken=null);
+        Task<HttpResponseMessage> GetAsync([StringSyntax(StringSyntaxAttribute.Uri)] string requestUri, HttpCompletionOption completionOption = HttpCompletionOption.ResponseContentRead, CancellationToken? cancellationToken = null);
+        Task<HttpResponseMessage> PutAsync([StringSyntax(StringSyntaxAttribute.Uri)] string requestUri, HttpContent? content, CancellationToken? cancellationToken = null);
+        Task<HttpResponseMessage> PostAsync([StringSyntax(StringSyntaxAttribute.Uri)] string requestUri, HttpContent? content, CancellationToken? cancellationToken = null);
+    }
+
     internal class PeerHost {
         [JsonProperty("address")]
         public string Address { get; }
@@ -94,6 +99,56 @@ namespace SecureArchive.Views.ViewModels {
                 sb.Append(hex[i]).Append(hex[i + 1]);
             }
             return sb.ToString();
+        }
+
+        // HttpClient Wrapper
+        private class PeerHostHttpClient : IHttpClient {
+            private readonly PeerHost _peerHost;
+            private readonly HttpClient _httpClient;
+
+            public PeerHostHttpClient(PeerHost peerHost, IHttpClientFactory factory) {
+                _peerHost = peerHost;
+                _httpClient = factory.CreateClient(HTTP_CLIENT_FACTORY_NAME);
+            }
+
+            public void Dispose() {
+                _httpClient.Dispose();
+            }
+            public Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken? cancellationToken) {
+                request.Options.Set(KEY, _peerHost);
+                return _httpClient.SendAsync(request, cancellationToken ?? CancellationToken.None);
+            }
+
+            public Task<HttpResponseMessage> GetAsync([StringSyntax("Uri")] string requestUri, HttpCompletionOption completionOption, CancellationToken? cancellationToken) {
+                var uri = new Uri(requestUri, UriKind.RelativeOrAbsolute);
+                var req = new HttpRequestMessage(HttpMethod.Get, uri);
+                return SendAsync(req, cancellationToken);
+            }
+
+            public Task<HttpResponseMessage> PostAsync([StringSyntax("Uri")] string requestUri, HttpContent? content, CancellationToken? cancellationToken) {
+                var uri = new Uri(requestUri, UriKind.RelativeOrAbsolute);
+                var req = new HttpRequestMessage(HttpMethod.Post, uri) {
+                    Content = content
+                };
+                return SendAsync(req, cancellationToken);
+            }
+
+            public Task<HttpResponseMessage> PutAsync([StringSyntax("Uri")] string requestUri, HttpContent? content, CancellationToken? cancellationToken) {
+                var uri = new Uri(requestUri, UriKind.RelativeOrAbsolute);
+                var req = new HttpRequestMessage(HttpMethod.Put, uri) {
+                    Content = content
+                };
+                return SendAsync(req, cancellationToken);
+            }
+            public TimeSpan Timeout {
+                get => _httpClient.Timeout;
+                set => _httpClient.Timeout = value;
+            }
+        }
+        public static readonly string HTTP_CLIENT_FACTORY_NAME = "PeerHostHttpClientFactory";
+        public static readonly HttpRequestOptionsKey<PeerHost> KEY = new("PeerHost");
+        public IHttpClient CreateHttpClient(IHttpClientFactory factory) {
+            return new PeerHostHttpClient(this, factory);
         }
     }
 }

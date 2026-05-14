@@ -6,6 +6,7 @@ using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
 using SecureArchive.Views.ViewModels;
+using System.Diagnostics;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -28,10 +29,11 @@ internal class SyncArchiveSevice : ISyncArchiveService {
      * このタイムアウトは、要求全体に対するタイムアウトであり、接続の確立と要求本体の送受信の間を区別しないので要注意。
      * ファイルのアップロードやダウンロードのように、要求本体の送受信に時間がかかる場合は、Timeout.InfiniteTimeSpan を設定した infiniteHttpClient を使うこと。
      */
-    private HttpClient? _defaultClient = null;
-    private HttpClient getDefaultHttpClient() {
+    private IHttpClient? _defaultClient = null;
+    private IHttpClient getDefaultHttpClient() {
+        Debug.Assert(peerHost != null);
         if (_defaultClient == null) {
-            _defaultClient = _httpClientFactory.CreateClient();
+            _defaultClient = peerHost.CreateHttpClient(_httpClientFactory);
             _defaultClient.Timeout = TimeSpan.FromSeconds(100); // デフォルトのタイムアウトを100秒に設定
         }
         return _defaultClient;
@@ -39,10 +41,11 @@ internal class SyncArchiveSevice : ISyncArchiveService {
     /**
      * タイムアウト無しの HttpClient
      */
-    private HttpClient? _infiniteClient = null;
-    private HttpClient getInfiniteHttpClient() {
+    private IHttpClient? _infiniteClient = null;
+    private IHttpClient getInfiniteHttpClient() {
+        Debug.Assert(peerHost != null);
         if (_infiniteClient == null) {
-            _infiniteClient = _httpClientFactory.CreateClient();
+            _infiniteClient = peerHost.CreateHttpClient(_httpClientFactory);
             _infiniteClient.Timeout = Timeout.InfiniteTimeSpan; // タイムアウト無し
         }
         return _infiniteClient;
