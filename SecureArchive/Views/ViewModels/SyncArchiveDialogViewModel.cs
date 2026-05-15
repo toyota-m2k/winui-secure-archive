@@ -4,22 +4,57 @@ using Microsoft.UI.Xaml.Controls;
 using Reactive.Bindings;
 using SecureArchive.DI;
 using SecureArchive.Utils;
+using SecureArchive.Utils.Server.mdns;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Windows.Navigation;
 
 namespace SecureArchive.Views.ViewModels; 
-internal class SyncArchiveDialogViewModel {
+internal class SyncArchiveDialogViewModel:IDisposable {
     ISyncArchiveService _syncArchiveService;
     IMainThreadService _mainThreadService;
     IUserSettingsService _userSettingsService;
+    DiscoverPeerDialogViewModel _discoverModel;
+
     UtLog _logger;
 
     public ReactivePropertySlim<bool> Running { get; } = new(false);
     public ReactivePropertySlim<string> PeerAddress { get; } = new("");
+    private PeerHost? _discoveredPeer = null;
+    public PeerHost? DiscoveredPeer {
+        get => (_discoveredPeer != null && _discoveredPeer.Address == PeerAddress.Value && _discoveredPeer.IsHttps == IsHttps.Value) ? _discoveredPeer : PeerHost.DirectHost(PeerAddress.Value, IsHttps.Value);
+        set {
+            _discoveredPeer = value;
+            if (value != null) {
+                PeerAddress.Value = value.Address;
+                IsHttps.Value = value.IsHttps;
+            }
+        }
+    }
+    public void Dispose() {
+        _discoverModel.Release();
+    }
+
+    public DiscoverPeerDialogViewModel DiscoveringModel => _discoverModel;
+
+    public async void DiscoverPeer() {
+        Discovering.Value = true;
+        try {
+            var r = await _discoverModel.Discover();
+            if (r != null) {
+                DiscoveredPeer = r;
+            }
+        } finally {
+            Discovering.Value = false;
+        }
+    }
+
+    public ReactivePropertySlim<bool> Discovering { get; } = new(false);
+    public ReactivePropertySlim<bool> IsHttps { get; } = new();
     public ReactivePropertySlim<string> Password { get; } = new("");
     public ReactivePropertySlim<bool> PeerToLocalOnly { get; } = new(true);
     public ReactivePropertySlim<string> ErrorMessage { get; } = new("");
@@ -36,11 +71,13 @@ internal class SyncArchiveDialogViewModel {
     public ReactiveCommandSlim StartCommand { get; } = new();
     public ReactiveCommandSlim CancelCommand { get; } = new();
     public ReactiveCommandSlim CloseCommand { get; } = new();
+    public ReactiveCommandSlim DiscoverCommand { get; } = new();
 
-    public SyncArchiveDialogViewModel(ISyncArchiveService syncArchiveService, IMainThreadService mainThreadService, IUserSettingsService userSettingsService) { 
+    public SyncArchiveDialogViewModel(ISyncArchiveService syncArchiveService, IMainThreadService mainThreadService, IUserSettingsService userSettingsService, DiscoverPeerDialogViewModel discoverModel) { 
         _syncArchiveService = syncArchiveService;
         _mainThreadService = mainThreadService;
         _userSettingsService = userSettingsService;
+        _discoverModel = discoverModel;
         _logger = UtLog.Instance(typeof(SyncArchiveDialogViewModel));
 
         CanStart = PeerAddress.Select(it => it.IsNotEmpty()).ToReadOnlyReactivePropertySlim();
@@ -53,20 +90,22 @@ internal class SyncArchiveDialogViewModel {
 
     private async void initPeerAddress() {
         var s = await _userSettingsService.GetAsync();
-        var addr = s.PreviousPeerAddress;
-        if (!string.IsNullOrEmpty(addr)) {
-            PeerAddress.Value = addr;
+        var host = s.PreviousPeerHost;
+        if (!string.IsNullOrEmpty(host)) {
+            DiscoveredPeer = PeerHost.FromJson(host);
         }
     }
-    private async void updatePeerAddress() {
-        var addr = PeerAddress.Value;
-        if (string.IsNullOrEmpty(addr)) return;
+    private async Task<bool> updatePeerAddress() {
+        var host = DiscoveredPeer;
+        if (host == null) return false;
         await _userSettingsService.EditAsync(edit => {
-            if (edit.PreviousPeerAddress != addr) {
-                edit.PreviousPeerAddress = addr;
+            var prev = PeerHost.FromJson(edit.PreviousPeerHost);
+            if (prev != host) {
+                edit.PreviousPeerHost = host?.ToJson();
                 return true;
             } else { return false; }
         });
+        return true;
     }
 
     private WeakReference<XamlRoot> Parent { get; set; } = null!;
@@ -76,7 +115,7 @@ internal class SyncArchiveDialogViewModel {
     }
 
     public async void StartSync(Page page) {
-        updatePeerAddress();
+        if (!await updatePeerAddress()) return;
         if (CanStart.Value && !Running.Value) {
             ErrorMessage.Value = string.Empty;
             ProgressMessage.Value = string.Empty;
@@ -85,7 +124,7 @@ internal class SyncArchiveDialogViewModel {
             CurrentIndex.Value = 0;
             TotalCount.Value = 0;
             Running.Value = true;
-            var result = await _syncArchiveService.Start(PeerAddress.Value, Password.Value, PeerToLocalOnly.Value, page.XamlRoot, ErrorMessageProc, SyncTaskProc, CountProgressProc, SizeProgressProc);
+            var result = await _syncArchiveService.Start(DiscoveredPeer!, Password.Value, PeerToLocalOnly.Value, page.XamlRoot, ErrorMessageProc, SyncTaskProc, CountProgressProc, SizeProgressProc);
             if (result) {
                 CloseCommand.Execute();
             }
@@ -93,7 +132,7 @@ internal class SyncArchiveDialogViewModel {
         }
     }
     private void CancelSync() {
-        updatePeerAddress();
+        _ = updatePeerAddress();
         _syncArchiveService.Cancel();
         CloseCommand.Execute();
     }

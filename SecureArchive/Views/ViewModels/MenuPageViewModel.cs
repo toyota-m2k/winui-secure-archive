@@ -3,7 +3,9 @@ using Microsoft.UI.Xaml;
 using Reactive.Bindings;
 using SecureArchive.DI;
 using SecureArchive.Utils;
+using System.Diagnostics;
 using System.Reactive.Linq;
+using System.Security.Cryptography.X509Certificates;
 
 namespace SecureArchive.Views.ViewModels {
     internal class MenuPageViewModel {
@@ -15,11 +17,12 @@ namespace SecureArchive.Views.ViewModels {
         public ReactiveCommandSlim ListCommand { get; } = new ReactiveCommandSlim();
         public ReactiveCommandSlim SettingsCommand { get; } = new ReactiveCommandSlim();
         public ReactiveCommandSlim MirrorCommand { get; } = new ReactiveCommandSlim();
+        public ReactiveCommandSlim QRCodeCommand { get; } = new ReactiveCommandSlim();
         //public ReactiveCommandSlim RepairCommand { get; } = new ReactiveCommandSlim();
         public ReactivePropertySlim<bool> IsServerRunning { get; } = new ReactivePropertySlim<bool>(false, ReactivePropertyMode.DistinctUntilChanged);
         public ReactivePropertySlim<bool> ShowLog { get; } = new ReactivePropertySlim<bool>(false, ReactivePropertyMode.DistinctUntilChanged);
         public ReadOnlyReactivePropertySlim<VerticalAlignment> PanelVerticalAlignment { get; }
-        public ReactivePropertySlim<int> PortNo { get; } = new ReactivePropertySlim<int>(0);
+        public ReactivePropertySlim<string> ServerParams { get; } = new ReactivePropertySlim<string>("");
 
         public MenuPageViewModel(
             //ILoggerFactory loggerFactory,
@@ -39,6 +42,7 @@ namespace SecureArchive.Views.ViewModels {
             MirrorCommand.Subscribe(() => {
                 App.GetService<SyncArchiveDialogPage>().ShowDialog(_pageService.CurrentPage!.XamlRoot);
             });
+            QRCodeCommand.Subscribe(ShowPairingQr);
             //RepairCommand.Subscribe(() => {
             //    Repair();
             //});
@@ -66,15 +70,25 @@ namespace SecureArchive.Views.ViewModels {
         private async void InitServer() {
             var us = await _userSettingsService.GetAsync();
             ShowLog.Value = us.ShowLog;
-            PortNo.Value = us.PortNo;
+            if (us.EnableHttp && us.EnableHttps) {
+                ServerParams.Value = $"HTTP: {us.PortHttp} / HTTPS: {us.PortHttps}";
+            }
+            else if (us.EnableHttps) {
+                ServerParams.Value = $"HTTPS: {us.PortHttps}";
+            }
+            else if (us.EnableHttp) {
+                ServerParams.Value = $"HTTP: {us.PortHttp}";
+            }
+            else {
+                ServerParams.Value = "Server is disabled";
+            }
             if (us.ServerAutoStart) {
                 StartServer();
             }
         }
 
         private async void StartServer() {
-            PortNo.Value = (await _userSettingsService.GetAsync()).PortNo;
-            _httpServreService.Start(PortNo.Value);
+            _httpServreService.Start();
         }
         private void StopServer() {
             _httpServreService.Stop();
@@ -93,5 +107,38 @@ namespace SecureArchive.Views.ViewModels {
         //    //}
 
         //}
+
+        private async void ShowPairingQr() {
+            // Persist current edits so the QR reflects the latest settings
+            var settings = await _userSettingsService.GetAsync();
+            var dlg = new Views.PairingQrDialog {
+                XamlRoot = App.MainWindow.Content.XamlRoot,
+                ServerName = settings.EnsureServerName,
+                Port = settings.EnableHttps ? settings.PortHttps : settings.PortHttp,
+                IsHttps = settings.EnableHttps,
+                Fingerprint = ComputeFingerprintIfPossible(settings),
+            };
+            await dlg.ShowAsync();
+        }
+
+        private static string ComputeFingerprintIfPossible(IReadonlyUserSettingsAccessor settings) {
+            if (!settings.EnableHttps) return "";
+            if (string.IsNullOrEmpty(settings.PfxPath) || !File.Exists(settings.PfxPath)) return "";
+            try {
+                // EphemeralKeySet: MSIX サンドボックス下でも OS ストアアクセスを発生させない
+                using var cert = X509CertificateLoader.LoadPkcs12FromFile(
+                    settings.PfxPath!, settings.PfxPassword, 
+                    X509KeyStorageFlags.EphemeralKeySet);
+                //using var cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(
+                //    settings.PfxPath!, settings.PfxPassword,
+                //    System.Security.Cryptography.X509Certificates.X509KeyStorageFlags.EphemeralKeySet);
+                return Utils.CertificateGenerator.ComputeSha256Fingerprint(cert);
+            }
+            catch (Exception e) {
+                Debug.WriteLine(e);
+                return "";
+            }
+        }
+
     }
 }

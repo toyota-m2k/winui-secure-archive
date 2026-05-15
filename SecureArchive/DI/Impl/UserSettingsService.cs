@@ -1,5 +1,7 @@
 ﻿using System.Diagnostics;
 using System.Runtime.CompilerServices;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace SecureArchive.DI.Impl;
 
@@ -18,21 +20,93 @@ internal class UserSettingsService : IUserSettingsService {
             get => _userSettings.GetString(callerName());
             set => _userSettings.Put(callerName(), value);
         }
-        public int PortNo { 
-            get => _userSettings.GetInt(callerName(), 3800);
-            set => _userSettings.Put(callerName(), value);
-        }
         public bool ServerAutoStart {
             get => _userSettings.GetBool(callerName(), false);
             set => _userSettings.Put(callerName(), value);
         }
-        public string? PreviousPeerAddress {
+        public string? PreviousPeerHost {
             get => _userSettings.GetString(callerName());
             set => _userSettings.Put(callerName(), value);
         }
         public bool ShowLog {
             get => _userSettings.GetBool(callerName(), false);
             set => _userSettings.Put(callerName(), value);
+        }
+
+        // ---- mDNS / HTTPS 関連 ----
+        public string? ServerName {
+            get => _userSettings.GetString(callerName());
+            set => _userSettings.Put(callerName(), value);
+        }
+        public string EnsureServerName =>
+            string.IsNullOrWhiteSpace(ServerName) ? Environment.MachineName : ServerName!;
+        public bool EnableMdnsAdvertisement {
+            get => _userSettings.GetBool(callerName(), false);
+            set => _userSettings.Put(callerName(), value);
+        }
+        public bool EnableHttp {
+            get => _userSettings.GetBool(callerName(), false);
+            set => _userSettings.Put(callerName(), value);
+        }
+        public bool EnableHttps {
+            get => _userSettings.GetBool(callerName(), false);
+            set => _userSettings.Put(callerName(), value);
+        }
+        public int PortHttp {
+            get => _userSettings.GetInt(callerName(), 3800);
+            set => _userSettings.Put(callerName(), value);
+        }
+        public int PortHttps {
+            get => _userSettings.GetInt(callerName(), 3801);
+            set => _userSettings.Put(callerName(), value);
+        }
+        public bool ServerEnabled => EnableHttp || EnableHttps;
+
+        //public bool HttpsOnly {
+        //    get => _userSettings.GetBool(callerName(), false);
+        //    set => _userSettings.Put(callerName(), value);
+        //}
+        public string? PfxPath {
+            get => _userSettings.GetString(callerName());
+            set => _userSettings.Put(callerName(), value);
+        }
+        public string? PfxPasswordEncrypted {
+            get => _userSettings.GetString(callerName());
+            set => _userSettings.Put(callerName(), value);
+        }
+        /// <summary>
+        /// PFX パスワードの「平文表現」アクセサ。getter は [PfxPasswordEncrypted] を DPAPI で復号、
+        /// setter は DPAPI で暗号化してから [PfxPasswordEncrypted] に保存する。
+        /// プレーン値はファイルに書き出されない。
+        /// </summary>
+        public string PfxPassword {
+            get {
+                var enc = PfxPasswordEncrypted;
+                if (string.IsNullOrEmpty(enc)) return "";
+                try {
+                    var bytes = Convert.FromBase64String(enc);
+                    var plain = ProtectedData.Unprotect(bytes, null, DataProtectionScope.CurrentUser);
+                    return Encoding.UTF8.GetString(plain);
+                }
+                catch (Exception e) {
+                    Debug.WriteLine(e);
+                    return "";
+                }
+            }
+            set {
+                if (string.IsNullOrEmpty(value)) {
+                    PfxPasswordEncrypted = "";
+                    return;
+                }
+                try {
+                    var bytes = ProtectedData.Protect(Encoding.UTF8.GetBytes(value), null, DataProtectionScope.CurrentUser);
+                    PfxPasswordEncrypted = Convert.ToBase64String(bytes);
+                }
+                catch (Exception e) {
+                    Debug.WriteLine(e);
+                    PfxPasswordEncrypted = "";
+                }
+            }
         }
     }
 
@@ -175,32 +249,32 @@ internal class UserSettingsService : IUserSettingsService {
             _dirty = true;
         }
     }
-    private void Put<T>(SettingsKey key, T value) {
-        Put(key.ToString(), value);
-    }
+    //private void Put<T>(SettingsKey key, T value) {
+    //    Put(key.ToString(), value);
+    //}
 
-    public async Task<string?> GetStringAsync(SettingsKey key) {
-        await InitializeAsync();
-        return GetString(key.ToString());
-    }
-    public async Task<int> GetIntAsync(SettingsKey key, int defaultValue=0) {
-        await InitializeAsync();
-        return GetInt(key.ToString(),defaultValue);
-    }
-    public async Task<long> GetLongAsync(SettingsKey key, long defaultValue = 0) {
-        await InitializeAsync();
-        return GetLong(key.ToString(), defaultValue);
-    }
-    public async Task<bool> GetBoolAsync(SettingsKey key, bool defaultValue = false) {
-        await InitializeAsync();
-        return GetBool(key.ToString(), defaultValue);
-    }
+    //public async Task<string?> GetStringAsync(SettingsKey key) {
+    //    await InitializeAsync();
+    //    return GetString(key.ToString());
+    //}
+    //public async Task<int> GetIntAsync(SettingsKey key, int defaultValue=0) {
+    //    await InitializeAsync();
+    //    return GetInt(key.ToString(),defaultValue);
+    //}
+    //public async Task<long> GetLongAsync(SettingsKey key, long defaultValue = 0) {
+    //    await InitializeAsync();
+    //    return GetLong(key.ToString(), defaultValue);
+    //}
+    //public async Task<bool> GetBoolAsync(SettingsKey key, bool defaultValue = false) {
+    //    await InitializeAsync();
+    //    return GetBool(key.ToString(), defaultValue);
+    //}
 
-    public async Task PutAsync<T>(SettingsKey key, T value) {
-        await InitializeAsync();
-        Put(key, value);
-        await CommitAsync();
-    }
+    //public async Task PutAsync<T>(SettingsKey key, T value) {
+    //    await InitializeAsync();
+    //    Put(key, value);
+    //    await CommitAsync();
+    //}
 
     public async Task EditAsync(Func<IUserSettingsAccessor, bool> fn) {
         await InitializeAsync();

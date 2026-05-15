@@ -208,7 +208,7 @@ public class FileEntry : IItemExtAttributes {
             var dateString = Filename2DateString(filename);
             return DateStringToUnixTime(dateString);
         }
-        catch (Exception e) {
+        catch (Exception) {
             return -1;
         }
     }
@@ -217,7 +217,7 @@ public class FileEntry : IItemExtAttributes {
             var dateString = Filename2DateString(filename);
             return DateStringToDateTime(dateString);
         }
-        catch (Exception e) {
+        catch (Exception) {
             return DateTime.MinValue;
         }
     }

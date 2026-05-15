@@ -32,8 +32,36 @@ public class HttpProcessor {
     public void HandleClient(int id, TcpClient tcpClient) {
         Task.Run(() => {
             using (tcpClient) {
-                Stream inputStream = GetInputStream(tcpClient);
-                Stream outputStream = GetOutputStream(tcpClient);
+                // SSL 対応のため、入出力で同じ Stream を使う必要がある (SslStream は 1 コネクションで 1 インスタンス)。
+                Stream stream;
+                try {
+                    stream = WrapStream(tcpClient);
+                }
+                catch (System.Security.Authentication.AuthenticationException authEx) {
+                    // TLS ハンドシェイク失敗は HTTPS リスナー上では「想定内ノイズ」のことが多い:
+                    //   - 素の HTTP クライアントが HTTPS ポートを叩いた (typo / port scanner)
+                    //   - クライアント側で fingerprint pin 不一致 → 接続を即時切断
+                    //   - 古い TLS バージョンのクライアント
+                    // 本物のサーバ側不具合ではないので Info レベルに落とす。
+                    string peer = tcpClient.Client.RemoteEndPoint?.ToString() ?? "?";
+                    // HRESULT も出す。Win32Exception なら NativeErrorCode が SChannel SSPI のエラーコード
+                    // (SEC_E_CERT_UNKNOWN=0x80090327, SEC_E_NO_CREDENTIALS=0x8009030E 等) になるので
+                    // 不具合解析時に直接 SChannel 側へ当たれる。
+                    var baseEx = authEx.GetBaseException();
+                    int hr = baseEx is System.ComponentModel.Win32Exception w32 ? w32.NativeErrorCode : authEx.HResult;
+                    Logger.Info($"[{id}] TLS handshake failed from {peer}: {baseEx.Message} (HRESULT=0x{hr:X8})");
+                    return;
+                }
+                catch (System.IO.IOException ioEx) {
+                    // 接続が途中で切れただけ。ログを汚さないよう Info で。
+                    Logger.Info($"[{id}] Connection aborted before request: {ioEx.Message}");
+                    return;
+                }
+                catch (Exception e) {
+                    // 上記以外は本当に想定外。Error で残す。
+                    Logger.Error(e, $"[{id}] WrapStream failed unexpectedly.");
+                    return;
+                }
                 Logger.Debug($"[{id}] Request Accepted.");
 
                 string peerAddress = "";
@@ -44,12 +72,12 @@ public class HttpProcessor {
 
                 var chronos = new Chronos(Logger);
                 string url = "?";
-                using (IHttpResponse response = ProcessRequest(id, peerAddress, inputStream, outputStream, chronos)) {
+                using (IHttpResponse response = ProcessRequest(id, peerAddress, stream, stream, chronos)) {
                     try {
                         url = response.Request?.Url ?? "?";
                         Logger.Info($"[{id}] Responding: {url}");
-                        response.WriteResponse(outputStream);
-                        outputStream.Flush();
+                        response.WriteResponse(stream);
+                        stream.Flush();
                         Logger.Info($"[{id}] Succeeded: {url}");
                     }
                     catch (Exception e) {
@@ -57,6 +85,7 @@ public class HttpProcessor {
                     }
                     finally {
                         chronos.Lap($"[{id}] Completed: {url}");
+                        try { stream.Dispose(); } catch { /* ignore */ }
                     }
                 }
                 //Logger.Debug($"[{id}] Shutdown Send-Socket: {url}");
@@ -111,16 +140,18 @@ public class HttpProcessor {
     #region Private Methods
 
     private static string Readline(Stream stream) {
-        int next_char;
-        string data = "";
+        var sb = new StringBuilder();
         while (true) {
-            next_char = stream.ReadByte();
-            if (next_char == '\n') { break; }
-            if (next_char == '\r') { continue; }
-            if (next_char == -1) { Thread.Sleep(1); continue; };
-            data += Convert.ToChar(next_char);
+            int c = stream.ReadByte();
+            if (c == -1) {
+                // 接続が閉じられた / タイムアウト到達。EOS を例外で抜けて呼び出し側の try/catch で扱う。
+                throw new IOException("End of stream while reading line.");
+            }
+            if (c == '\n') break;
+            if (c == '\r') continue;
+            sb.Append((char)c);
         }
-        return data;
+        return sb.ToString();
     }
 
     private static void Write(Stream stream, string text) {
@@ -128,11 +159,14 @@ public class HttpProcessor {
         stream.Write(bytes, 0, bytes.Length);
     }
 
-    private Stream GetOutputStream(TcpClient tcpClient) {
-        return tcpClient.GetStream();
-    }
-
-    private Stream GetInputStream(TcpClient tcpClient) {
+    /// <summary>
+    /// TcpClient から 1 コネクションぶんの読み書き Stream を取り出す。
+    /// SSL 派生クラスはここを override して SslStream を返す。
+    /// </summary>
+    protected virtual Stream WrapStream(TcpClient tcpClient) {
+        // ハンドシェイク中の slowloris 等を避けるための保険
+        tcpClient.ReceiveTimeout = 30000;
+        tcpClient.SendTimeout = 30000;
         return tcpClient.GetStream();
     }
 

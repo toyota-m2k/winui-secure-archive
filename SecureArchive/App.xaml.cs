@@ -8,8 +8,10 @@ using Microsoft.UI.Xaml.Controls;
 using SecureArchive.DI;
 using SecureArchive.DI.Impl;
 using SecureArchive.Utils;
+using SecureArchive.Utils.Server.mdns;
 using SecureArchive.Views;
 using SecureArchive.Views.ViewModels;
+using System.Runtime.ConstrainedExecution;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -92,8 +94,10 @@ namespace SecureArchive {
                 .UseContentRoot(AppContext.BaseDirectory)
                 .ConfigureServices((context, service) => {
                     service
-                    .AddHttpClient()
-                    .AddSingleton<IAppConfigService>(sp=>new AppConfigService(appDataPath))
+                    .AddHttpClient(PeerHost.HTTP_CLIENT_FACTORY_NAME)
+                    .ConfigurePrimaryHttpMessageHandler(() => CreateHttpClientHandler());
+                    service
+                    .AddSingleton<IAppConfigService>(sp => new AppConfigService(appDataPath))
                     .AddSingleton<ILocalSettingsService, LocalSettingsService>()
                     .AddSingleton<IUserSettingsService, UserSettingsService>()
                     .AddSingleton<IPageService, PageService>()
@@ -103,7 +107,7 @@ namespace SecureArchive {
                     .AddSingleton<IFileStoreService, FileStoreService>()
                     .AddSingleton<ISecureStorageService, SecureStorageService>()
                     .AddSingleton<ICryptoStreamHandler, CryptoStreamHandler>()
-                    .AddSingleton<IHttpServreService,  HttpServerService>()
+                    .AddSingleton<IHttpServreService, HttpServerService>()
                     .AddSingleton<IMainThreadService, MainThradService>()
                     .AddSingleton<IBackupService, BackupService>()
                     .AddSingleton<IDeviceMigrationService, DeviceMigrationService>()
@@ -126,6 +130,7 @@ namespace SecureArchive {
                     .AddTransient<RemotePasswordDialogPage>()
                     .AddTransient<SyncArchiveDialogViewModel>()
                     .AddTransient<SyncArchiveDialogPage>()
+                    .AddTransient<DiscoverPeerDialogViewModel>()
                     ;
                 })
                 .Build();
@@ -168,7 +173,7 @@ namespace SecureArchive {
                 .AddButton("Yes", id: true)
                 .AddButton("No", id: false)
                 .ShowAsync() as bool?;
-            if(r==true) {
+            if (r == true) {
                 closeConfirmed = true;
                 MainWindow.Close();
             }
@@ -181,6 +186,38 @@ namespace SecureArchive {
                 ConfirmClose();
             }
             GetService<IHttpServreService>().Stop();
+        }
+
+        /**
+         * HTTPS 用 HttpClientHandler を生成。peer.IsHttps の場合、mDNS TXT で得た指紋と
+         * 実際のサーバ証明書 SHA-256 を pin-to-fingerprint 比較する。
+         */
+        private HttpClientHandler CreateHttpClientHandler() {
+            return new HttpClientHandler {
+                ServerCertificateCustomValidationCallback = (req, cert, chain, sslErrors) => {
+                    // HTTP は証明書検証不要
+                    if (req.RequestUri?.Scheme != Uri.UriSchemeHttps) return true;
+                    if (cert == null) {
+                        Logger.Error("Sync: no certificate presented");
+                        return false;
+                    }
+                    var peer = req.Options.TryGetValue(PeerHost.KEY, out PeerHost? v) ? v : null;
+                    if (peer == null) {
+                        Logger.Error("Sync: no PeerHost info in request options");
+                        return false;
+                    }
+                    var expected = peer.Fingerprint ?? "";
+                    string actual = CertificateGenerator.ComputeSha256Fingerprint(cert);
+                    bool ok = string.Equals(
+                        PeerEndpoint.NormalizeFp(actual),
+                        PeerEndpoint.NormalizeFp(expected),
+                        StringComparison.OrdinalIgnoreCase);
+                    if (!ok) {
+                        Logger.Error($"Sync: certificate fingerprint mismatch.\n  expected={expected}\n  actual  ={actual}");
+                    }
+                    return ok;
+                }
+            };
         }
     }
 }
