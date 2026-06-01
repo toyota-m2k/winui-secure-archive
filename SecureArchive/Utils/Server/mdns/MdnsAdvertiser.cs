@@ -106,7 +106,7 @@ public class MdnsAdvertiser : IDisposable {
     // ---- Sockets ----------------------------------------------------------------------
 
     private void BindSockets() {
-        foreach (var addr in MdnsCommon.EnumerateMulticastV4Addresses()) {
+        foreach (var addr in MdnsCommon.MyAddresses) {
             UdpClient sock = null!;
             try {
                 sock = new UdpClient(AddressFamily.InterNetwork);
@@ -295,16 +295,18 @@ public class MdnsAdvertiser : IDisposable {
     }
 
     private static List<IPAddress> GetLocalIPv4Addresses() {
-        var list = new List<IPAddress>();
-        foreach (var nic in NetworkInterface.GetAllNetworkInterfaces()) {
-            if (nic.OperationalStatus != OperationalStatus.Up) continue;
-            if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
-            foreach (var ua in nic.GetIPProperties().UnicastAddresses) {
-                if (ua.Address.AddressFamily != AddressFamily.InterNetwork) continue;
-                if (IPAddress.IsLoopback(ua.Address)) continue;
-                list.Add(ua.Address);
-            }
-        }
-        return list.Distinct().ToList();
+        return MdnsCommon.MyAddresses.ToList();
+
+        //var list = new List<IPAddress>();
+        //foreach (var nic in NetworkInterface.GetAllNetworkInterfaces()) {
+        //    if (nic.OperationalStatus != OperationalStatus.Up) continue;
+        //    if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+        //    foreach (var ua in nic.GetIPProperties().UnicastAddresses) {
+        //        if (ua.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+        //        if (IPAddress.IsLoopback(ua.Address)) continue;
+        //        list.Add(ua.Address);
+        //    }
+        //}
+        //return list.Distinct().ToList();
     }
 }

@@ -110,7 +110,7 @@ namespace SecureArchive.Utils.Server.mdns {
         // ---- Sockets / IO -----------------------------------------------------------------
 
         private void BindSockets() {
-            foreach (var addr in MdnsCommon.EnumerateMulticastV4Addresses()) {
+            foreach (var addr in MdnsCommon.MyAddresses) {
                 UdpClient? sock = null;
                 try {
                     sock = new UdpClient(AddressFamily.InterNetwork);

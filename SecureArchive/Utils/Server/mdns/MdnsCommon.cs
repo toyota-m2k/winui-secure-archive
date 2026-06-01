@@ -101,18 +101,30 @@ namespace SecureArchive.Utils.Server.mdns {
         /// マルチキャスト対応の UP な NIC のユニキャスト IPv4 アドレスを列挙する。
         /// mDNS サブシステムでの socket bind 用。Advertizer / Browser 共通。
         /// </summary>
-        public static IEnumerable<IPAddress> EnumerateMulticastV4Addresses() {
-            foreach (var nic in NetworkInterface.GetAllNetworkInterfaces()) {
-                if (nic.OperationalStatus != OperationalStatus.Up) continue;
-                if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
-                if (!nic.SupportsMulticast) continue;
-                var ipProps = nic.GetIPProperties();
-                foreach (var ua in ipProps.UnicastAddresses) {
-                    if (ua.Address.AddressFamily != AddressFamily.InterNetwork) continue;
-                    if (IPAddress.IsLoopback(ua.Address)) continue;
-                    yield return ua.Address;
-                }
-            }
-        }
+        //public static IEnumerable<IPAddress> EnumerateMulticastV4Addresses() {
+        //    foreach (var nic in NetworkInterface.GetAllNetworkInterfaces()) {
+        //        if (nic.OperationalStatus != OperationalStatus.Up) continue;
+        //        if (nic.NetworkInterfaceType == NetworkInterfaceType.Loopback) continue;
+        //        if (!nic.SupportsMulticast) continue;
+        //        var ipProps = nic.GetIPProperties();
+        //        foreach (var ua in ipProps.UnicastAddresses) {
+        //            if (ua.Address.AddressFamily != AddressFamily.InterNetwork) continue;
+        //            if (IPAddress.IsLoopback(ua.Address)) continue;
+        //            yield return ua.Address;
+        //        }
+        //    }
+        //}
+        private static readonly string[] virtualKeywords = { "hyper-v", "virtual", "wsl", "docker" };
+        public static IEnumerable<IPAddress> MyAddresses =>
+            NetworkInterface.GetAllNetworkInterfaces()
+            .Where(nic => nic.OperationalStatus == OperationalStatus.Up   // アクティブなNIC
+                         && nic.NetworkInterfaceType != NetworkInterfaceType.Loopback    // Loopbackは除外
+                         && nic.SupportsMulticast   // マルチキャストをサポート (GenCert/QRPairingでは不要かもしれないが、たぶん、あっても困らないと思う）
+                         && !virtualKeywords.Any(keyword => nic.Description.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)) // HyperVの仮想NICは除外
+            .SelectMany(ni => ni.GetIPProperties().UnicastAddresses)
+            .Where(ua => ua.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ua.Address))  // ipネットワーク限定
+            .Select(ua => ua.Address)
+            .Distinct();
+        public static IPAddress MyAddress => MyAddresses.FirstOrDefault();
     }
 }
