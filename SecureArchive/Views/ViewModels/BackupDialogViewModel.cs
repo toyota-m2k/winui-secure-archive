@@ -67,7 +67,9 @@ internal class BackupDialogViewModel {
 
         Task.Run(async () => {
             try {
-                foreach(var item in targets) {
+                var buffer = new byte[1024 * 1024];
+                foreach (var item in targets) {
+                    if (_cts.IsCancellationRequested) break;
                     _mainThreadService.Run(() => {
                         CurrentIndex.Value++;
                         CurrentBytes.Value = 0;
@@ -75,7 +77,7 @@ internal class BackupDialogViewModel {
                         CurrentItem.Value = item.Name;
                     });
                     _logger.Info($"download start: {item.Name}");
-                    if (await _backupService.DownloadTarget(item, Progress, _cts.Token)) {
+                    if (await _backupService.DownloadTarget(item, Progress, buffer, _cts.Token)) {
                         _mainThreadService.Run(() => {
                             RemoteItems.Remove(item);
                         });

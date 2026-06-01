@@ -54,7 +54,7 @@ internal interface IBackupService {
     IList<FileEntry> RemoteModifiedItems { get; }
 
     bool Request(string ownerId, string token, PeerHost peer);
-    Task<bool> DownloadTarget(RemoteItem item, ProgressProc progress, CancellationToken ct);
+    Task<bool> DownloadTarget(RemoteItem item, ProgressProc progress, byte[]? buffer, CancellationToken ct);
     Task<bool> DeleteBackupEntry(FileEntry entry);
     Task<bool> UpdateBackupEntry(FileEntry entry, CancellationToken ct);
     bool RequestDBBackup(string ownerId, string token, PeerHost peer);

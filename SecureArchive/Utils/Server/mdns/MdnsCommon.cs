@@ -125,6 +125,6 @@ namespace SecureArchive.Utils.Server.mdns {
             .Where(ua => ua.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ua.Address))  // ipネットワーク限定
             .Select(ua => ua.Address)
             .Distinct();
-        public static IPAddress MyAddress => MyAddresses.FirstOrDefault();
+        //public static IPAddress MyAddress => MyAddresses.FirstOrDefault();
     }
 }
