@@ -6,9 +6,16 @@ using System.Text;
 namespace SecureArchive.Views.ViewModels {
     interface IHttpClient : IDisposable {
         TimeSpan Timeout { get; set; }
-        Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken? cancellationToken=null);
-        Task<HttpResponseMessage> GetAsync([StringSyntax(StringSyntaxAttribute.Uri)] string requestUri, HttpCompletionOption completionOption = HttpCompletionOption.ResponseContentRead, CancellationToken? cancellationToken = null);
+        Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationToken? cancellationToken=null);
+        Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken? cancellationToken = null);
+
+        Task<HttpResponseMessage> GetAsync([StringSyntax(StringSyntaxAttribute.Uri)] string requestUri, HttpCompletionOption completionOption, CancellationToken? cancellationToken = null);
+        Task<HttpResponseMessage> GetAsync([StringSyntax(StringSyntaxAttribute.Uri)] string requestUri, CancellationToken? cancellationToken = null);
+
+        Task<HttpResponseMessage> PutAsync([StringSyntax(StringSyntaxAttribute.Uri)] string requestUri, HttpContent? content, HttpCompletionOption completionOption, CancellationToken? cancellationToken = null);
         Task<HttpResponseMessage> PutAsync([StringSyntax(StringSyntaxAttribute.Uri)] string requestUri, HttpContent? content, CancellationToken? cancellationToken = null);
+
+        Task<HttpResponseMessage> PostAsync([StringSyntax(StringSyntaxAttribute.Uri)] string requestUri, HttpContent? content, HttpCompletionOption completionOption, CancellationToken? cancellationToken = null);
         Task<HttpResponseMessage> PostAsync([StringSyntax(StringSyntaxAttribute.Uri)] string requestUri, HttpContent? content, CancellationToken? cancellationToken = null);
     }
 
@@ -114,31 +121,48 @@ namespace SecureArchive.Views.ViewModels {
             public void Dispose() {
                 _httpClient.Dispose();
             }
-            public Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken? cancellationToken) {
+
+            // completionOption を下層の HttpClient まで伝える版。
+            // ResponseHeadersRead を指定したいダウンロード系で必須（既定の ResponseContentRead だと
+            // ボディを全部受信し終えるまで Task が完了せず、ストリーミング受信できない）。
+            public Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, HttpCompletionOption completionOption, CancellationToken? cancellationToken) {
                 request.Options.Set(KEY, _peerHost);
-                return _httpClient.SendAsync(request, cancellationToken ?? CancellationToken.None);
+                return _httpClient.SendAsync(request, completionOption, cancellationToken ?? CancellationToken.None);
+            }
+            public Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken? cancellationToken) {
+                return SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken ?? CancellationToken.None);
             }
 
             public Task<HttpResponseMessage> GetAsync([StringSyntax("Uri")] string requestUri, HttpCompletionOption completionOption, CancellationToken? cancellationToken) {
                 var uri = new Uri(requestUri, UriKind.RelativeOrAbsolute);
                 var req = new HttpRequestMessage(HttpMethod.Get, uri);
-                return SendAsync(req, cancellationToken);
+                return SendAsync(req, completionOption, cancellationToken);
+            }
+            public Task<HttpResponseMessage> GetAsync([StringSyntax("Uri")] string requestUri, CancellationToken? cancellationToken) {
+                return GetAsync(requestUri, HttpCompletionOption.ResponseContentRead, cancellationToken);
             }
 
-            public Task<HttpResponseMessage> PostAsync([StringSyntax("Uri")] string requestUri, HttpContent? content, CancellationToken? cancellationToken) {
+            public Task<HttpResponseMessage> PostAsync([StringSyntax("Uri")] string requestUri, HttpContent? content, HttpCompletionOption completionOption, CancellationToken? cancellationToken) {
                 var uri = new Uri(requestUri, UriKind.RelativeOrAbsolute);
                 var req = new HttpRequestMessage(HttpMethod.Post, uri) {
                     Content = content
                 };
-                return SendAsync(req, cancellationToken);
+                return SendAsync(req, completionOption, cancellationToken);
+            }
+            public Task<HttpResponseMessage> PostAsync([StringSyntax("Uri")] string requestUri, HttpContent? content, CancellationToken? cancellationToken) {
+                return PostAsync(requestUri, content, HttpCompletionOption.ResponseContentRead, cancellationToken);
             }
 
-            public Task<HttpResponseMessage> PutAsync([StringSyntax("Uri")] string requestUri, HttpContent? content, CancellationToken? cancellationToken) {
+            public Task<HttpResponseMessage> PutAsync([StringSyntax("Uri")] string requestUri, HttpContent? content, HttpCompletionOption completionOption, CancellationToken? cancellationToken) {
                 var uri = new Uri(requestUri, UriKind.RelativeOrAbsolute);
                 var req = new HttpRequestMessage(HttpMethod.Put, uri) {
                     Content = content
                 };
-                return SendAsync(req, cancellationToken);
+                return SendAsync(req, completionOption, cancellationToken);
+            }
+
+            public Task<HttpResponseMessage> PutAsync([StringSyntax("Uri")] string requestUri, HttpContent? content, CancellationToken? cancellationToken = null) {
+                return PutAsync(requestUri, content, HttpCompletionOption.ResponseContentRead, cancellationToken);
             }
             public TimeSpan Timeout {
                 get => _httpClient.Timeout;
