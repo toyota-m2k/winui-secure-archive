@@ -432,7 +432,7 @@ internal class BackupService : IBackupService {
 
 
     private const int BUFF_SIZE = 1 * 1024 * 1024;
-    public async Task<bool> DownloadTarget(RemoteItem item, ProgressProc progress, CancellationToken ct) {
+    public async Task<bool> DownloadTarget(RemoteItem item, ProgressProc progress, byte[]? buffer, CancellationToken ct) {
         var url = Peer.MakeUrl($"{GetSlotId(item.Slot)}{item.UrlType}?id={item.Id}&auth={Token}");
         try {
             await Task.Delay(500);          // これを入れないと、Pixel3 でエラーになる。
@@ -447,12 +447,12 @@ internal class BackupService : IBackupService {
                 using (var entryCreator = await _secureStorageService.CreateEntry(OwnerId, item.Slot, item.Id, true)) {
                     if (entryCreator == null) { throw new InvalidOperationException("cannot create entry."); }
                     var total = content.Headers.ContentLength ?? 0L;
-                    var buff = new byte[BUFF_SIZE];
+                    var buff = buffer ?? new byte[BUFF_SIZE];
                     var recv = 0L;
                     var ok = false;
                     while (true) {
                         ct.ThrowIfCancellationRequested();
-                        int len = await inStream.ReadAsync(buff, 0, BUFF_SIZE, ct);
+                        int len = await inStream.ReadAsync(buff, 0, buff.Length, ct);
                         if (len == 0) {
                             if (total == 0L || total == recv) {
                                 entryCreator.Complete(item.Name, total!=0L ? total : item.Size, item.Type, item.Date, item.CreationDate, item.Duration, null, extAttr);
