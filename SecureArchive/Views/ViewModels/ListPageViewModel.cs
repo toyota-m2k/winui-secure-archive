@@ -1,33 +1,39 @@
-﻿using Microsoft.Extensions.Logging;
-using Reactive.Bindings;
+﻿using Reactive.Bindings;
 using SecureArchive.DI;
-using SecureArchive.DI.Impl;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
-using System;
-using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel.DataAnnotations;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
-using System.Globalization;
-using System.Linq;
 using System.Reactive.Linq;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading.Tasks;
-using System.Windows.Forms;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement.TextBox;
 
 namespace SecureArchive.Views.ViewModels;
 
 internal class DispOwnerInfo {
-    public string? OwnerId { get; set; } = null;
-    public string Name { get; set; } = string.Empty;
-    public static DispOwnerInfo All = new DispOwnerInfo() {
-        Name = "All"
-    };
+    public string OwnerId { get; private set; }
+    public string Name { get; private set; }
+    public DispOwnerInfo(string ownerId, string name) {
+        OwnerId = ownerId;
+        Name = name;
+    }
+    public static DispOwnerInfo All = new DispOwnerInfo("$$ALL", "All");
+    
+    public static DispOwnerInfo From(OwnerInfo oi) {
+        return new DispOwnerInfo(oi.OwnerId, oi.Name);
+    }
+
+
+    public override bool Equals(object? obj) {
+        if (obj is DispOwnerInfo other) {
+            return OwnerId == other.OwnerId;
+        }
+        return false;
+    }
+
+    public override int GetHashCode() {
+        return OwnerId.GetHashCode();
+    }
 }
 internal class DispSlotInfo {
     public int Slot { get; set; } = 0;
@@ -118,6 +124,7 @@ internal class ListPageViewModel : IListSource {
                 var uo = UpdateOwnerList();
                 var us = UpdateSlotList();
                 if (uo || us) {
+                    // 全リスト更新済みなので、個別の変更は不要
                     return;
                 }
                 _mainThreadService.Run(() => {
@@ -156,27 +163,25 @@ internal class ListPageViewModel : IListSource {
 
     private bool UpdateOwnerList() {
         var availableOwners = _dataBaseService.Entries.AvailableOwnerIds();
-        var owners = 
+        var owners =
             new List<DispOwnerInfo>() { DispOwnerInfo.All }
             .Concat(
-            _dataBaseService.OwnerList
-            .List()
-            .Where(it=>availableOwners
-            .Contains(it.OwnerId))
-            .Select((it) => new DispOwnerInfo() { OwnerId = it.OwnerId, Name = it.Name })
+                _dataBaseService.OwnerList
+                .List()
+                .Where(it=> availableOwners.Contains(it.OwnerId))
+                .Select(it => DispOwnerInfo.From(it))
             ).ToList();
-
+        Debug.Assert(owners[0] == DispOwnerInfo.All);
         if (OwnerList.Value.SequenceEqual(owners, _ownerComparer)) {
+            // OwnerListが変化していなければ何もしない
             return false;
         }
-        var selectionChanging = SelectedOwner.Value.OwnerId != DispOwnerInfo.All.OwnerId && owners.Find(it => it.OwnerId == SelectedOwner.Value.OwnerId) == null;
+        var newOwner = owners.Find(it => it == SelectedOwner.Value) ?? DispOwnerInfo.All;
         _mainThreadService.Run(() => {
             OwnerList.Value = owners;
-            if (selectionChanging) {
-                SelectedOwner.Value = owners[0];
-            }
+            SelectedOwner.Value = newOwner;
         });
-        return selectionChanging;
+       return true;
     }
 
     private class SlotComparer : IEqualityComparer<DispSlotInfo> {
@@ -360,7 +365,7 @@ internal class ListPageViewModel : IListSource {
 
     private void AddItem(FileEntry entry) {
         if (SelectedSlot.Value.Slot != -1 && SelectedSlot.Value.Slot != entry.Slot) return; // Skip if not in the selected slot
-        if (SelectedOwner.Value.OwnerId != null && SelectedOwner.Value.OwnerId != entry.OwnerId) return; // Skip if not in the selected owner
+        if (SelectedOwner.Value != DispOwnerInfo.All && SelectedOwner.Value.OwnerId != entry.OwnerId) return; // Skip if not in the selected owner
 
         var list = FileList.Value;
         var next = list.FirstOrDefault((it) => it.LastModifiedDate > entry.LastModifiedDate);
@@ -400,12 +405,13 @@ internal class ListPageViewModel : IListSource {
     }
 
     private void ResetAllItems() {
-        var ownerId = SelectedOwner.Value.OwnerId;
+        if (SelectedOwner.Value == null) return;
         var slot = SelectedSlot.Value.Slot;
-        if (ownerId == null) {
+        if (SelectedOwner.Value == DispOwnerInfo.All) {
             FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(slot, true));
         }
         else {
+            var ownerId = SelectedOwner.Value.OwnerId;
             FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(slot, it => it.OwnerId == ownerId, true));
         }
     }

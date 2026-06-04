@@ -46,7 +46,12 @@ internal class DeviceMigrationService : IDeviceMigrationService {
             _logger.LogError("dstDevice is not found.");
             return new List<OwnerInfo>();
         }
-        return _databaseService.OwnerList.List(o => o.OwnerId != dstDeviceId && !string.IsNullOrEmpty(o.OwnerId) && o.OwnerId!="LOCAL");
+        var validOwners = _databaseService.Entries.AvailableOwnerIds();
+        return _databaseService.OwnerList.List(o => 
+                o.OwnerId != dstDeviceId 
+                && !string.IsNullOrEmpty(o.OwnerId) 
+                && o.OwnerId!="LOCAL" 
+                && validOwners.Any(it=>it==o.OwnerId));
     }
 
 

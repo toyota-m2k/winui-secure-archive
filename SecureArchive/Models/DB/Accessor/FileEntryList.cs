@@ -406,7 +406,7 @@ public class FileEntryList : IMutableFileEntryList {
     }
     public List<string> AvailableOwnerIds() {
         lock (_connector) {
-            return _entries.Select(it => it.OwnerId).Distinct().OrderBy(it => it).ToList();
+            return _entries.Where(it=>it.Deleted==0).Select(it => it.OwnerId).Distinct().OrderBy(it => it).ToList();
         }
     }
 
