@@ -327,3 +327,4 @@ fastlane/screenshots
 fastlane/test_output
 fastlane/readme.md
 SecureArchive/DI/Impl/HttpServerService.cs
+CLAUDE.md

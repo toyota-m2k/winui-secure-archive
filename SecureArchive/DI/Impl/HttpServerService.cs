@@ -378,6 +378,9 @@ internal class HttpServerService : IHttpServreService {
     private List<Route> Routes() {
 
         return new List<Route> {
+            #region Common
+            
+            // nop 疎通確認用
             Route.get(
                 name: "nop",
                 regex: "/nop",
@@ -385,36 +388,7 @@ internal class HttpServerService : IHttpServreService {
                     var slot = GetSlot(request.Url);
                     return new TextHttpResponse(request, HttpStatusCode.Ok, $"SecureArchive server (slot={slot}) is running.");
                 }),
-            Route.post(
-                name: "upload",
-                regex: "/upload",
-                process: (HttpRequest request) => {
-                    var content = request.Content;
-                    if(content==null) {
-                        return HttpErrorResponse.BadRequest(request);
-                    }
-                    //var p = QueryParser.Parse(request.Url);
-                    using(var handler = new UploadHandler(_secureStorageService, _deviceMigrationService)) {
-                        //// 登録処理を実行
-                        try {
-                            int slot = GetSlot(request.Url);
-                            if (slot < 0) {
-                                _logger.Error("No Slot");
-                                return HttpErrorResponse.InternalServerError(request);
-                            }
-                            _logger.Debug($"[{request.Id}] Parsing Multipart (slot={slot})");
-                            content.ParseMultipartContent(slot, handler);
-                            //UnregisterUploadTask(handler);
-                            _logger.Debug($"[{request.Id}] Parsing Multipart (slot={slot}) ... Completed");
-                            return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
-                        } catch (Exception ex) {
-                            _logger.Error(ex, $"[{request.Id}] Parsing multipart body error.");
-                            handler.HasError = true;
-                            return HttpErrorResponse.InternalServerError(request);
-                        }
-                        // 処理完了
-                    }
-                }),
+            // capability
             Route.get(
                 name: "capability",
                 regex:@"/capability",
@@ -439,6 +413,22 @@ internal class HttpServerService : IHttpServreService {
                     };
                     return TextHttpResponse.FromJson(request, cap);
                 }),
+            // category 非サポートだが、BooDroidにバグがあって、これを返さないと死んでしまう。
+            Route.get(
+                name: "category",
+                regex: @"/category",
+                process: (request) => {
+                    var dic = new Dictionary<string, object>(){
+                        { "cmd", "category"},
+                    };
+                    return TextHttpResponse.FromJson(request, dic);
+                }),
+            
+            #endregion
+
+            #region Authentication
+            
+            // auth (put) チャレンジに対する応答を受け取って、認証を行う。成功すれば、auth tokenを返す。
             Route.put(
                 name: "authentication",
                 regex: "/auth",
@@ -446,6 +436,7 @@ internal class HttpServerService : IHttpServreService {
                     var passPhrease = request.Content?.TextContent?.Trim();
                     return oneTimePasscode.Authenticate(request, passPhrease).Result;
                 }),
+            // auth (get) 認証と疎通確認。認証に失敗すれば、challengeを返す。
             Route.get(
                 name: "auth & nop",
                 regex: @"/auth/.*",
@@ -455,6 +446,12 @@ internal class HttpServerService : IHttpServreService {
                     }
                     return new TextHttpResponse(request, HttpStatusCode.Ok, "Ok");
                 }),
+            
+            #endregion
+
+            #region Items
+            
+            // list?auth=<auth-token>&sync=<true|false>&type=<all|video|photo>&f=<vp>&o=<ownerId>&s=<listMode>
             Route.get(
                 name: "list",
                 regex: @"/list(?:\?.*)?",
@@ -507,24 +504,68 @@ internal class HttpServerService : IHttpServreService {
                     };
                     return TextHttpResponse.FromJson(request, dic);
                 }),
+            
+            // video アイテムを取得
             Route.get(
                 name: "video",
                 regex: @"/video\?\w+",
                 process: (HttpRequest request) => {
                     return RequestItem(request, "v");
                 }),
-            Route.get(
-                name: "item",
-                regex: @"/item\?\w+",
-                process: (HttpRequest request) => {
-                    return RequestItem(request, null);
-                }),
+            
+            // photo アイテムを取得
             Route.get(
                 name: "photo",
                 regex: @"/photo\?\w+",
                 process: (HttpRequest request) => {
                     return RequestItem(request, "p");
                 }),
+            
+            // タイプを指定しないでアイテムを取得する。
+            Route.get(
+                name: "item",
+                regex: @"/item\?\w+",
+                process: (HttpRequest request) => {
+                    return RequestItem(request, null);
+                }),
+            
+            // upload アイテムのアップロード
+            Route.post(
+                name: "upload",
+                regex: "/upload",
+                process: (HttpRequest request) => {
+                    var content = request.Content;
+                    if(content==null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    //var p = QueryParser.Parse(request.Url);
+                    using(var handler = new UploadHandler(_secureStorageService, _deviceMigrationService)) {
+                        //// 登録処理を実行
+                        try {
+                            int slot = GetSlot(request.Url);
+                            if (slot < 0) {
+                                _logger.Error("No Slot");
+                                return HttpErrorResponse.InternalServerError(request);
+                            }
+                            _logger.Debug($"[{request.Id}] Parsing Multipart (slot={slot})");
+                            content.ParseMultipartContent(slot, handler);
+                            //UnregisterUploadTask(handler);
+                            _logger.Debug($"[{request.Id}] Parsing Multipart (slot={slot}) ... Completed");
+                            return new TextHttpResponse(request, HttpStatusCode.Ok, "Done.");
+                        } catch (Exception ex) {
+                            _logger.Error(ex, $"[{request.Id}] Parsing multipart body error.");
+                            handler.HasError = true;
+                            return HttpErrorResponse.InternalServerError(request);
+                        }
+                        // 処理完了
+                    }
+                }),
+            
+            #endregion
+
+            #region Item Attributes
+            
+            // chapter  アイテムのチャプターリストを取得する。
             Route.get(
                 name: "chapters",
                 regex: @"/chapter\?\w+",
@@ -546,15 +587,7 @@ internal class HttpServerService : IHttpServreService {
                     }
                     return TextHttpResponse.FromJson(request, dic);
                 }),
-            Route.get(
-                name: "category",   // Categoryは非サポートだが、BooDroidにバグがあって、これを返さないと死んでしまう。
-                regex: @"/category",
-                process: (request) => {
-                    var dic = new Dictionary<string, object>(){
-                        { "cmd", "category"},
-                    };
-                    return TextHttpResponse.FromJson(request, dic);
-                }),
+            // extension (get) アイテムの拡張情報（ExtAttrDate/Rating/Mark/Label/Category/Chapters）を取得
             Route.get(
                 name: "Extended Attributes",
                 regex: @"/extension\?\w+",
@@ -575,6 +608,7 @@ internal class HttpServerService : IHttpServreService {
                             { "chapters", entry.Chapters ?? "" },
                         });
                 }),
+            // extension (put)  アイテムの拡張情報（ExtAttrDate/Rating/Mark/Label/Category/Chapters）を更新する。
             Route.put(
                 name: "Extended Attributes",
                 regex: @"/extension",
@@ -602,6 +636,26 @@ internal class HttpServerService : IHttpServreService {
                     });
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "extension" }, {"status", "ok"} });
                 }),
+            
+            #endregion
+
+            #region Owner
+            
+            // owner オーナー登録
+            Route.put(
+                name:"register owner",
+                regex: @"/owner",
+                process: (request) => {
+                    var content = request.Content?.TextContent;
+                    if (content== null) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    if(!RegisterOwner(JsonConvert.DeserializeObject<Dictionary<string, string>>(content))) {
+                        return HttpErrorResponse.BadRequest(request);
+                    }
+                    return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "owner" }, {"status", "registered"} });
+                }),
+            // sync/owners  SA間同期用
             Route.put(
                 name:"sync OwnerList",
                 regex:@"/sync/owners",
@@ -617,19 +671,12 @@ internal class HttpServerService : IHttpServreService {
                     return TextHttpResponse.FromJsonString(request, _databaseService.OwnerList.JsonForSync());
 
                 }),
-            Route.put(
-                name:"register owner",
-                regex: @"/owner",
-                process: (request) => {
-                    var content = request.Content?.TextContent;
-                    if (content== null) {
-                        return HttpErrorResponse.BadRequest(request);
-                    }
-                    if(!RegisterOwner(JsonConvert.DeserializeObject<Dictionary<string, string>>(content))) {
-                        return HttpErrorResponse.BadRequest(request);
-                    }
-                    return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "owner" }, {"status", "registered"} });
-                }),
+            
+            #endregion
+
+            #region Backup (Device<->SA)
+
+            // backup/request
             Route.put(
                 name: "backup start",
                 regex: @"/backup/request",
@@ -658,6 +705,8 @@ internal class HttpServerService : IHttpServreService {
                     }
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "backup" }, {"status", "accepted"} });
                 }),
+            
+            // backup-db/request
             Route.put(
                 name: "backup-db start",
                 regex: @"/backup-db/request",
@@ -685,8 +734,13 @@ internal class HttpServerService : IHttpServreService {
                     }
                     return TextHttpResponse.FromJson(request, new Dictionary<string,object>{ { "cmd", "backup" }, {"status", "accepted"} });
                 }),
+            
+            #endregion
+
+            #region Migration
+
+            // migration/devices/auth=<auth-token>&n=<new-clientId>
             Route.get(
-                // migration/devices/auth=<auth-token>&n=<new-clientId>
                 name: "retrieve migration target devices",
                 regex: @"/migration/devices",
                 process: (request) => {
@@ -709,8 +763,8 @@ internal class HttpServerService : IHttpServreService {
                     };
                     return TextHttpResponse.FromJson(request, dic);
                 }),
+            // migration/start/auth=<auth-token>&n=<new-clientId>&o=<old-clientId>
             Route.get(
-                // migration/start/auth=<auth-token>&n=<new-clientId>&o=<old-clientId>
                 name: "start migration",
                 regex: @"/migration/start",
                 process: (request) => {
@@ -735,8 +789,8 @@ internal class HttpServerService : IHttpServreService {
                     };
                     return TextHttpResponse.FromJson(request, dic);
                 }),
+            // migration/end/h=<migration-handle>
             Route.get(
-                // migration/end/h=<migration-handle>
                 name: "end migration",
                 regex: @"/migration/end",
                 process: (request) => {
@@ -751,8 +805,8 @@ internal class HttpServerService : IHttpServreService {
                         { "status", result ? "ok" : "ng" }
                     });
                 }),
+            // migration/proc/auth=<auth-token>
             Route.put(
-                // migration/proc/auth=<auth-token>
                 name: "process single entry",
                 regex: @"/migration/exec",
                 process: (request) => {
@@ -789,8 +843,8 @@ internal class HttpServerService : IHttpServreService {
                         { "status", "ok" }
                     });
                 }),
+            // migration/history
             Route.get(
-                // migration/history
                 name: "end migration",
                 regex: @"/migration/history",
                 process: (request) => {
@@ -799,8 +853,8 @@ internal class HttpServerService : IHttpServreService {
                         { "list", _databaseService.DeviceMigration.List().Select(it => it.ToDictionary()).ToList() }
                     });
                 }),
+            // migration/history
             Route.put(
-                // migration/history
                 name: "end migration",
                 regex: @"/migration/history",
                 process: (request) => {
@@ -826,6 +880,10 @@ internal class HttpServerService : IHttpServreService {
                         { "status", "ok" }
                     });
                 }),
+
+            #endregion
+
+
         };
     }
 
