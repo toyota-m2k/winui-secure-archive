@@ -63,7 +63,63 @@ internal class ListPageViewModel : IListSource {
     public ReactiveCommandSlim GoBackCommand { get; } = new ReactiveCommandSlim();
     public ReactiveCommandSlim PatchCommand { get; } = new ReactiveCommandSlim();
 
-    public ReactivePropertySlim<ObservableCollection<FileEntry>> FileList { get; } = new (new ObservableCollection<FileEntry>());
+    public class FileEntryItem {
+        public FileEntry Entry { get;}
+        public long Id { get; }
+        public string OwnerId { get; }
+        public string OriginalId { get; }
+        public string Name { get; }
+        public long Size { get; }
+        public string Type { get; }
+        public string? MetaInfo { get; }
+        public string Path { get; }
+        public long RegisteredDate { get; }
+        public long CreationDate { get; }
+        public long LastModifiedDate { get; }
+        public long Deleted { get; }
+        public long ExtAttrDate { get; }
+        // 以下、extended attributes
+        public int Rating { get; }
+        public int Mark { get; }
+        public string? Label { get; }
+        public string? Category { get; }
+        public string? Chapters { get; }
+        public long Duration { get; } = 0;
+        public int Slot { get; } = 0;
+
+        public bool IsDeleted => Deleted != 0;
+
+        public FileEntryItem(FileEntry entry) {
+            Entry = entry;
+            Id = entry.Id;
+            OwnerId = entry.OwnerId;
+            OriginalId = entry.OriginalId;
+            Name = entry.Name;
+            Size = entry.Size;
+            Type = entry.Type;
+            MetaInfo = entry.MetaInfo;
+            Path = entry.Path;
+            RegisteredDate = entry.RegisteredDate;
+            CreationDate = entry.CreationDate;
+            LastModifiedDate = entry.LastModifiedDate;
+            Deleted = entry.Deleted;
+            ExtAttrDate = entry.ExtAttrDate;
+            Rating = entry.Rating;
+            Mark = entry.Mark;
+            Label = entry.Label;
+            Category = entry.Category;
+            Chapters = entry.Chapters;
+            Duration = entry.Duration;
+            Slot = entry.Slot;
+        }
+
+        public static FileEntryItem FromFileEntry(FileEntry entry) {
+            return new FileEntryItem(entry);
+        }
+
+    }
+
+    public ReactivePropertySlim<ObservableCollection<FileEntryItem>> FileList { get; } = new (new ObservableCollection<FileEntryItem>());
     public IReadOnlyReactiveProperty<string> Message { get; }
     public IReadOnlyReactiveProperty<ProgressMode> ProgressMode { get; } 
     public IReadOnlyReactiveProperty<int> ProgressInPercent { get; }
@@ -76,7 +132,7 @@ internal class ListPageViewModel : IListSource {
     public ReactivePropertySlim<DispSlotInfo> SelectedSlot { get; } = new ReactivePropertySlim<DispSlotInfo>(DispSlotInfo.All, ReactivePropertyMode.DistinctUntilChanged);
 
     public IList<FileEntry> GetFileList() {
-        return FileList.Value;
+        return FileList.Value.Select(it=>it.Entry).ToList();
     }
 
     public ListPageViewModel(
@@ -101,7 +157,7 @@ internal class ListPageViewModel : IListSource {
         GoBackCommand.Subscribe(_pageService.ShowMenuPage);
         AddCommand.Subscribe(AddLocalFile);
 
-        FileList.Value = new ObservableCollection<FileEntry>();
+        FileList.Value = new ObservableCollection<FileEntryItem>();
         Task.Run(() => {
             UpdateOwnerList();
             UpdateSlotList();
@@ -380,6 +436,15 @@ internal class ListPageViewModel : IListSource {
                     return modified;
                 });
             }
+
+            //_mainThreadService.Run(() => {
+            //    var list = FileList.Value.ToList();
+            //    FileList.Value.Clear();
+            //    foreach(var item in list) {
+            //        _logger.Debug($"{item.Name} : Size={item.Size}");
+            //        FileList.Value.Add(item);
+            //    }
+            //});
         });
     }
 
@@ -416,9 +481,9 @@ internal class ListPageViewModel : IListSource {
         var list = FileList.Value;
         var next = list.FirstOrDefault((it) => it.LastModifiedDate > entry.LastModifiedDate);
         if(next==null) {
-            list.Add(entry);
+            list.Add(FileEntryItem.FromFileEntry(entry));
         } else {
-            list.Insert(list.IndexOf(next), entry);
+            list.Insert(list.IndexOf(next), FileEntryItem.FromFileEntry(entry));
         }
     }
 
@@ -445,9 +510,9 @@ internal class ListPageViewModel : IListSource {
         if (item != null) {
             var index = list.IndexOf(item);
             if (index >= 0) {
-                //list[index] = entry;  DataGridのバグ対策。
+                //list[index] = FileEntryItem.FromFileEntry(entry);
                 list.RemoveAt(index);
-                list.Insert(index, entry);
+                list.Insert(index, FileEntryItem.FromFileEntry(entry));
             }
         }
     }
@@ -456,11 +521,11 @@ internal class ListPageViewModel : IListSource {
         if (SelectedOwner.Value == null) return;
         var slot = SelectedSlot.Value.Slot;
         if (SelectedOwner.Value == DispOwnerInfo.All) {
-            FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(slot, true));
+            FileList.Value = new ObservableCollection<FileEntryItem>(_dataBaseService.Entries.List(slot, true).Select(FileEntryItem.FromFileEntry));
         }
         else {
             var ownerId = SelectedOwner.Value.OwnerId;
-            FileList.Value = new ObservableCollection<FileEntry>(_dataBaseService.Entries.List(slot, it => it.OwnerId == ownerId, true));
+            FileList.Value = new ObservableCollection<FileEntryItem>(_dataBaseService.Entries.List(slot, it => it.OwnerId == ownerId, true).Select(FileEntryItem.FromFileEntry));
         }
     }
 
@@ -496,7 +561,7 @@ internal class ListPageViewModel : IListSource {
                             var newEntry = await _secureStorageService.RegisterFile(item.Path, OwnerInfo.LOCAL_ID, 0, item.Name, Guid.NewGuid().ToString("N"), 0L, null, progress);
                             if (newEntry != null) {
                                 mainThread.Run(() => {
-                                    FileList.Value.Add(newEntry);
+                                    FileList.Value.Add(FileEntryItem.FromFileEntry(newEntry));
                                 });
                                 success++;
                             } else {
@@ -532,7 +597,7 @@ internal class ListPageViewModel : IListSource {
         var sorted = ascending
             ? list.OrderBy((it) => it.GetType().GetProperty(key)?.GetValue(it)).ThenBy((it) => it.GetType().GetProperty(prevKey)?.GetValue(it))
             : list.OrderByDescending((it) => it.GetType().GetProperty(key)?.GetValue(it)).ThenBy((it) => it.GetType().GetProperty(prevKey)?.GetValue(it));
-        FileList.Value = new ObservableCollection<FileEntry>(sorted);
+        FileList.Value = new ObservableCollection<FileEntryItem>(sorted);
         return ascending;
     }
 
@@ -576,7 +641,7 @@ internal class ListPageViewModel : IListSource {
             i++;
             if (entry.IsDeleted) continue;
             _logger.Debug($"Validating ({i}/{count}): {entry.Name}[ID={entry.Id}]");
-            var stream = openEntryStream(entry);
+            var stream = openEntryStream(entry.Entry);
             if (stream != null) {
                 using (stream) {
                     if (stream == null) {
@@ -599,7 +664,7 @@ internal class ListPageViewModel : IListSource {
                                         entry.OriginalId,
                                         entry.Duration,
                                         entry.MetaInfo,
-                                        new ItemExtAttributes(entry.AttrDataDic));
+                                        new ItemExtAttributes(entry.Entry.AttrDataDic));
                                     return true;
                                 });
                             }
