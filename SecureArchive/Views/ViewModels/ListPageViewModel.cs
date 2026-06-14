@@ -1,4 +1,5 @@
-﻿using Reactive.Bindings;
+﻿using io.github.toyota32k.toolkit.net;
+using Reactive.Bindings;
 using SecureArchive.DI;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
@@ -398,21 +399,28 @@ internal class ListPageViewModel : IListSource {
     // DBに登録されたファイルサイズが不正なエントリを修正するメンテナンスメソッド
     public void RepairFileSize() {
         (FileEntry entry, long length) getActuelEntryLength(FileEntry entry) {
-            var inner = _secureStorageService.OpenEntry(entry);
-            if (inner == null) {
-                _logger.Error($"cannot open {entry.Name}: {entry.Path}");
-                return (entry, -1);
-            }
-            var stream = new SeekableInputStream(inner, current => {
-                current?.Dispose();
-                return _secureStorageService.OpenEntry(entry);
-            });
-            using (stream) {
-                var length = stream.ReadLength();
-                if (entry.Size != length) {
-                    _logger.Warn($"size mismatch -- recorded size: {entry.Size} / actual size: {length}");
+            try {
+                var inner = _secureStorageService.OpenEntry(entry);
+                if (inner == null) {
+                    _logger.Error($"cannot open {entry.Name}: {entry.Path}");
+                    return (entry, -1);
                 }
-                return (entry,length);
+                var stream = new SeekableInputStream(inner, current => {
+                    current?.Dispose();
+                    return _secureStorageService.OpenEntry(entry);
+                });
+                using (stream) {
+                    var length = stream.ReadLength();
+                    if (entry.Size != length) {
+                        _logger.Warn($"size mismatch -- recorded size: {entry.Size} / actual size: {length}");
+                    } else {
+                        Logger.debug($"ok: {entry.Name}");
+                    }
+                    return (entry, length);
+                }
+            } catch (Exception e) {
+                _logger.Error(e, $"cannot open { entry.Name}: { entry.Path}");
+                return (entry, -1);
             }
         }
 
@@ -586,7 +594,7 @@ internal class ListPageViewModel : IListSource {
     private bool ascending = false;
 
     public bool SortBy(string key) {
-        string prevKey = prevSortKey.IsEmpty() ? (key == "Name" ? "Id" : key) : prevSortKey;
+        string prevKey = string.IsNullOrEmpty(prevSortKey) ? (key == "Name" ? "Id" : key) : prevSortKey;
         if (prevSortKey == key) {
             ascending = !ascending;
         } else { 
