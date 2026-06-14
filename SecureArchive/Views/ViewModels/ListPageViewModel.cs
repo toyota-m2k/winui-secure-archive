@@ -425,7 +425,7 @@ internal class ListPageViewModel : IListSource {
         }
 
         Task.Run(() => {
-            var list = _dataBaseService.Entries.List().Select(entry => {
+            var list = _dataBaseService.Entries.List().Where(it=>it.Size==0).Select(entry => {
                 return getActuelEntryLength(entry);
             }).Where(it => {
                 return it.entry.Size != it.length;
@@ -436,6 +436,7 @@ internal class ListPageViewModel : IListSource {
                     foreach (var it in list) {
                         if (it.length < 0) {
                             // need to swipe?
+                            _logger.Error($"cannot get actual size for entry: {it.entry.Name}");
                             continue;
                         }
                         table.Update(it.entry, size: it.length);
