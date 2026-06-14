@@ -7,6 +7,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Reactive.Linq;
+using System.Windows.Documents;
 
 namespace SecureArchive.Views.ViewModels;
 
@@ -338,6 +339,51 @@ internal class ListPageViewModel : IListSource {
         });
     }
 
+    // DBに登録されたファイルサイズが不正なエントリを修正するメンテナンスメソッド
+    public void RepairFileSize() {
+        (FileEntry entry, long length) getActuelEntryLength(FileEntry entry) {
+            var inner = _secureStorageService.OpenEntry(entry);
+            if (inner == null) {
+                _logger.Error($"cannot open {entry.Name}: {entry.Path}");
+                return (entry, -1);
+            }
+            var stream = new SeekableInputStream(inner, current => {
+                current?.Dispose();
+                return _secureStorageService.OpenEntry(entry);
+            });
+            using (stream) {
+                var length = stream.ReadLength();
+                if (entry.Size != length) {
+                    _logger.Warn($"size mismatch -- recorded size: {entry.Size} / actual size: {length}");
+                }
+                return (entry,length);
+            }
+        }
+
+        Task.Run(() => {
+            var list = _dataBaseService.Entries.List().Select(entry => {
+                return getActuelEntryLength(entry);
+            }).Where(it => {
+                return it.entry.Size != it.length;
+            }).ToList();
+            if (list.Count > 0) {
+                _dataBaseService.EditEntry(table => {
+                    var modified = false;
+                    foreach (var it in list) {
+                        if (it.length < 0) {
+                            // need to swipe?
+                            continue;
+                        }
+                        table.Update(it.entry, size: it.length);
+                        modified = true;
+                    }
+                    return modified;
+                });
+            }
+        });
+    }
+
+    // 実ファイルが存在しないエントリをDBから削除するメンテナンスメソッド
     public void Sweep() {
         Task.Run(() => {
             //PatchCreationDate();
@@ -399,7 +445,9 @@ internal class ListPageViewModel : IListSource {
         if (item != null) {
             var index = list.IndexOf(item);
             if (index >= 0) {
-                list[index] = entry;
+                //list[index] = entry;  DataGridのバグ対策。
+                list.RemoveAt(index);
+                list.Insert(index, entry);
             }
         }
     }

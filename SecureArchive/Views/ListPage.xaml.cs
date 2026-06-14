@@ -25,7 +25,8 @@ namespace SecureArchive.Views {
             });
             ViewModel.PatchCommand.Subscribe(() => {
                 //_ = ViewModel.ConvertFastStart(FileListGrid.SelectedItems.Cast<FileEntry>().ToList());
-                ViewModel.Sweep();
+                // ViewModel.Sweep();
+                ViewModel.RepairFileSize();
             });
         }
 

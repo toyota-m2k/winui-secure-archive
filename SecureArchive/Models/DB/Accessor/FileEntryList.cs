@@ -120,6 +120,7 @@ public interface IDataChangeEventSource {
 public interface IMutableFileEntryList : IFileEntryList {
     FileEntry Add(string ownerId, int slot, string name, long size, string type, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr=null);
     FileEntry Update(string ownerId, int slot, string name, long size, string type_, string path, long lastModifiedDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null);
+    FileEntry Update(FileEntry entry, int? slot = null, string? name = null, long? size = null, string? type_ = null, string? path = null, long? lastModifiedDate = null, string? originalId = null, long? duration = null, string? metaInfo = null, IItemExtAttributes? extAttr = null);
     FileEntry AddOrUpdate(string ownerId, int slot, string name, long size, string type_, string path, long lastModifiedDate, long creationDate, string originalId, long duration, string? metaInfo = null, IItemExtAttributes? extAttr = null); 
     void Remove(FileEntry entry, bool deleteDbEntry = false);
     //void Remove(Func<FileEntry, bool> predicate);
@@ -371,6 +372,10 @@ public class FileEntryList : IMutableFileEntryList {
         }
         _changeInfoQueue.Enqueue(DataChangeInfo.Update(ResolveOwnerInfo(entry)));
         return entry;
+    }
+
+    public FileEntry Update(FileEntry entry, int? slot=null, string? name=null, long? size=null, string? type_=null, string? path=null, long? lastModifiedDate=null, string? originalId=null, long? duration=null, string? metaInfo = null, IItemExtAttributes? extAttr = null) {
+        return Update(entry.OwnerId, slot ?? entry.Slot, name ?? entry.Name, size ?? entry.Size, type_ ?? entry.Type, path ?? entry.Path, lastModifiedDate ?? entry.LastModifiedDate, originalId ?? entry.OriginalId, duration ?? entry.Duration, metaInfo ?? entry.MetaInfo, extAttr??new ItemExtAttributes(entry.AttrDataDic));
     }
 
     public void Remove(FileEntry entry, bool deleteDbEntry) {

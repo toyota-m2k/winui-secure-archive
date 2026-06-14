@@ -2,6 +2,7 @@
 using System.CodeDom;
 using System.Diagnostics;
 using System.IO;
+using System.Security.Cryptography;
 
 namespace SecureArchive.Utils;
 
@@ -29,6 +30,9 @@ public class SeekableInputStream : Stream {
     public override long Length { get; }
     private long getLength() {
         try {
+            if (_internalStream is CryptoStream) {
+                return -1;
+            }
             return _internalStream.Length;
         }
         catch (Exception) {
@@ -127,6 +131,22 @@ public class SeekableInputStream : Stream {
             if (len == 0) throw new InvalidOperationException("unexpected end of stream.");
             _position += len;
             remain -= len;
+        }
+    }
+
+    /**
+     * ストリームを読みだして、Lengthを実測する。
+     */
+    public long ReadLength() {
+
+        var buffer = new byte[BUFFER_SIZE];
+        var length = 0L;
+        while (true) {
+            var len = _internalStream.Read(buffer, 0, buffer.Length);
+            length += Math.Max(0, len);
+            if (len==0) {
+                return length;
+            }
         }
     }
 
