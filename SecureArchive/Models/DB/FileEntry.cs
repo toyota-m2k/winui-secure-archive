@@ -68,9 +68,9 @@ public class FileEntry : IItemExtAttributes {
 
     [Key, Required]
     public long Id { get; set; }
-    public string OriginalId { get; set; } = string.Empty;  // Owner App 内でのID
+    public string OriginalId { get; set; } = string.Empty;  // デバイス上でのID (OwnerId+Slot+OriginalIdの組み合わせで一意になることを想定)
     [Required]
-    public string OwnerId { get; set; } = string.Empty;
+    public string OwnerId { get; set; } = string.Empty;     // デバイスID
     [Required]
     public string Name { get; set; } = string.Empty;
     public long Size { get; set; }
@@ -80,11 +80,11 @@ public class FileEntry : IItemExtAttributes {
     [Required]
     public string Path { get; set; } = string.Empty;
 
-    public long RegisteredDate { get; set; }
-    public long LastModifiedDate { get; set; }
-    public long CreationDate { get; set; }
-    public long Deleted { get; set; }
-    public long ExtAttrDate { get; set;}
+    public long RegisteredDate { get; set; }                    // SAに登録された日時（UnixTime）
+    public long LastModifiedDate { get; set; }                  // ファイルの最終更新日時（UnixTime）
+    public long CreationDate { get; set; }                      // ファイルの作成日時（UnixTime）
+    public long Deleted { get; set; }                           // 削除フラグ（0:有効、1:削除済み）
+    public long ExtAttrDate { get; set; }                       // 拡張属性の更新日時（UnixTime）
     // 以下、extended attributes
     public int Rating { get; set; }
     public int Mark { get; set; }

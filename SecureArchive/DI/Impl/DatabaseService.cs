@@ -172,7 +172,7 @@ public class DatabaseService : IDatabaseService, IMutableTables {
         (int fromEntries, int fromMigrations) ret = (0, 0);
         lock (_connector) {
             EditEntry(entries => {
-                var dels = entries.List().Where(entry => entry.Deleted == 0 && !File.Exists(entry.Path));
+                var dels = entries.List().Where(entry => /*entry.Deleted == 0 &&*/ !File.Exists(entry.Path));
                 foreach(var del in dels) {
                     entries.Remove(del, deleteDbEntry: true);
                     ret.fromEntries++;
@@ -183,7 +183,7 @@ public class DatabaseService : IDatabaseService, IMutableTables {
             EditDeviceMigration(migrations => {
                 var dels = migrations.List().Where((it) => {
                     var entry = Entries.GetByOriginalId(it.NewOwnerId, it.Slot, it.NewOriginalId);
-                    return entry == null || (entry.Deleted == 0 && !File.Exists(entry.Path));
+                    return entry == null || (/*entry.Deleted == 0 &&*/ !File.Exists(entry.Path));
                 });
                 foreach(var del in dels) {
                     migrations.Remove(del);

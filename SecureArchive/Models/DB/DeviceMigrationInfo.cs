@@ -1,12 +1,7 @@
 ﻿using Newtonsoft.Json.Linq;
 using SecureArchive.Utils;
-using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace SecureArchive.Models.DB;
 
@@ -35,19 +30,19 @@ public class DeviceMigrationInfo {
         }
     }
 
-        [Key, Required]
+    [Key, Required]
     public long Key { get; set; }
     [Required]
-    public string OldOriginalId { get; set; } = string.Empty;  // Owner App 内でのID
+    public string OldOriginalId { get; set; } = string.Empty;   // 旧デバイス上でのID
     [Required]
-    public string OldOwnerId { get; set; } = string.Empty;
+    public string OldOwnerId { get; set; } = string.Empty;      // 旧デバイスのオーナーID
     [Required]
-    public int Slot { get; set; } = 0;
+    public int Slot { get; set; } = 0;                          // スロット番号：移行元と移行先が同じスロット構成であることを前提とする。（スロットのマッピングは行わない）
     [Required]
-    public string NewOriginalId { get; set; } = string.Empty;  // Owner App 内でのID
+    public string NewOriginalId { get; set; } = string.Empty;   // 新デバイス上でのID
     [Required]
-    public string NewOwnerId { get; set; } = string.Empty;
-    public long MigratedOn { get; set; }
+    public string NewOwnerId { get; set; } = string.Empty;      // 新デバイスのオーナーID
+    public long MigratedOn { get; set; }                        // 移行日時（Ticks）
 
     public Dictionary<string, object> ToDictionary() {
         return new Dictionary<string, object>() {
