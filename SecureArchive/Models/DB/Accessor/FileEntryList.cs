@@ -110,6 +110,7 @@ public interface IFileEntryList {
     FileEntry? GetByOriginalId(string ownerId, int slot, string originalId);
     List<int> AvailableSlots();
     List<string> AvailableOwnerIds();
+    FileEntry ResolveOwnerInfo(FileEntry entry);
 }
 
 public interface IDataChangeEventSource {
@@ -286,7 +287,7 @@ public class FileEntryList : IMutableFileEntryList {
         }
     }
 
-    private FileEntry ResolveOwnerInfo(FileEntry entry) {
+    public FileEntry ResolveOwnerInfo(FileEntry entry) {
         if (entry.OwnerInfo == null) {
             lock (_connector) {
                 entry.OwnerInfo = _connector.OwnerInfos.FirstOrDefault(it => it.OwnerId == entry.OwnerId) ?? OwnerInfo.Empty;

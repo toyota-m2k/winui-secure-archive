@@ -87,10 +87,11 @@ internal class ListPageViewModel : IListSource {
         public string? Chapters { get; }
         public long Duration { get; } = 0;
         public int Slot { get; } = 0;
+        public OwnerInfo? OwnerInfo { get; } = OwnerInfo.Empty;
 
         public bool IsDeleted => Deleted != 0;
 
-        public FileEntryItem(FileEntry entry) {
+        private FileEntryItem(FileEntry entry) {
             Entry = entry;
             Id = entry.Id;
             OwnerId = entry.OwnerId;
@@ -112,12 +113,16 @@ internal class ListPageViewModel : IListSource {
             Chapters = entry.Chapters;
             Duration = entry.Duration;
             Slot = entry.Slot;
+            OwnerInfo = entry.OwnerInfo;
         }
 
-        public static FileEntryItem FromFileEntry(FileEntry entry) {
+        public static FileEntryItem FromEntry(FileEntry entry) {
             return new FileEntryItem(entry);
         }
+    }
 
+    private FileEntryItem FromEntry(FileEntry entry) {
+        return FileEntryItem.FromEntry(_dataBaseService.Entries.ResolveOwnerInfo(entry));
     }
 
     public ReactivePropertySlim<ObservableCollection<FileEntryItem>> FileList { get; } = new (new ObservableCollection<FileEntryItem>());
@@ -490,9 +495,9 @@ internal class ListPageViewModel : IListSource {
         var list = FileList.Value;
         var next = list.FirstOrDefault((it) => it.LastModifiedDate > entry.LastModifiedDate);
         if(next==null) {
-            list.Add(FileEntryItem.FromFileEntry(entry));
+            list.Add(FromEntry(entry));
         } else {
-            list.Insert(list.IndexOf(next), FileEntryItem.FromFileEntry(entry));
+            list.Insert(list.IndexOf(next), FromEntry(entry));
         }
     }
 
@@ -521,7 +526,7 @@ internal class ListPageViewModel : IListSource {
             if (index >= 0) {
                 //list[index] = FileEntryItem.FromFileEntry(entry);
                 list.RemoveAt(index);
-                list.Insert(index, FileEntryItem.FromFileEntry(entry));
+                list.Insert(index, FromEntry(entry));
             }
         }
     }
@@ -530,11 +535,11 @@ internal class ListPageViewModel : IListSource {
         if (SelectedOwner.Value == null) return;
         var slot = SelectedSlot.Value.Slot;
         if (SelectedOwner.Value == DispOwnerInfo.All) {
-            FileList.Value = new ObservableCollection<FileEntryItem>(_dataBaseService.Entries.List(slot, true).Select(FileEntryItem.FromFileEntry));
+            FileList.Value = new ObservableCollection<FileEntryItem>(_dataBaseService.Entries.List(slot, true).Select(FromEntry));
         }
         else {
             var ownerId = SelectedOwner.Value.OwnerId;
-            FileList.Value = new ObservableCollection<FileEntryItem>(_dataBaseService.Entries.List(slot, it => it.OwnerId == ownerId, true).Select(FileEntryItem.FromFileEntry));
+            FileList.Value = new ObservableCollection<FileEntryItem>(_dataBaseService.Entries.List(slot, it => it.OwnerId == ownerId, true).Select(FromEntry));
         }
     }
 
@@ -570,7 +575,7 @@ internal class ListPageViewModel : IListSource {
                             var newEntry = await _secureStorageService.RegisterFile(item.Path, OwnerInfo.LOCAL_ID, 0, item.Name, Guid.NewGuid().ToString("N"), 0L, null, progress);
                             if (newEntry != null) {
                                 mainThread.Run(() => {
-                                    FileList.Value.Add(FileEntryItem.FromFileEntry(newEntry));
+                                    FileList.Value.Add(FromEntry(newEntry));
                                 });
                                 success++;
                             } else {
