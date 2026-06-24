@@ -12,7 +12,7 @@ namespace SecureArchive.DI;
 
 public interface IEntryCreator : IDisposable {
     Stream OutputStream { get; }
-    FileEntry Complete(string name, long size, string type, long lastModifiedDate, long creationDate, long duration, string? metaInfo, IItemExtAttributes? extAttr);
+    Task<FileEntry> Complete(string name, long size, string type, long lastModifiedDate, long creationDate, long duration, string? metaInfo, IItemExtAttributes? extAttr);
 }
 
 internal interface ISecureStorageService {

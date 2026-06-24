@@ -455,7 +455,7 @@ internal class BackupService : IBackupService {
                         int len = await inStream.ReadAsync(buff, 0, buff.Length, ct);
                         if (len == 0) {
                             if (total == 0L || total == recv) {
-                                entryCreator.Complete(item.Name, total!=0L ? total : item.Size, item.Type, item.Date, item.CreationDate, item.Duration, null, extAttr);
+                                await entryCreator.Complete(item.Name, total!=0L ? total : item.Size, item.Type, item.Date, item.CreationDate, item.Duration, null, extAttr);
                                 ok = true;
                             } else {
                                 // 受信したデータファイルのサイズが不正（途中で切れた、とか？）

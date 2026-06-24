@@ -123,6 +123,9 @@ internal class HttpServerService : IHttpServreService {
             if(_entryCreator==null) {
                 return;
             }
+            var entryCreator = _entryCreator;
+            if (entryCreator == null) return;
+
             var name = string.IsNullOrEmpty(multipartBody.Filename) ? multipartBody.Name : multipartBody.Filename;
             long lastModifiedDate = 0;
             if (Parameters.TryGetValue("FileDate", out var fileDateText)) {
@@ -150,7 +153,7 @@ internal class HttpServerService : IHttpServreService {
                 size = Convert.ToInt64(sizeText);
             }
 
-            _entryCreator?.Complete(name, size, Path.GetExtension(name), lastModifiedDate, creationDate, duration, metaInfo, extAttr);
+            entryCreator.Complete(name, size, Path.GetExtension(name), lastModifiedDate, creationDate, duration, metaInfo, extAttr).GetAwaiter().GetResult();
             Dispose();
         }
 

@@ -87,6 +87,7 @@ internal class SecureStorageService : ISecureStorageService {
 
         private CryptoStream _cryptoStream;
         private IDatabaseService _databaseService;
+        private SecureStorageService _self;
         private Stream _innerStream;
         private string _cryptedFilePath;
         private bool _completed = false;
@@ -96,11 +97,12 @@ internal class SecureStorageService : ISecureStorageService {
         private string _originalId;
         private long _existingId;
 
-        public EntryCreator(string ownerId, int slot, string originalId, FileEntry? entry, string cryptedFilePath, ICryptographyService cryptService, IDatabaseService databaseService) {
+        public EntryCreator(string ownerId, int slot, string originalId, FileEntry? entry, string cryptedFilePath, ICryptographyService cryptService, IDatabaseService databaseService, SecureStorageService self) {
             _ownerId = ownerId;
             _slot = slot;
             _originalId = originalId;
             _existingId = entry?.Id ?? -1;
+            _self = self;
 
             _cryptedFilePath = cryptedFilePath;
             _databaseService = databaseService;
@@ -112,7 +114,7 @@ internal class SecureStorageService : ISecureStorageService {
             
         }
 
-        public FileEntry Complete(string name, long size, string type_, long lastModifiedDate, long creationDate, long duration, string? metaInfo, IItemExtAttributes? extAttr) {
+        public async Task<FileEntry> Complete(string name, long size, string type_, long lastModifiedDate, long creationDate, long duration, string? metaInfo, IItemExtAttributes? extAttr) {
             _completed = true;
             _cryptoStream.FlushFinalBlock();
             _cryptoStream.Flush();
@@ -123,34 +125,18 @@ internal class SecureStorageService : ISecureStorageService {
             if(type_.StartsWith(".")) {
                 type = type_.Substring(1);
             }
-            FileEntry entry = null!;
+            FileEntry? entry = null;
+            if (_existingId>=0) {
+                entry = _databaseService.Entries.GetById(_existingId);
+                if (entry!=null) {
+                    await _self.InternalDeleteEntry(entry);
+                }
+            }
             _databaseService.EditEntry((entryList) => {
-                if (_existingId >= 0) {
-                    // Overwrite
-                    entry = entryList.GetById(_existingId)!;
-                    FileUtils.SafeDelete(entry.Path);
-                    entry.Path = _cryptedFilePath;
-                    entry.Name = name;
-                    entry.Size = size;
-                    entry.Type = type;
-                    entry.LastModifiedDate = lastModifiedDate;
-                    entry.MetaInfo = metaInfo;
-                    if(extAttr!=null) {
-                        entry.ExtAttrDate = extAttr.ExtAttrDate;
-                        entry.Rating = extAttr.Rating;
-                        entry.Mark = extAttr.Mark;
-                        entry.Category = extAttr.Category;
-                        entry.Chapters = extAttr.Chapters;
-                    }
-                    return true;
-                }
-                else {
-                    // New entry.
-                    entry = entryList.Add(_ownerId, _slot, name, size, type, _cryptedFilePath, lastModifiedDate, creationDate, _originalId, duration, metaInfo, extAttr);
-                    return true;
-                }
+                entry = entryList.AddOrUpdate(_ownerId, _slot, name, size, type, _cryptedFilePath, lastModifiedDate, creationDate, _originalId, duration, metaInfo, extAttr);
+                return true;
             });
-            return entry;
+            return entry!;
         }
 
         public void Dispose() {
@@ -172,7 +158,7 @@ internal class SecureStorageService : ISecureStorageService {
         }
         var outFolder = await _fileStoreService.GetFolder();
         var cryptedFilePath = Path.Combine(outFolder!, Guid.NewGuid().ToString());
-        return new EntryCreator(ownerId, slot, originalId, entry, cryptedFilePath, _cryptoService, _databaseService);
+        return new EntryCreator(ownerId, slot, originalId, entry, cryptedFilePath, _cryptoService, _databaseService, this);
     }
 
     #endregion
@@ -309,13 +295,13 @@ internal class SecureStorageService : ISecureStorageService {
      * 事前に CryptoStreamHandler#AbortStream を呼び出すが、ストリームを閉じてもしばらく、
      * ファイルが解放されない可能性があるので、時間をあけて、５回リトライする。
      */
-    private async Task InternalDeleteEntry(FileEntry entry) {
+    public async Task<bool> InternalDeleteEntry(FileEntry entry) {
         int retry = 0;
         _cryptoStreamHandler.AbortStream(entry, true);
         while (true) {
             try {
                 File.Delete(entry.Path);
-                return;
+                return true;
             } catch(IOException e) {
                 if (retry >= 4) {
                     throw new Exception($"cannot delete {entry.Path}", e);
