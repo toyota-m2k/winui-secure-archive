@@ -5,6 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 using SecureArchive.Models.DB;
 using SecureArchive.Utils;
 using SecureArchive.Views.ViewModels;
+using static SecureArchive.Views.ViewModels.ListPageViewModel;
 //using System.Windows.Controls;
 
 // To learn more about WinUI, the WinUI project structure,
@@ -21,7 +22,7 @@ namespace SecureArchive.Views {
             this.InitializeComponent();
 
             ViewModel.ExportCommand.Subscribe(() => {
-                _ = ViewModel.ExportFiles(FileListGrid.SelectedItems.Cast<FileEntry>().ToList());
+                _ = ViewModel.ExportFiles(FileListGrid.SelectedItems.Cast<FileEntryItem>().Select(it => it.Entry).ToList());
             });
             ViewModel.PatchCommand.Subscribe(() => {
                 //_ = ViewModel.ConvertFastStart(FileListGrid.SelectedItems.Cast<FileEntry>().ToList());
