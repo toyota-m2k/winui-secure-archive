@@ -5,6 +5,8 @@ using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
+using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,13 +21,13 @@ namespace SecureArchive.Utils.Server.mdns;
 /// 主要動作:
 ///   - UDP 5353 / 224.0.0.251 で待ち受け、PTR/SRV/TXT/A 質問に応答する
 ///   - 起動直後に gratuitous announcement、その後 30 秒ごとに再広告
-///   - Dispose 時に TTL=0 の goodbye パケットを送出
+///   - StopAsync 時に TTL=0 の goodbye パケットを送出
 /// 参考: RFC 6762 (mDNS), RFC 6763 (DNS-SD)
 ///
 /// _booapi._tcp.local は BooTube 系互換 REST API を提供するアプリで共通のサービスタイプ。
 /// アプリ識別は TXT app=archive で行う (BooTube は app=bootube)。
 /// </summary>
-public class MdnsAdvertiser : IDisposable {
+public class MdnsAdvertiser {
     public const string ServiceType = MdnsCommon.ServiceType;
     public const string AppId = MdnsCommon.AppId;
     private const uint TtlAnnouncement = 120;
@@ -36,7 +38,8 @@ public class MdnsAdvertiser : IDisposable {
 
     private readonly object _lock = new object();
     private readonly List<UdpClient> _sockets = new List<UdpClient>();
-    private CancellationTokenSource? _cts;
+    private readonly CancellationTokenSource _cts = new CancellationTokenSource();
+    private bool _active = false;     // 多重起動禁止用フラグ
 
     private string _instance = "";
     private string _hostLocal = "";
@@ -44,8 +47,13 @@ public class MdnsAdvertiser : IDisposable {
     private List<string> _txt = new List<string>();
     private List<IPAddress> _addresses = new List<IPAddress>();
 
-    public bool IsRunning {
-        get { lock (_lock) return _cts != null; }
+    private BehaviorSubject<int> RunningTaskCount = new(0);
+    public IObservable<bool> Running => RunningTaskCount.Select(count => count > 0).DistinctUntilChanged();
+    private void IncrementRunning() {
+        lock(_lock) { RunningTaskCount.OnNext(RunningTaskCount.Value + 1); }
+    }
+    private void DecrementRunning() {
+        lock (_lock) { RunningTaskCount.OnNext(RunningTaskCount.Value - 1); }
     }
 
     /**
@@ -53,7 +61,9 @@ public class MdnsAdvertiser : IDisposable {
      */
     public void Start(string serviceName, int port, bool isHttps, string? fingerprint) {
         lock (_lock) {
-            if (_cts != null) return;
+            if (_active) return;
+            _active = true;
+            IncrementRunning();
 
             var machineName = Environment.MachineName;
             _instance = SanitizeInstanceName($"{serviceName}@{machineName}");        // Settings.ServiceName
@@ -69,38 +79,64 @@ public class MdnsAdvertiser : IDisposable {
                 _txt.Add("fp=" + fingerprint);
             }
             _addresses = GetLocalIPv4Addresses();
-
-            _cts = new CancellationTokenSource();
             BindSockets();
         }
 
         // 初回広告 (RFC 6762 8.3 に倣い少しずらして 2 回送る)
-        SendUnsolicitedAnnouncement();
         Task.Run(async () => {
-            try { await Task.Delay(800, _cts!.Token); SendUnsolicitedAnnouncement(); } catch { }
+            try {
+                await SendUnsolicitedAnnouncement(0, _cts.Token);
+                await SendUnsolicitedAnnouncement(800, _cts.Token);
+            }
+            catch { }
         });
 
         // 周期再広告ループ
-        Task.Run(() => AnnounceLoop(_cts!.Token));
+        Task.Run(async () => {
+            await AnnounceLoop(_cts.Token);
+        });
+
+        DecrementRunning();
     }
 
-    public void Dispose() {
-        CancellationTokenSource? cts;
+    public async Task StopAsync() {
+        if (!_active) return;
+        _active = false;
+
         List<UdpClient> sockets;
         lock (_lock) {
-            cts = _cts;
-            if (cts == null) return;
-            _cts = null;
             sockets = new List<UdpClient>(_sockets);
             _sockets.Clear();
         }
 
-        try { SendGoodbye(sockets); } catch (Exception e) { _logger.Error(e, "mDNS goodbye"); }
-
-        try { cts.Cancel(); } catch { }
-        foreach (var s in sockets) {
-            try { s.Close(); } catch { }
+        // goodbye パケット送信
+        try {
+            SendGoodbye(sockets);
         }
+        catch (Exception e) {
+            _logger.Error(e, "mDNS goodbye");
+        }
+        // AnnounceLoop/ListenLoop 停止
+        try {
+            await _cts.CancelAsync();
+        }
+        catch { }
+
+        try {
+            // AnnounceLoop/ListenLoop が終了するのを待つ (最大 3 秒)
+            await RunningTaskCount.FirstAsync(it => it == 0)
+                .Timeout(TimeSpan.FromSeconds(3));
+        } catch (TimeoutException) {
+            _logger.Warn("mDNS tasks did not finish in time");
+        }
+        // ソケットを閉じる（念のため）
+        foreach (var s in sockets) {
+            try {
+                s.Close();
+            }
+            catch { }
+        }
+        return;
     }
 
     // ---- Sockets ----------------------------------------------------------------------
@@ -118,7 +154,7 @@ public class MdnsAdvertiser : IDisposable {
                 _sockets.Add(sock);
                 _logger.Debug($"mDNS bound on {addr}");
                 var s = sock;
-                Task.Run(() => ListenLoop(s, _cts!.Token));
+                Task.Run(() => ListenLoop(s, _cts.Token));
             }
             catch (Exception e) {
                 _logger.Error(e, $"mDNS bind on {addr} failed: {e.Message}");
@@ -128,36 +164,44 @@ public class MdnsAdvertiser : IDisposable {
     }
 
     private async Task ListenLoop(UdpClient sock, CancellationToken ct) {
-        while (!ct.IsCancellationRequested) {
-            UdpReceiveResult result;
-            try {
-                result = await sock.ReceiveAsync().ConfigureAwait(false);
+        try {
+            IncrementRunning();
+            while (!ct.IsCancellationRequested) {
+                UdpReceiveResult result;
+                try {
+                    result = await sock.ReceiveAsync(ct).ConfigureAwait(false);
+                }
+                catch (ObjectDisposedException) {
+                    return;
+                }
+                catch (Exception e) {
+                    if (ct.IsCancellationRequested) return;
+                    _logger.Error($"mDNS receive: {e.Message}");
+                    continue;
+                }
+                try {
+                    HandleQuery(result.Buffer, sock);
+                }
+                catch (Exception e) {
+                    _logger.Error($"mDNS handle: {e.Message}");
+                }
             }
-            catch (ObjectDisposedException) {
-                return;
-            }
-            catch (Exception e) {
-                if (ct.IsCancellationRequested) return;
-                _logger.Error($"mDNS receive: {e.Message}");
-                continue;
-            }
-            try {
-                HandleQuery(result.Buffer, sock);
-            }
-            catch (Exception e) {
-                _logger.Error($"mDNS handle: {e.Message}");
-            }
+        } finally {
+            DecrementRunning();
         }
     }
 
     private async Task AnnounceLoop(CancellationToken ct) {
         try {
+            IncrementRunning();
             while (!ct.IsCancellationRequested) {
-                await Task.Delay(AnnounceIntervalMs, ct).ConfigureAwait(false);
-                SendUnsolicitedAnnouncement();
+                await SendUnsolicitedAnnouncement(AnnounceIntervalMs, ct);
             }
         }
         catch (TaskCanceledException) { }
+        finally {
+            DecrementRunning();
+        }
     }
 
     // ---- Query handling ---------------------------------------------------------------
@@ -192,7 +236,10 @@ public class MdnsAdvertiser : IDisposable {
 
     // ---- Sending ---------------------------------------------------------------------
 
-    private void SendUnsolicitedAnnouncement() {
+    private async Task SendUnsolicitedAnnouncement(int delayMs, CancellationToken ct) {
+        if (delayMs > 0) {
+            await Task.Delay(delayMs, ct).ConfigureAwait(false);
+        }
         var packet = BuildResponsePacket(includePTR: true, ttlOverride: null);
         List<UdpClient> sockets;
         lock (_lock) sockets = new List<UdpClient>(_sockets);

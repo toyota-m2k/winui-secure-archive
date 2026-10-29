@@ -328,7 +328,7 @@ namespace SecureArchive.Views.ViewModels {
         }
 
         private async void Initialize() {
-            _httpServreService.Stop();
+            await _httpServreService.StopAsync();
             await _userSettingsService.EditAsync((editor) => {
                 //DataFolder.Value = editor.DataFolder ?? "";
                 ServerAutoStart.Value = editor.ServerAutoStart;

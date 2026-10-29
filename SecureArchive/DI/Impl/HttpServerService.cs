@@ -2,6 +2,7 @@
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Reactive.Bindings;
 using SecureArchive.Models.DB;
 using SecureArchive.Models.DB.Accessor;
 using SecureArchive.Utils;
@@ -12,6 +13,7 @@ using SecureArchive.Utils.Server.lib.response;
 using SecureArchive.Utils.Server.mdns;
 using SecureArchive.Views.ViewModels;
 using System.Reactive.Linq;
+using System.Reactive.Subjects;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
@@ -25,8 +27,10 @@ namespace SecureArchive.DI.Impl;
 internal class HttpServerService : IHttpServreService {
     private UtLog _logger;
     private readonly List<HttpServer> _servers = new List<HttpServer>();
+    private readonly BehaviorSubject<IReadOnlyList<HttpServer>> _serverList = new([]);
+    public IReadOnlyReactiveProperty<bool> Running { get; }
     private MdnsAdvertiser? _mdns;
-    private readonly System.Reactive.Subjects.BehaviorSubject<bool> _running = new(false);
+    //private readonly System.Reactive.Subjects.BehaviorSubject<bool> _running = new(false);
     private ISecureStorageService _secureStorageService;
     private IDatabaseService _databaseService;
     private IPasswordService _passwordService;
@@ -58,6 +62,16 @@ internal class HttpServerService : IHttpServreService {
         ListSource = listPageViewModel;
 
         oneTimePasscode = new OneTimePasscode(_passwordService);
+
+        Running = _serverList
+            .Select(list => list.Count == 0
+                ? Observable.Return(false)  // 空なら false
+                : Observable.CombineLatest(list.Select(s => s.Running))
+                            .Select(values => values.Any(v => v)))
+            .Switch()   // 新しい一覧が流れたら、古い購読を解除して切り替える
+            .DistinctUntilChanged()
+            .ToReadOnlyReactiveProperty()
+            ;
     }
 
     #region Uploading
@@ -910,14 +924,12 @@ internal class HttpServerService : IHttpServreService {
     #endregion
     #region Server
 
-    public IObservable<bool> Running => _running;
-
     /// <summary>
     /// 旧シグネチャ。引数の <paramref name="port"/> は HTTP リスナーのポートとして扱う。
     /// HTTPS / mDNS 関連は <see cref="IUserSettingsService"/> から動的に読み出す。
     /// </summary>
     public bool Start() {
-        if (_running.Value) return false;
+        if (Running.Value) return false;
         oneTimePasscode.Reset(); // for Debug
 
         var settings = _userSettingsService.GetAsync().GetAwaiter().GetResult();
@@ -959,7 +971,6 @@ internal class HttpServerService : IHttpServreService {
         }
 
         bool anyRunning = _servers.Count > 0;
-        _running.OnNext(anyRunning);
 
         if (anyRunning) {
             StartMdns(settings);
@@ -971,6 +982,7 @@ internal class HttpServerService : IHttpServreService {
         var server = new HttpServer(routes, _logger, certificate);
         if (server.Start(port)) {
             _servers.Add(server);
+            _serverList.OnNext(_servers.ToList());
             _logger.Info($"{label} listener started on port {port}");
             return true;
         }
@@ -1004,21 +1016,25 @@ internal class HttpServerService : IHttpServreService {
         }
         catch (Exception e) {
             _logger.Error(e, "mDNS advertise failed");
-            _mdns.Dispose();
+            _ = _mdns.StopAsync();
             _mdns = null;
         }
     }
 
-    public void Stop() {
+    public async Task StopAsync() {
         if (_mdns != null) {
-            try { _mdns.Dispose(); } catch (Exception e) { _logger.Error(e, "mDNS stop"); }
+            try { 
+                await _mdns.StopAsync(); 
+            } catch (Exception e) { _logger.Error(e, "mDNS stop"); }
             _mdns = null;
         }
         foreach (var s in _servers) {
-            try { s.Stop(); } catch (Exception e) { _logger.Error(e, "Server stop"); }
+            try { 
+                await s.StopAsync(); 
+            } catch (Exception e) { _logger.Error(e, "Server stop"); }
         }
         _servers.Clear();
-        _running.OnNext(false);
+        _serverList.OnNext(_servers.ToList());
     }
 
     //public IList<FileEntry> ListSource { get; set; }

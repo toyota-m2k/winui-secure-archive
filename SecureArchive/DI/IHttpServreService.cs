@@ -1,4 +1,5 @@
-﻿using SecureArchive.Models.DB;
+﻿using Reactive.Bindings;
+using SecureArchive.Models.DB;
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
@@ -12,8 +13,8 @@ internal interface IListSource {
     IList<FileEntry> GetFileList();
 }
 internal interface IHttpServreService {
-    IObservable<bool> Running { get; }
+    IReadOnlyReactiveProperty<bool> Running { get; }
     bool Start();
-    void Stop();
+    Task StopAsync();
     IListSource? ListSource { get; set; }
 }

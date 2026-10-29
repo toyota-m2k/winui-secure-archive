@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using SecureArchive.Utils.Server.lib.model;
 using System.Net;
 using System.Net.Sockets;
+using System.Reactive.Linq;
 using System.Reactive.Subjects;
 using System.Security.Cryptography.X509Certificates;
 
@@ -13,7 +14,7 @@ public class HttpServer
 {
     #region Fields
 
-    private TcpListener Listener = null!;
+    private TcpListener? Listener = null;
     private HttpProcessor Processor;
     //private bool IsActive = true;
 
@@ -42,16 +43,14 @@ public class HttpServer
         : this(routes, logger, null) {
     }
 
-    public HttpServer(List<Route> routes, UtLog logger, X509Certificate2? certificate)
-    {
+    public HttpServer(List<Route> routes, UtLog logger, X509Certificate2? certificate) {
         Processor = (certificate != null)
             ? new SslHttpProcessor(certificate)
             : new HttpProcessor();
         IsSecure = certificate != null;
         Logger = logger;
 
-        foreach (var route in routes)
-        {
+        foreach (var route in routes) {
             Processor.AddRoute(route);
         }
     }
@@ -72,64 +71,70 @@ public class HttpServer
     //    }
     //}
 
-    public bool Start(int port)
-    {
-        if(_running.Value) { 
-            return false; 
+    CancellationTokenSource? _cts = null;
+
+    public bool Start(int port) {
+        if (_running.Value) {
+            return false;
         }
-        try
-        {
+        try {
             Alive = true;
             _running.OnNext(true);
             Listener = new TcpListener(IPAddress.Any, port);
             Listener.Start();
             Logger.Info($"{(IsSecure ? "HTTPS" : "HTTP")} Server Running... Port={port}");
         }
-        catch (Exception e)
-        {
+        catch (Exception e) {
             Logger.Error(e, "cannot start server.");
             Stop();
+            _running.OnNext(false);
             return false;
         }
-        Task.Run(async () =>
-        {
-            while (Alive)
-            {
-                try
-                {
-                    TcpClient s = await Listener.AcceptTcpClientAsync();
+        Task.Run(async () => {
+            _cts = new CancellationTokenSource();
+            while (Alive) {
+                try {
+                    TcpClient s = await Listener.AcceptTcpClientAsync(_cts.Token);
                     int id = GenerateId();
                     Processor.HandleClient(id, s);
                 }
-                catch (Exception e)
-                {
-                    if (Alive)
-                    {
+                catch (Exception e) {
+                    if (Alive) {
                         //ReportOutput?.ErrorOutput(e.ToString());
                         Logger.Error(e, "cannot listen.");
                     }
                 }
             }
-            lock (this)
-            {
-                _running.OnNext(false);
+            lock (this) {
                 Listener?.Stop();
+                Listener = null;
+                _cts = null;
+                _running.OnNext(false);
                 Logger.Info("HTTP Server Stopped.");
             }
         });
         return true;
     }
 
-    public void Stop()
-    {
-        lock (this)
-        {
-            if(!Alive) {
+    private void Stop() {
+        lock (this) {
+            if (!Alive) {
                 return;
             }
             Alive = false;
-            _running.OnNext(false);
+            _cts?.Cancel();
             Listener?.Stop();
+        }
+    }
+
+    public async Task StopAsync() {
+        Stop();
+        try {
+            await _running.FirstAsync(it => !it)
+                .Timeout(TimeSpan.FromSeconds(3));
+        }
+        catch (Exception e) {
+            Logger.Error(e, "StopAsync failed");
         }
     }
     #endregion

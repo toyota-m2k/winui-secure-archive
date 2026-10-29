@@ -34,7 +34,11 @@ public sealed partial class MainWindow : Window, IMainFrameContract {
         this.Title = "AppTitle/Text".GetLocalized();
 
         // Custom Title Bar
+        // OS が描画する標準のタイトルバーを消し、ウィンドウの内容をタイトルバーの領域 (ウィンドウの最上部) まで広げます。
+        // 最小化・最大化・閉じるのボタン (キャプションボタン) は残り、右上に重ねて表示されます。
         ExtendsContentIntoTitleBar = true;
+        // 指定した要素をタイトルバーとして扱う領域にします。
+        // この領域では、ドラッグでウィンドウを移動したり、ダブルクリックで最大化/元に戻したり、右クリックでシステムメニューを開いたりできます。
         SetTitleBar(_appTitleBar);
         //this.Content = RootFrame; <-- これはエラー。どうしてもやるなら、一旦、Context=null にしてからやること。
 
@@ -45,10 +49,13 @@ public sealed partial class MainWindow : Window, IMainFrameContract {
 
 
     private void Settings_ColorValuesChanged(UISettings sender, object args) {
+        // OS のテーマ(ライト/ ダーク) が切り替わったときに、タイトルバーの色を合わせる。
         DispatcherQueue.TryEnqueue(TitleBarHelper.ApplySystemThemeToCaptionButtons);
     }
 
     private void OnActivated(object sender, WindowActivatedEventArgs args) {
+        // 標準のタイトルバーと同じ見た目にするため、
+        // ウィンドウが非アクティブになったときにタイトル文字の色を薄くします。
         var resource = args.WindowActivationState == WindowActivationState.Deactivated ? "WindowCaptionForegroundDisabled" : "WindowCaptionForeground";
         _appTitleBar.TitleText.Foreground = (SolidColorBrush)App.Current.Resources[resource];
         //TitleBarHelper.ApplySystemThemeToCaptionButtons();    ここでやると無限ループになってスタックオーバーフローする

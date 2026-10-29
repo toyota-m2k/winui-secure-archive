@@ -16,6 +16,18 @@
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
         </Grid.RowDefinitions>
+        <!--
+        MainWindow.xaml.cs で、
+        ```
+        // OS が描画する標準のタイトルバーを消し、ウィンドウの内容をタイトルバーの領域 (ウィンドウの最上部) まで広げます。
+        // 最小化・最大化・閉じるのボタン (キャプションボタン) は残り、右上に重ねて表示されます。
+        ExtendsContentIntoTitleBar = true;
+        // 指定した要素をタイトルバーとして扱う領域にします。
+        // この領域では、ドラッグでウィンドウを移動したり、ダブルクリックで最大化/元に戻したり、右クリックでシステムメニューを開いたりできます。
+        SetTitleBar(_appTitleBar);
+        ```
+        とすることにより、TitleBarをWindowのタイトルバーとして設定する。
+        -->
         <local:TitleBar
             Grid.Row="0"
             x:Name="_appTitleBar"/>

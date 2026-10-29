@@ -23,6 +23,7 @@ namespace SecureArchive.Views.ViewModels {
         public ReactivePropertySlim<bool> ShowLog { get; } = new ReactivePropertySlim<bool>(false, ReactivePropertyMode.DistinctUntilChanged);
         public ReadOnlyReactivePropertySlim<VerticalAlignment> PanelVerticalAlignment { get; }
         public ReactivePropertySlim<string> ServerParams { get; } = new ReactivePropertySlim<string>("");
+        public ReadOnlyReactiveProperty<string> ServerStatus { get; }
 
         public MenuPageViewModel(
             //ILoggerFactory loggerFactory,
@@ -54,9 +55,21 @@ namespace SecureArchive.Views.ViewModels {
                     StopServer();
                 }
             });
-            _httpServreService.Running.Subscribe((it) => {
-                IsServerRunning.Value = it;
-            });
+            ServerStatus = _httpServreService.Running.CombineLatest(IsServerRunning, (act, req) => {
+                    if (act == req) {
+                        return act ? $"Server Running." : $"Server Stopped.";
+                    }
+                    else if (req) {
+                        return $"Server Starting...";
+                    }
+                    else {
+                        return $"Server Stopping...";
+                    }
+                })
+                .ToReadOnlyReactiveProperty<string>();
+            //_httpServreService.Running.Subscribe((it) => {
+            //    IsServerRunning.Value = it;
+            //});
             ShowLog.Subscribe((it) => {
                 _userSettingsService.EditAsync(us => {
                     us.ShowLog = it;
@@ -83,7 +96,8 @@ namespace SecureArchive.Views.ViewModels {
                 ServerParams.Value = "Server is disabled";
             }
             if (us.ServerAutoStart) {
-                StartServer();
+                IsServerRunning.Value = true;
+                // StartServer();
             }
         }
 
@@ -91,7 +105,7 @@ namespace SecureArchive.Views.ViewModels {
             _httpServreService.Start();
         }
         private void StopServer() {
-            _httpServreService.Stop();
+            _ = _httpServreService.StopAsync();
         }
 
         //private async void Repair() {

@@ -101,6 +101,9 @@ internal class TitleBarHelper
         }
     }
 
+    /**
+     * OS のテーマ (ライト/ダーク) に、タイトルバーの色を合わせる。
+     */
     public static void ApplySystemThemeToCaptionButtons()
     {
         var res = Application.Current.Resources;

@@ -11,7 +11,9 @@ using SecureArchive.Utils;
 using SecureArchive.Utils.Server.mdns;
 using SecureArchive.Views;
 using SecureArchive.Views.ViewModels;
+using System.ComponentModel.Design;
 using System.Runtime.ConstrainedExecution;
+using Windows.UI.Core;
 
 // To learn more about WinUI, the WinUI project structure,
 // and more about our project templates, see: http://aka.ms/winui-project-info.
@@ -153,6 +155,7 @@ namespace SecureArchive {
         protected override void OnLaunched(Microsoft.UI.Xaml.LaunchActivatedEventArgs args) {
             GetService<IPageService>().Startup(RootFrame);
             MainWindow.Activate();
+            // OS のテーマ (ライト/ダーク) に、タイトルバーの色を合わせる。
             TitleBarHelper.ApplySystemThemeToCaptionButtons();
 
             //var ds = GetService<IDatabaseService>();
@@ -179,13 +182,31 @@ namespace SecureArchive {
             }
         }
 
+        private bool serverStopping = false;
+
         private void AppWindow_Closing(AppWindow sender, AppWindowClosingEventArgs args) {
             var appConfigService = GetService<IAppConfigService>();
             if (appConfigService.NeedsConfirmOnExit && !closeConfirmed) {
+                // 終了確認ダイアログを表示する
                 args.Cancel = true;
                 ConfirmClose();
+                return;
             }
-            GetService<IHttpServreService>().Stop();
+
+            // HTTPサーバー起動中なら停止してから終了
+            var httpService = GetService<IHttpServreService>();
+            if (!serverStopping && httpService.Running.Value) {
+                args.Cancel = true;
+                Task.Run(async () => {
+                    await httpService.StopAsync();
+                    GetService<IMainThreadService>().Run(() => { 
+                        MainWindow.Close();
+                    });
+                    // StopAsyncがタイムアウトした場合、Running.Value が false にならないので、
+                    // チェックをスキップするためのフラグを立てて、再度 Close() を呼ぶ。
+                    serverStopping = true;
+                });
+            }
         }
 
         /**
