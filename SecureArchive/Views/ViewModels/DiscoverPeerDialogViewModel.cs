@@ -11,7 +11,6 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows.Threading;
 using Windows.Networking;
 
 namespace SecureArchive.Views.ViewModels {

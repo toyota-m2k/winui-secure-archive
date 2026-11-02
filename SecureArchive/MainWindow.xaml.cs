@@ -4,7 +4,6 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using SecureArchive.Utils;
 using SecureArchive.Views.ViewModels;
-using System.Windows.Interop;
 using Windows.UI.ViewManagement;
 
 // To learn more about WinUI, the WinUI project structure,

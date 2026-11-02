@@ -11,7 +11,6 @@ using System.Linq;
 using System.Reactive.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using System.Windows.Navigation;
 
 namespace SecureArchive.Views.ViewModels; 
 internal class SyncArchiveDialogViewModel:IDisposable {

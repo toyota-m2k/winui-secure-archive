@@ -60,9 +60,9 @@
     <PackageReference Include="QRCoder" Version="1.6.0" />
     <PackageReference Include="ReactiveProperty" Version="9.8.0" />
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.14" />
+    <PackageReference Include="System.Reactive" Version="7.0.0" />
     <PackageReference Include="System.Security.Cryptography.ProtectedData" Version="10.0.14" />
     <PackageReference Include="System.Data.SQLite.Core" Version="1.0.119" />
-    <PackageReference Include="System.Reactive.Linq" Version="6.0.1" />
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
 
