@@ -117,10 +117,12 @@ namespace SecureArchive.Utils.Server.mdns {
         private static readonly string[] virtualKeywords = { "hyper-v", "virtual", "wsl", "docker" };
         public static IEnumerable<IPAddress> MyAddresses =>
             NetworkInterface.GetAllNetworkInterfaces()
-            .Where(nic => nic.OperationalStatus == OperationalStatus.Up   // アクティブなNIC
-                         && nic.NetworkInterfaceType != NetworkInterfaceType.Loopback    // Loopbackは除外
-                         && nic.SupportsMulticast   // マルチキャストをサポート (GenCert/QRPairingでは不要かもしれないが、たぶん、あっても困らないと思う）
-                         && !virtualKeywords.Any(keyword => nic.Description.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)) // HyperVの仮想NICは除外
+            .Where(nic => 
+                nic.OperationalStatus == OperationalStatus.Up   // アクティブなNIC
+                && nic.NetworkInterfaceType != NetworkInterfaceType.Loopback    // Loopbackは除外
+                && nic.SupportsMulticast   // マルチキャストをサポート (GenCert/QRPairingでは不要かもしれないが、たぶん、あっても困らないと思う）
+                && nic.GetIPProperties().GatewayAddresses.Any() // Default Gateway を持たないNICは、仮想ネットワークだろう。
+                && !virtualKeywords.Any(keyword => nic.Description.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) >= 0)) // HyperVの仮想NICは除外
             .SelectMany(ni => ni.GetIPProperties().UnicastAddresses)
             .Where(ua => ua.Address.AddressFamily == AddressFamily.InterNetwork && !IPAddress.IsLoopback(ua.Address))  // ipネットワーク限定
             .Select(ua => ua.Address)
