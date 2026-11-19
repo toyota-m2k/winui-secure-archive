@@ -150,7 +150,7 @@ public class MdnsAdvertiser {
                 sock.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
                 sock.Client.Bind(new IPEndPoint(addr, MdnsCommon.MdnsPort));
                 sock.JoinMulticastGroup(MdnsCommon.MulticastV4, addr);
-                sock.MulticastLoopback = false;
+                sock.MulticastLoopback = true;
                 _sockets.Add(sock);
                 _logger.Debug($"mDNS bound on {addr}");
                 var s = sock;
