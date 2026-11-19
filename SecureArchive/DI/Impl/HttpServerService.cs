@@ -507,6 +507,7 @@ internal class HttpServerService : IHttpServreService {
                                 { "name", it.Name },
                                 { "type", it.Type },
                                 { "size", it.Size },
+                                { "duration", it.Duration },
                                 { "media", it.MediaType },
                                 { "date", it.CreationDate },
                                 { "slot", it.Slot }
